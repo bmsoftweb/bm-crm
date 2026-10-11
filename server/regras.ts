@@ -74,15 +74,20 @@ export async function antesDeGravar(recurso: string, payload: Record<string, any
       throw new Error('O fim do contrato não pode ser antes do início.');
     }
   }
-  if (recurso === 'contrato_itens' && payload.produto_id) {
-    // Sem valor informado, vale o preço de tabela do produto
-    if (payload.preco_unitario == null) {
-      const [rows] = await pool.query<any[]>('SELECT preco_tabela FROM produtos WHERE id = ?', [payload.produto_id]);
-      payload.preco_unitario = Number(rows[0]?.preco_tabela) || 0;
+  if ((recurso === 'contrato_itens' && payload.produto_id) || (recurso === 'os_itens' && payload.servico_id)) {
+    // Sem valor informado, vale o preço de tabela do produto (contrato) ou o do serviço (OS)
+    if (payload.preco_unitario == null || payload.preco_unitario === '') {
+      const [rows] =
+        recurso === 'os_itens'
+          ? await pool.query<any[]>('SELECT preco FROM servicos WHERE id = ?', [payload.servico_id])
+          : await pool.query<any[]>('SELECT preco_tabela AS preco FROM produtos WHERE id = ?', [payload.produto_id]);
+      payload.preco_unitario = Number(rows[0]?.preco) || 0;
     }
     const quantidade = Number(payload.quantidade ?? 1);
     const bruto = quantidade * Number(payload.preco_unitario || 0);
     const desconto = Number(payload.desconto || 0);
+    // Em branco = sem desconto (a coluna da OS não aceita vazio)
+    payload.desconto = desconto;
     if (quantidade <= 0) throw new Error('A quantidade deve ser maior que zero.');
     if (desconto < 0 || desconto > bruto) throw new Error('O desconto não pode passar do valor do item.');
     payload.subtotal = Math.round((bruto - desconto) * 100) / 100;

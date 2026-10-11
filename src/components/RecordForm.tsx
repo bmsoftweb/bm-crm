@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Save, Loader2, Eye, EyeOff, X, Columns3, Search, Move, Scaling, RotateCcw, Lock } from 'lucide-react';
 import { Endereco, FieldDef, Id, OpcaoRef, RegistroCrud, ResourceDef } from '../types';
-import { maskCNPJ, cleanCNPJ, toInputDate, toInputDateTime } from '../utils/formatters';
+import { maskCNPJ, cleanCNPJ, toInputDate, toInputDateTime, hojeIso, formatDateTimeBR } from '../utils/formatters';
 import { INPUT_CLASS, LABEL_CLASS, FIELD_CLASS, HINT_CLASS } from '../utils/formStyles';
 import { DateField } from './DateField';
 import { NumberField } from './NumberField';
@@ -96,6 +96,8 @@ function initialValue(field: FieldDef, record: RegistroCrud | null): any {
   }
 
   // Padrões para um registro novo: o declarado no metadado ou um valor sensato
+  // "hoje" em campo de data = a data local do navegador (Brasília), calculada ao abrir o formulário
+  if (field.default === 'hoje' && field.type === 'date') return hojeIso();
   if (field.default !== undefined) return field.default;
   switch (field.type) {
     case 'boolean':
@@ -286,7 +288,9 @@ export const RecordForm: React.FC<RecordFormProps> = ({
     () =>
       [
         ...resource.fields.filter((f) => {
-          if (f.readOnly) return false;
+          // Só leitura: fica fora, menos o marcado para aparecer (bloqueado) na edição
+          if (f.readOnly) return Boolean(isEdit && f.mostrarNaEdicao);
+          if (!isEdit && f.soNaAlteracao) return false;
           // O campo JSON em si não é editável: quem aparece são os campos configurados
           if (f.type === 'personalizados') return false;
           if (resource.autoIncrement && resource.pk.includes(f.name)) return false;
@@ -336,7 +340,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({
 
 
   const readOnlyFields = useMemo(
-    () => resource.fields.filter((f) => f.readOnly && record && record[f.name] != null),
+    () => (resource.semDadosDoBanco ? [] : resource.fields.filter((f) => f.readOnly && !f.mostrarNaEdicao && record && record[f.name] != null)),
     [resource, record],
   );
 
@@ -386,6 +390,13 @@ export const RecordForm: React.FC<RecordFormProps> = ({
   const setValue = (name: string, value: any) => {
     setValues((prev) => {
       const next = { ...prev, [name]: value };
+      // Hora que acerta outra (ex.: Das → Até = Das + 2 h), sem passar da meia-noite
+      const soma = resource.fields.find((f) => f.name === name)?.somarHoras;
+      const hm = /^(\d{2}):(\d{2})/.exec(String(value ?? ''));
+      if (soma && hm) {
+        const min = Math.min(23 * 60 + 59, Number(hm[1]) * 60 + Number(hm[2]) + soma.horas * 60);
+        next[soma.campo] = `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+      }
       // Campos que ficaram desabilitados por esta mudança perdem o valor
       for (const f of editableFields) {
         if (f.disabledWhen?.field === name && estaDesabilitado(f, next)) next[f.name] = '';
@@ -407,6 +418,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({
       const payload: RegistroCrud = {};
       const doJson: Record<string, any> = {};
       for (const f of editableFields) {
+        if (f.readOnly) continue;
         let v = values[f.name];
         if (f.type === 'cnpj') v = cleanCNPJ(String(v ?? ''));
         if (f.type === 'boolean') v = f.json ? Boolean(v) : v ? 1 : 0;
@@ -437,6 +449,16 @@ export const RecordForm: React.FC<RecordFormProps> = ({
   const renderField = (field: FieldDef) => {
     const value = values[field.name] ?? '';
     const inputId = `form-${resource.name}-${field.name}`;
+
+    // Só leitura dentro do formulário (ex.: fechamento da OS): o valor, sem editar
+    if (field.readOnly) {
+      const texto = !value ? '—' : field.type === 'datetime' ? formatDateTimeBR(String(value)) : String(value);
+      return (
+        <div id={inputId} className={`${inputClass} min-h-[34px] whitespace-pre-wrap opacity-70 cursor-not-allowed`} title="Preenchido no fechamento da OS">
+          {texto}
+        </div>
+      );
+    }
 
     // Chave estrangeira: combo alimentado pelo recurso referenciado
     if (field.ref) {

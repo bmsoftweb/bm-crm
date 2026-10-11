@@ -139,12 +139,21 @@ export const DateField: React.FC<DateFieldProps> = ({
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setAberto(false);
     };
+    // Saiu do campo pelo teclado (Tab) ou o foco foi para outro campo: fecha também
+    // (ir para a hora, ao lado, também fecha: só o campo da data mantém o calendário)
+    const aoFocar = (e: FocusEvent) => {
+      const alvo = e.target as Node;
+      if (popoverRef.current?.contains(alvo) || ancoraRef.current?.firstElementChild?.contains(alvo)) return;
+      setAberto(false);
+    };
 
     document.addEventListener('mousedown', aoClicar);
     document.addEventListener('keydown', aoTeclar);
+    document.addEventListener('focusin', aoFocar);
     return () => {
       document.removeEventListener('mousedown', aoClicar);
       document.removeEventListener('keydown', aoTeclar);
+      document.removeEventListener('focusin', aoFocar);
     };
   }, [aberto]);
 

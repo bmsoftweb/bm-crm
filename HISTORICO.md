@@ -2,6 +2,18 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.143 — 2026-10-10
+
+- Cadastros › Serviços: código, nome, unidade (UN, HR, VISITA...), preço, descrição e ativo; inativo continua nas OS antigas, marcado.
+- Ordens de Serviço: painel "Serviços" embaixo da OS selecionada (como os itens do contrato): serviço, quantidade, preço (em branco = o do cadastro), desconto e subtotal; coluna "Valor" na lista com a soma.
+- Ordens de Serviço: ação "Encerrar" (menu "...") para fechar a OS que voltou no papel: o que foi feito, início e término (término em branco = agora), quem assinou e a grade de serviços. Encerrada vira "Corrigir fechamento". Concluir pela edição comum é recusado: use o Encerrar.
+- Ordens de Serviço: inclusão só com os dados da abertura (status sempre Aberta); data já vem com hoje; Das e Até lado a lado e o Até vem com Das + 2 h. Na edição, o que foi feito, início e término reais ficam bloqueados (só o fechamento grava). Sem a caixa "Dados gerados pelo banco" na OS, nos serviços da OS e no cadastro de Serviços.
+- Impressão da OS: quadro "Serviços e produtos utilizados" com linhas em branco para o técnico anotar (some depois de encerrada), serviços lançados com o total e, numa página à parte, as fotos de antes e depois.
+- App do técnico: fotos de antes e depois (câmera ou galeria, até 10 de cada), reduzidas no celular e enviadas ao Storage quando houver sinal (os/<empresa>/<OS>-<antes|depois>-<id>.jpg); remover pede confirmação. Excluir a OS apaga as fotos do Storage.
+- App do técnico: "Iniciar atendimento" só registra a chegada (data, hora e local); o fechamento abre no botão "Fechar OS": serviços feitos (catálogo guardado no celular, quantidade com − e +), o que foi feito, assinatura e encerrar. Serviços lançados pelo escritório aparecem para conferir. Tudo funciona sem sinal.
+- Calendário dos campos de data fecha também ao sair do campo com Tab.
+- Tabelas novas: os_fotos, servicos e os_itens (extras/criar_tabela_os_fotos.sql e extras/criar_tabelas_servicos.sql).
+
 ## 0.0.142 — 2026-10-09
 
 - Ordens de Serviço (Suporte › Ordens de Serviço): atendimento externo do técnico no cliente. Cliente, técnico, data e horário, tipo, chamado de origem, com quem falar, endereço (vazio = o principal do cliente), o que será feito e o que foi feito. Número sequencial por empresa; concluída sem término fica com a hora da conclusão. "Só as minhas" = as do técnico logado.

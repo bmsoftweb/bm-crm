@@ -36,6 +36,7 @@ import { AcaoConcluir, BotaoConcluirRapido } from './components/ConcluirAtividad
 import { BotaoAcao } from './components/MenuAcoes';
 import { Headset, KeyRound, Printer } from 'lucide-react';
 import { imprimirOS } from './utils/imprimirOS';
+import { AcaoEncerrarOS } from './components/EncerrarOS';
 import { AcaoRetornoLigacao, PesquisasSatisfacao } from './components/PesquisasSatisfacao';
 import { PainelSuporte } from './components/PainelSuporte';
 import { Prospeccao } from './components/Prospeccao';
@@ -644,7 +645,7 @@ export default function App() {
                     ? (recarregar) => <BotaoImportarBM tipo="produtos" onImportado={recarregar} />
                     : undefined
               }
-              acoesEmMenu={['propostas', 'pedidos', 'campanhas', 'atividades'].includes(activeResource.name)}
+              acoesEmMenu={['propostas', 'pedidos', 'campanhas', 'atividades', 'ordens_servico'].includes(activeResource.name)}
               aoDuploClique={
                 activeResource.name === 'atividades'
                   ? (row) => {
@@ -758,13 +759,16 @@ export default function App() {
                               );
                             }
                           : activeResource.name === 'ordens_servico'
-                            ? (row) => (
-                                <BotaoAcao
-                                  icone={Printer}
-                                  titulo="Imprimir"
-                                  descricao="Abre a OS numa aba para imprimir: o técnico leva, anota o que fez e o cliente assina"
-                                  onClick={() => imprimirOS(row.id as string, showToast)}
-                                />
+                            ? (row, { recarregar }) => (
+                                <>
+                                  <BotaoAcao
+                                    icone={Printer}
+                                    titulo="Imprimir"
+                                    descricao="Abre a OS numa aba para imprimir: o técnico leva, anota o que fez e o cliente assina"
+                                    onClick={() => imprimirOS(row.id as string, showToast)}
+                                  />
+                                  <AcaoEncerrarOS registro={row} onFeito={() => (showToast('OS encerrada.'), recarregar())} />
+                                </>
                               )
                           : undefined
               }

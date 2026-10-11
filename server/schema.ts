@@ -54,6 +54,12 @@ export interface FieldDef {
   required?: boolean;
   /** Campo apenas leitura (gerado pelo banco ou pelo sistema): nunca vai em INSERT/UPDATE */
   readOnly?: boolean;
+  /** Só na alteração: o formulário de inclusão não mostra e a inclusão não grava (ex.: fechamento da OS) */
+  soNaAlteracao?: boolean;
+  /** Campo só leitura mostrado dentro do formulário na edição (bloqueado), em vez da caixa de dados do banco */
+  mostrarNaEdicao?: boolean;
+  /** Campo de hora: ao preencher, acerta outro campo de hora somando estas horas (ex.: Das → Até + 2 h) */
+  somarHoras?: { campo: string; horas: number };
   /** Exibido na grade de listagem */
   listed?: boolean;
   /** Participa da busca textual (LIKE) da barra de busca rápida */
@@ -71,7 +77,7 @@ export interface FieldDef {
   disabledWhen?: { field: string; equals: string };
   /** Campo numérico que aceita valor negativo (o sinal alterna ao digitar "-") */
   allowNegative?: boolean;
-  /** Valor inicial na inclusão */
+  /** Valor inicial na inclusão ("hoje" em campo de data = a data do dia) */
   default?: string | number | boolean;
   /** Largura sugerida da coluna na grade */
   width?: 'xs' | 'sm' | 'md' | 'lg';
@@ -152,6 +158,8 @@ export interface ResourceDef {
    * é a raiz e os demais aparecem como filhos (ex.: versões de uma proposta).
    */
   arvore?: { grupo: string; ordem: string };
+  /** O formulário não mostra a caixa "Dados gerados pelo banco" */
+  semDadosDoBanco?: boolean;
   fields: FieldDef[];
 }
 
@@ -1311,16 +1319,19 @@ export const RESOURCES: ResourceDef[] = [
     defaultSort: { field: 'data_agendada', dir: 'desc' },
     minhasSql: 't.tecnico_id = ?',
     ficha: true,
+    semDadosDoBanco: true,
+    // Serviços cobrados, lançados como os itens do pedido (preço em branco = o do cadastro de Serviços)
+    details: [{ resource: 'os_itens', foreignKey: 'os_id', label: 'Serviços', totalField: 'subtotal', editavel: true }],
     canCreate: true,
     canUpdate: true,
     canDelete: true,
     fields: [
       ID,
       { name: 'numero', label: 'Nº', type: 'number', listed: true, searchable: true, filterable: true, width: 'xs', readOnly: true },
-      { name: 'pessoa_id', label: 'Cliente', type: 'text', required: true, listed: true, filterable: true, ref: { resource: 'pessoas', labelField: 'nome' } },
+      { name: 'pessoa_id', label: 'Cliente', type: 'text', required: true, listed: true, filterable: true, span: 2, ref: { resource: 'pessoas', labelField: 'nome' } },
       { name: 'tecnico_id', label: 'Técnico', type: 'text', required: true, listed: true, filterable: true, ref: { resource: 'usuarios', labelField: 'nome' } },
-      { name: 'data_agendada', label: 'Data', type: 'date', required: true, listed: true, filterable: true },
-      { name: 'hora_inicio', label: 'Das', type: 'time', listed: true },
+      { name: 'data_agendada', label: 'Data', type: 'date', required: true, listed: true, filterable: true, default: 'hoje' },
+      { name: 'hora_inicio', label: 'Das', type: 'time', listed: true, somarHoras: { campo: 'hora_fim', horas: 2 } },
       { name: 'hora_fim', label: 'Até', type: 'time' },
       {
         name: 'status',
@@ -1330,6 +1341,8 @@ export const RESOURCES: ResourceDef[] = [
         listed: true,
         filterable: true,
         default: 'aberta',
+        // OS nova é sempre aberta (o servidor grava o padrão do banco)
+        soNaAlteracao: true,
         options: [
           { value: 'aberta', label: 'Aberta' },
           { value: 'em_execucao', label: 'Em execução' },
@@ -1359,14 +1372,54 @@ export const RESOURCES: ResourceDef[] = [
       { name: 'contato_telefone', label: 'Telefone do contato', type: 'text', maxLength: 20 },
       { name: 'endereco', label: 'Endereço do atendimento', type: 'text', searchable: true, maxLength: 500, span: 4, hint: 'Vazio = o endereço principal do cliente' },
       { name: 'servico_solicitado', label: 'O que será feito', type: 'textarea', required: true, listed: true, searchable: true },
-      { name: 'servico_executado', label: 'O que foi feito', type: 'textarea', searchable: true },
-      { name: 'inicio_em', label: 'Início real', type: 'datetime' },
-      { name: 'fim_em', label: 'Término real', type: 'datetime', hint: 'Vazio ao concluir = agora' },
+      {
+        name: 'valor_total',
+        label: 'Valor',
+        type: 'decimal',
+        scale: 2,
+        listed: true,
+        readOnly: true,
+        sql: '(SELECT COALESCE(SUM(i.subtotal), 0) FROM os_itens i WHERE i.os_id = t.id)',
+      },
+      // Fechamento: só na alteração (na inclusão a OS ainda não foi feita)
+      // Fechamento: gravado só pelo Encerrar (web) ou pelo app do técnico; na edição aparece bloqueado
+      { name: 'servico_executado', label: 'O que foi feito', type: 'textarea', searchable: true, readOnly: true, mostrarNaEdicao: true },
+      { name: 'inicio_em', label: 'Início real', type: 'datetime', readOnly: true, mostrarNaEdicao: true },
+      { name: 'fim_em', label: 'Término real', type: 'datetime', readOnly: true, mostrarNaEdicao: true },
       { name: 'observacao', label: 'Observação interna', type: 'textarea', hint: 'Não sai na impressão' },
       { name: 'assinatura_nome', label: 'Assinado por', type: 'text', readOnly: true },
       { name: 'assinatura', label: 'Assinatura do cliente', type: 'imagem', readOnly: true },
       { name: 'criado_por', label: 'Aberta por', type: 'text', readOnly: true, ref: { resource: 'usuarios', labelField: 'nome' } },
       ...CRIADO_ATUALIZADO,
+    ],
+  },
+  {
+    name: 'os_itens',
+    table: 'os_itens',
+    scopeSql: 't.os_id IN (SELECT id FROM ordens_servico WHERE empresa_id = ?)',
+    label: 'Serviços da OS',
+    labelSingular: 'Serviço da OS',
+    semDadosDoBanco: true,
+    description: 'Serviços cobrados em cada ordem de serviço',
+    icon: 'ListOrdered',
+    group: 'suporte',
+    oculto: true,
+    pk: ['id'],
+    autoIncrement: true,
+    labelField: 'id',
+    defaultSort: { field: 'id', dir: 'asc' },
+    canCreate: true,
+    canUpdate: true,
+    canDelete: true,
+    fields: [
+      ID,
+      { name: 'os_id', label: 'OS', type: 'text', required: true, ref: { resource: 'ordens_servico', labelField: 'numero' } },
+      { name: 'servico_id', label: 'Serviço', type: 'text', required: true, listed: true, ref: { resource: 'servicos', labelField: 'nome' } },
+      { name: 'quantidade', label: 'Quantidade', type: 'decimal', scale: 3, required: true, listed: true, default: '1.000' },
+      { name: 'preco_unitario', label: 'Preço Unitário', type: 'decimal', scale: 2, listed: true, hint: 'Em branco: o preço do cadastro de Serviços' },
+      { name: 'desconto', label: 'Desconto (R$)', type: 'decimal', scale: 2, listed: true },
+      { name: 'subtotal', label: 'Subtotal', type: 'decimal', scale: 2, readOnly: true, listed: true },
+      { name: 'criado_em', label: 'Criado em', type: 'datetime', readOnly: true },
     ],
   },
   {
@@ -1556,6 +1609,39 @@ export const RESOURCES: ResourceDef[] = [
       { name: 'ativo', label: 'Ativo', type: 'boolean', listed: true, filterable: true },
       { name: 'cod_integracao', label: 'Cód.Integração', type: 'text', readOnly: true, filterable: true, searchable: true, hint: 'Preenchido pela importação do bmsoft (PRODUTOSPRINCIPAL.ID)' },
       { name: 'fotos', label: 'Fotos', type: 'fotos', hint: 'Até 4 fotos, do computador ou da internet' },
+      ...CRIADO_ATUALIZADO,
+    ],
+  },
+  {
+    // Cadastros › Serviços: o que se cobra na Ordem de Serviço
+    name: 'servicos',
+    table: 'servicos',
+    tenantColumn: 'empresa_id',
+    scopeSql: 't.empresa_id = ?',
+    label: 'Serviços',
+    labelSingular: 'Serviço',
+    semDadosDoBanco: true,
+    description: 'Serviços com preço, lançados nas ordens de serviço',
+    icon: 'Hammer',
+    group: 'cadastros',
+    pk: ['id'],
+    autoIncrement: true,
+    labelField: 'nome',
+    // Inativos continuam no combo (OS antiga com o serviço), marcados
+    optionsSql: `SELECT id AS value, CONCAT(nome, IF(ativo = 1, '', ' (inativo)')) AS label
+                   FROM servicos WHERE empresa_id = ? ORDER BY ativo DESC, nome LIMIT 5000`,
+    defaultSort: { field: 'nome', dir: 'asc' },
+    canCreate: true,
+    canUpdate: true,
+    canDelete: true,
+    fields: [
+      ID,
+      { name: 'codigo', label: 'Código', type: 'text', listed: true, searchable: true, maxLength: 50, width: 'sm' },
+      { name: 'nome', label: 'Nome', type: 'text', required: true, listed: true, searchable: true, maxLength: 255 },
+      { name: 'unidade', label: 'Unidade', type: 'text', required: true, listed: true, maxLength: 10, default: 'UN', width: 'xs', hint: 'Ex.: UN, HR, VISITA' },
+      { name: 'preco', label: 'Preço', type: 'decimal', scale: 2, required: true, listed: true, filterable: true },
+      { name: 'descricao', label: 'Descrição', type: 'textarea', searchable: true },
+      { name: 'ativo', label: 'Ativo', type: 'boolean', listed: true, filterable: true, default: true },
       ...CRIADO_ATUALIZADO,
     ],
   },

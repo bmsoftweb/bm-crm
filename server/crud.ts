@@ -101,6 +101,8 @@ function buildWritePayload(resource: ResourceDef, body: Record<string, any>, isU
 
   for (const field of writableFields(resource)) {
     if (!(field.name in body)) continue;
+    // Campo de fechamento (ex.: o que foi feito na OS): a inclusão não grava
+    if (!isUpdate && field.soNaAlteracao) continue;
 
     // Senha: texto puro informado é convertido em bcrypt; em branco mantém a senha atual
     if (field.type === 'password') {
@@ -128,6 +130,7 @@ function validateRequired(resource: ResourceDef, payload: Record<string, any>, i
     if (!field.required) continue;
     if (field.type === 'password') continue;
     if (isUpdate && !(field.name in payload)) continue;
+    if (!isUpdate && field.soNaAlteracao) continue;
 
     const value = payload[field.name];
     if (value === null || value === undefined || value === '') {
@@ -558,7 +561,15 @@ export function createCrudRouter() {
       const afetados = await antesDeExcluir(resource.name, req.params.id);
       // Item de contrato: o contrato precisa ser recalculado depois que o item sair
       const contratoAfetado = resource.name === 'contrato_itens' ? await contratoDoItem(req.params.id) : null;
-      const fotosAntes = resource.name === 'produtos' ? await fotosDoProduto(req.params.id, empresaDa(res)) : null;
+      // Fotos que saem do Blob junto: as do produto e as de antes/depois da OS
+      const fotosAntes =
+        resource.name === 'produtos'
+          ? await fotosDoProduto(req.params.id, empresaDa(res))
+          : resource.name === 'ordens_servico'
+            ? await pool
+                .query<any[]>('SELECT url FROM os_fotos WHERE os_id = ? AND empresa_id = ?', [req.params.id, empresaDa(res)])
+                .then(([r]) => r.map((f) => String(f.url)))
+            : null;
       // Visita/reunião levada ao Google Agenda: o evento sai junto (os outros tipos não são do CRM na agenda)
       const eventoGoogle =
         resource.name === 'atividades'

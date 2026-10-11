@@ -33,11 +33,45 @@ export interface OS {
   pessoa_cpf: string | null;
   pessoa_telefone: string | null;
   pessoa_whatsapp: string | null;
+  /** Serviços feitos (lista inteira: o app manda a lista toda a cada mudança) */
+  itens?: ItemOS[];
   /** O servidor recusou uma alteração desta OS (ex.: cancelada): a fila dela para até o técnico decidir */
   erro?: string | null;
 }
 
-export type Alteracao = Partial<Pick<OS, 'status' | 'servico_executado' | 'inicio_em' | 'fim_em' | 'inicio_geo' | 'fim_geo' | 'assinatura' | 'assinatura_nome' | 'assinatura_documento'>>;
+export interface ItemOS {
+  servico_id: number;
+  quantidade: number | string;
+  /** Do escritório (vêm do servidor e voltam como estão); lançado no app vai sem: vale o do cadastro */
+  preco_unitario?: number | string | null;
+  desconto?: number | string | null;
+  servico_nome: string;
+  unidade: string;
+}
+
+/** Catálogo de serviços ativos, para lançar sem sinal */
+export interface Servico {
+  id: number;
+  codigo: string | null;
+  nome: string;
+  unidade: string;
+}
+
+export type Alteracao = Partial<
+  Pick<OS, 'status' | 'servico_executado' | 'inicio_em' | 'fim_em' | 'inicio_geo' | 'fim_geo' | 'assinatura' | 'assinatura_nome' | 'assinatura_documento' | 'itens'>
+>;
+
+/** Foto de antes/depois. Até ir para o servidor, a imagem fica aqui (data URI); depois, só o endereço */
+export interface Foto {
+  uuid: string;
+  osId: number;
+  momento: 'antes' | 'depois';
+  url?: string | null;
+  imagem?: string | null;
+  /** Já estava no servidor e o técnico tirou: sai de lá na próxima sincronização */
+  remover?: boolean;
+  criada: number;
+}
 
 interface Pendencia {
   seq?: number;
@@ -48,9 +82,13 @@ interface Pendencia {
 class Banco extends Dexie {
   os!: Table<OS, number>;
   fila!: Table<Pendencia, number>;
+  fotos!: Table<Foto, string>;
+  servicos!: Table<Servico, number>;
   constructor() {
     super('crmweb_tecnico');
     this.version(1).stores({ os: 'id', fila: '++seq, osId' });
+    this.version(2).stores({ fotos: 'uuid, osId' });
+    this.version(3).stores({ servicos: 'id' });
   }
 }
 
@@ -87,18 +125,48 @@ export async function alterar(osId: number, dados: Alteracao) {
   });
 }
 
+/** Reduz a foto da câmera (1600 px no lado maior, JPEG): de 4 MB para uns 300 KB, cabe no aparelho e no envio */
+// createImageBitmap, não Image.decode(): o decode não termina com a página em segundo plano (câmera aberta)
+export async function reduzirFoto(arquivo: File): Promise<string> {
+  const img = await createImageBitmap(arquivo, { imageOrientation: 'from-image' });
+  try {
+    const fator = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * fator);
+    canvas.height = Math.round(img.height * fator);
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.8);
+  } finally {
+    img.close();
+  }
+}
+
+export async function adicionarFoto(osId: number, momento: Foto['momento'], imagem: string) {
+  await db.fotos.add({ uuid: crypto.randomUUID(), osId, momento, imagem, criada: Date.now() });
+}
+
+/** Ainda não enviada: some daqui. Já no servidor: marcada para sair de lá */
+export async function removerFoto(f: Foto) {
+  if (f.url) await db.fotos.update(f.uuid, { remover: true });
+  else await db.fotos.delete(f.uuid);
+}
+
 /** Desiste do que está na fila da OS (depois de o servidor recusar); a próxima sincronização traz a do servidor */
 export async function descartar(osId: number) {
-  await db.transaction('rw', db.os, db.fila, async () => {
+  await db.transaction('rw', db.os, db.fila, db.fotos, async () => {
     await db.fila.where('osId').equals(osId).delete();
+    await db.fotos.where('osId').equals(osId).filter((f) => !f.url).delete();
+    await db.fotos.where('osId').equals(osId).modify({ remover: false });
     await db.os.update(osId, { erro: null });
   });
 }
 
 export async function limparTudo() {
-  await db.transaction('rw', db.os, db.fila, async () => {
+  await db.transaction('rw', db.os, db.fila, db.fotos, db.servicos, async () => {
     await db.os.clear();
     await db.fila.clear();
+    await db.fotos.clear();
+    await db.servicos.clear();
   });
 }
 
@@ -114,34 +182,67 @@ export function sincronizar(token: string): Promise<void> {
   emAndamento ??= (async () => {
     const auth = { Authorization: `Bearer ${token}` };
     const travadas = new Set<number>();
-    for (const p of await db.fila.orderBy('seq').toArray()) {
-      if (travadas.has(p.osId) || (await db.os.get(p.osId))?.erro) {
-        travadas.add(p.osId);
-        continue;
+    /** Manda um pedido da OS; null = recusado (a OS fica com o motivo e a fila dela para) */
+    const enviar = async (osId: number, caminho: string, method: string, corpo?: unknown): Promise<any> => {
+      if (travadas.has(osId) || (await db.os.get(osId))?.erro) {
+        travadas.add(osId);
+        return null;
       }
-      const r = await fetch(`/api/os-tecnico/${p.osId}`, {
-        method: 'POST',
+      const r = await fetch(`/api/os-tecnico/${osId}${caminho}`, {
+        method,
         headers: { ...auth, 'Content-Type': 'application/json' },
-        body: JSON.stringify(p.dados),
+        body: corpo === undefined ? undefined : JSON.stringify(corpo),
       });
       if (r.status === 401) throw new SessaoExpirada('Sessão expirada. Entre novamente.');
-      if (r.status >= 500) throw new Error(`Servidor indisponível (HTTP ${r.status}).`);
+      if (r.status >= 500) throw new Error((await r.json().catch(() => ({})))?.error || `Servidor indisponível (HTTP ${r.status}).`);
+      const resposta = await r.json().catch(() => ({}));
       if (!r.ok) {
-        const msg = (await r.json().catch(() => ({})))?.error || `Recusado (HTTP ${r.status}).`;
-        await db.os.update(p.osId, { erro: msg });
-        travadas.add(p.osId);
-        continue;
+        await db.os.update(osId, { erro: resposta?.error || `Recusado (HTTP ${r.status}).` });
+        travadas.add(osId);
+        return null;
       }
-      await db.fila.delete(p.seq!);
+      return resposta;
+    };
+
+    for (const p of await db.fila.orderBy('seq').toArray()) {
+      if (await enviar(p.osId, '', 'POST', p.dados)) await db.fila.delete(p.seq!);
+    }
+    // Fotos depois das alterações, uma por vez (cada uma tem uns 300 KB)
+    for (const f of (await db.fotos.toArray()).sort((a, b) => a.criada - b.criada)) {
+      if (f.remover) {
+        if (await enviar(f.osId, `/fotos/${f.uuid}`, 'DELETE')) await db.fotos.delete(f.uuid);
+      } else if (!f.url && f.imagem) {
+        const r = await enviar(f.osId, '/fotos', 'POST', { uuid: f.uuid, momento: f.momento, imagem: f.imagem });
+        if (r) await db.fotos.update(f.uuid, { url: r.url, imagem: null });
+      }
     }
 
     const r = await fetch('/api/os-tecnico', { headers: auth });
     if (r.status === 401) throw new SessaoExpirada('Sessão expirada. Entre novamente.');
     if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `Falha ao baixar as OS (HTTP ${r.status}).`);
-    const doServidor: OS[] = await r.json();
+    const cat = await fetch('/api/os-tecnico-servicos', { headers: auth });
+    if (cat.ok) {
+      const servicos: Servico[] = await cat.json();
+      await db.transaction('rw', db.servicos, async () => {
+        await db.servicos.clear();
+        await db.servicos.bulkPut(servicos);
+      });
+    }
+
+    const recebidas: (OS & { fotos: { uuid: string; momento: Foto['momento']; url: string }[] })[] = await r.json();
+    const doServidor: OS[] = recebidas.map(({ fotos, ...o }) => o);
 
     // A do servidor, com o que ainda está na fila por cima (assim nada digitado aqui some)
-    await db.transaction('rw', db.os, db.fila, async () => {
+    await db.transaction('rw', db.os, db.fila, db.fotos, async () => {
+      // Fotos: as do servidor, mais as daqui que ainda não foram (ou que vão sair de lá)
+      const fotosLocais = new Map((await db.fotos.toArray()).map((f) => [f.uuid, f]));
+      const noServidor = recebidas.flatMap((o) => o.fotos.map((f) => ({ ...f, osId: o.id })));
+      const uuids = new Set(noServidor.map((f) => f.uuid));
+      await db.fotos.bulkDelete([...fotosLocais.values()].filter((f) => f.url && !uuids.has(f.uuid)).map((f) => f.uuid));
+      await db.fotos.bulkPut(
+        noServidor.map((f) => ({ ...f, remover: fotosLocais.get(f.uuid)?.remover ?? false, criada: fotosLocais.get(f.uuid)?.criada ?? 0 })),
+      );
+
       const fila = await db.fila.orderBy('seq').toArray();
       const comFila = new Set(fila.map((p) => p.osId));
       const ids = new Set(doServidor.map((o) => o.id));

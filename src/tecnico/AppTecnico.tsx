@@ -14,6 +14,10 @@ import {
   Play,
   RefreshCw,
   Upload,
+  Camera,
+  X,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import { LoginView } from '../components/LoginView';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -22,7 +26,23 @@ import { applyTheme, getInitialTheme } from '../utils/theme';
 import { formatDateBR, formatDateTimeBR, hojeIso } from '../utils/formatters';
 import { FIELD_CLASS, LABEL_CLASS } from '../utils/formStyles';
 import { Assinatura } from './Assinatura';
-import { OS, SessaoExpirada, agora, alterar, db, descartar, limparTudo, localizacao, sincronizar, useConsulta } from './dados';
+import {
+  Foto,
+  ItemOS,
+  OS,
+  SessaoExpirada,
+  adicionarFoto,
+  agora,
+  alterar,
+  db,
+  descartar,
+  limparTudo,
+  localizacao,
+  reduzirFoto,
+  removerFoto,
+  sincronizar,
+  useConsulta,
+} from './dados';
 
 const STATUS: Record<OS['status'], { label: string; cor: string }> = {
   aberta: { label: 'Aberta', cor: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
@@ -117,8 +137,12 @@ export default function AppTecnico() {
 
 const Painel: React.FC<{ sessao: Sessao; onSair: (aviso?: string) => void }> = ({ sessao, onSair }) => {
   const lista = useConsulta(() => db.os.toArray());
-  const pendentes = useConsulta(() => db.fila.count()) ?? 0;
-  const comFila = useConsulta(async () => new Set((await db.fila.toArray()).map((p) => p.osId))) ?? new Set<number>();
+  // Pendente = alteração na fila ou foto ainda não enviada (ou a remover do servidor)
+  const fotosPendentes = useConsulta(() => db.fotos.filter((f) => !f.url || Boolean(f.remover)).toArray());
+  const pendentes = (useConsulta(() => db.fila.count()) ?? 0) + (fotosPendentes?.length ?? 0);
+  const comFila =
+    useConsulta(async () => new Set([...(await db.fila.toArray()).map((p) => p.osId), ...(fotosPendentes ?? []).map((f) => f.osId)]), [fotosPendentes]) ??
+    new Set<number>();
   const [online, setOnline] = useState(navigator.onLine);
   const [sincronizando, setSincronizando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
@@ -270,6 +294,8 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
   const [encerrar, setEncerrar] = useState(false);
   const [descartando, setDescartando] = useState(false);
   const [iniciando, setIniciando] = useState(false);
+  /** Tela de fechamento (serviços, o que foi feito, assinatura): só depois de tocar em "Fechar OS" */
+  const [fechando, setFechando] = useState(false);
   const espera = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // O texto vai para a fila 1 s depois de parar de digitar (fechar o app no meio não perde o que foi escrito)
@@ -294,6 +320,7 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
   const tel = os.contato_telefone || os.pessoa_whatsapp || os.pessoa_telefone;
   const zap = (os.pessoa_whatsapp || os.contato_telefone || '').replace(/\D/g, '');
   const emExecucao = os.status === 'em_execucao';
+  const preenchendo = emExecucao && fechando;
   const podeEncerrar = emExecucao && feito.trim().length > 0 && Boolean(os.assinada);
   const link = 'flex flex-1 flex-col items-center gap-1 rounded-xl bg-stone-100 py-2.5 text-xs font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200';
 
@@ -304,6 +331,7 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
           type="button"
           onClick={async () => {
             await gravarFeitoJa();
+            if (preenchendo) return setFechando(false);
             onVoltar();
             onSincronizar();
           }}
@@ -313,7 +341,7 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
           <ArrowLeft size={22} />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-bold leading-tight">OS nº {os.numero}</h1>
+          <h1 className="text-lg font-bold leading-tight">{preenchendo ? 'Fechar' : 'OS'} nº {os.numero}</h1>
           <p className="text-xs text-blue-100">{TIPOS[os.tipo] || os.tipo} • {quando(os)}</p>
         </div>
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS[os.status].cor}`}>{STATUS[os.status].label}</span>
@@ -376,12 +404,30 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
           </button>
         )}
 
-        {(emExecucao || os.status === 'concluida') && (
+        {/* Em atendimento: só o início registrado; os dados entram no fechamento ("Fechar OS") */}
+        {emExecucao && !fechando && os.inicio_em && (
+          <div className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            <Clock size={16} /> Em atendimento desde {formatDateTimeBR(os.inicio_em)}
+          </div>
+        )}
+
+        {/* Fotos durante todo o atendimento (as de antes, logo ao chegar) */}
+        {(emExecucao || os.status === 'concluida') && <FotosOS os={os} editavel={emExecucao} onSincronizar={onSincronizar} />}
+
+        {(preenchendo || (os.status !== 'cancelada' && (os.itens?.length ?? 0) > 0)) && <ServicosOS os={os} editavel={preenchendo} />}
+
+        {emExecucao && !fechando && (
+          <button type="button" onClick={() => setFechando(true)} className={`${BOTAO} bg-emerald-600 text-white`}>
+            <CheckCircle2 size={20} /> Fechar OS
+          </button>
+        )}
+
+        {(preenchendo || os.status === 'concluida') && (
           <section className="flex flex-col gap-3 rounded-xl bg-white p-3 shadow-sm dark:bg-stone-900">
             {os.inicio_em && <div className="text-xs text-stone-500">Início: {formatDateTimeBR(os.inicio_em)}{os.fim_em ? ` • Término: ${formatDateTimeBR(os.fim_em)}` : ''}</div>}
             <div className={FIELD_CLASS}>
               <label htmlFor="os-feito" className={LABEL_CLASS}>O que foi feito</label>
-              {emExecucao ? (
+              {preenchendo ? (
                 <textarea
                   id="os-feito"
                   required
@@ -412,7 +458,7 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
                   {os.assinatura_documento ? ` • ${os.assinatura_documento}` : ''}
                 </p>
               )}
-              {emExecucao && (
+              {preenchendo && (
                 <button type="button" onClick={() => setAssinando(true)} className={`${BOTAO} mt-2 bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-100`}>
                   <PenLine size={20} /> {os.assinada ? 'Refazer assinatura' : 'Coletar assinatura'}
                 </button>
@@ -421,7 +467,7 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
           </section>
         )}
 
-        {emExecucao && (
+        {preenchendo && (
           <button type="button" onClick={() => setEncerrar(true)} disabled={!podeEncerrar} className={`${BOTAO} bg-emerald-600 text-white`}>
             <CheckCircle2 size={20} /> {podeEncerrar ? 'Encerrar OS' : !feito.trim() ? 'Para encerrar, descreva o que foi feito' : 'Para encerrar, colete a assinatura'}
           </button>
@@ -469,5 +515,189 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
         />
       )}
     </div>
+  );
+};
+
+const MOMENTOS = [
+  { id: 'antes', rotulo: 'Fotos de antes' },
+  { id: 'depois', rotulo: 'Fotos de depois' },
+] as const;
+const MAX_FOTOS = 10;
+
+/** Fotos de antes e depois: da câmera ou da galeria, reduzidas e guardadas no aparelho até haver sinal */
+const FotosOS: React.FC<{ os: OS; editavel: boolean; onSincronizar: () => void }> = ({ os, editavel, onSincronizar }) => {
+  const fotos = useConsulta(() => db.fotos.where('osId').equals(os.id).filter((f) => !f.remover).sortBy('criada'), [os.id]) ?? [];
+  const [lendo, setLendo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [ampliada, setAmpliada] = useState<string | null>(null);
+  const [remover, setRemover] = useState<Foto | null>(null);
+
+  const incluir = async (momento: Foto['momento'], arquivos: FileList | null, livres: number) => {
+    if (!arquivos?.length) return;
+    setLendo(true);
+    setErro(null);
+    try {
+      for (const a of [...arquivos].slice(0, livres)) await adicionarFoto(os.id, momento, await reduzirFoto(a));
+      if (arquivos.length > livres) setErro(`No máximo ${MAX_FOTOS} fotos de ${momento}: as demais ficaram de fora.`);
+    } catch {
+      setErro('Não foi possível ler a foto. Tente de novo.');
+    } finally {
+      setLendo(false);
+    }
+    onSincronizar();
+  };
+
+  if (!editavel && !fotos.length) return null;
+
+  return (
+    <section className="flex flex-col gap-3 rounded-xl bg-white p-3 shadow-sm dark:bg-stone-900">
+      {MOMENTOS.map(({ id, rotulo }) => {
+        const doMomento = fotos.filter((f) => f.momento === id);
+        if (!editavel && !doMomento.length) return null;
+        const livres = MAX_FOTOS - doMomento.length;
+        return (
+          <div key={id}>
+            <h2 className={LABEL_CLASS}>
+              {rotulo} ({doMomento.length})
+            </h2>
+            <div className="mt-1 grid grid-cols-3 gap-2">
+              {doMomento.map((f) => (
+                <div key={f.uuid} className="relative aspect-square overflow-hidden rounded-lg bg-stone-100 dark:bg-stone-800">
+                  <img src={f.imagem || f.url || ''} alt="" className="h-full w-full object-cover" onClick={() => setAmpliada(f.imagem || f.url || null)} />
+                  {!f.url && (
+                    <span className="absolute bottom-1 left-1 rounded-full bg-amber-500 p-1 text-white" title="Ainda não enviada">
+                      <Upload size={12} />
+                    </span>
+                  )}
+                  {editavel && (
+                    <button type="button" onClick={() => setRemover(f)} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white" title="Remover foto">
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {editavel && livres > 0 && (
+                <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-300 text-xs font-semibold text-stone-500 dark:border-stone-600">
+                  <Camera size={24} />
+                  {lendo ? 'Lendo…' : 'Foto'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    hidden
+                    disabled={lendo}
+                    onChange={(e) => {
+                      incluir(id, e.target.files, livres);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {erro && <p className="text-xs font-medium text-rose-600">{erro}</p>}
+
+      {ampliada && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-2" onClick={() => setAmpliada(null)}>
+          <img src={ampliada} alt="" className="max-h-full max-w-full object-contain" />
+          <button type="button" className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] rounded-full bg-white/20 p-2 text-white" title="Fechar">
+            <X size={22} />
+          </button>
+        </div>
+      )}
+      {remover && (
+        <ConfirmDialog
+          titulo="Remover foto"
+          mensagem={`Remover esta foto de ${remover.momento} da OS nº ${os.numero}?`}
+          confirmar="Remover"
+          onConfirmar={async () => {
+            await removerFoto(remover);
+            setRemover(null);
+            onSincronizar();
+          }}
+          onCancelar={() => setRemover(null)}
+        />
+      )}
+    </section>
+  );
+};
+
+const qtdBR = (v: unknown) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(v) || 0);
+
+/** Serviços feitos: escolhidos do catálogo guardado no aparelho; cada mudança manda a lista inteira para a fila */
+const ServicosOS: React.FC<{ os: OS; editavel: boolean }> = ({ os, editavel }) => {
+  const catalogo = useConsulta(() => db.servicos.orderBy('id').toArray()) ?? [];
+  const itens = os.itens ?? [];
+  const [remover, setRemover] = useState<number | null>(null);
+  const gravar = (lista: ItemOS[]) => alterar(os.id, { itens: lista });
+  const somar = (n: number, delta: number) =>
+    gravar(itens.map((i, k) => (k === n ? { ...i, quantidade: Math.max(1, (Number(i.quantidade) || 0) + delta) } : i)));
+
+  return (
+    <section className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-sm dark:bg-stone-900">
+      <h2 className={LABEL_CLASS}>{editavel || os.status === 'concluida' ? 'Serviços feitos' : 'Serviços lançados'}</h2>
+      {!editavel && os.status !== 'concluida' && <p className="text-xs text-stone-500">Lançados pelo escritório. No fechamento da OS, confira e ajuste.</p>}
+      {editavel && itens.length > 0 && <p className="text-xs text-stone-500">Confira os serviços: ajuste a quantidade, tire ou adicione.</p>}
+      {itens.length === 0 && <p className="text-sm text-stone-500">Nenhum serviço lançado.</p>}
+      {itens.map((i, n) => (
+        <div key={`${i.servico_id}-${n}`} className="flex items-center gap-2 rounded-lg bg-stone-50 p-2 dark:bg-stone-800/60">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{i.servico_nome}</div>
+            <div className="text-xs text-stone-500">{i.unidade}</div>
+          </div>
+          {editavel ? (
+            <>
+              <button type="button" onClick={() => somar(n, -1)} disabled={Number(i.quantidade) <= 1} className="rounded-lg bg-white p-2 shadow-sm disabled:opacity-30 dark:bg-stone-700" title="Menos">
+                <Minus size={16} />
+              </button>
+              <span className="w-10 text-center font-semibold tabular-nums">{qtdBR(i.quantidade)}</span>
+              <button type="button" onClick={() => somar(n, 1)} className="rounded-lg bg-white p-2 shadow-sm dark:bg-stone-700" title="Mais">
+                <Plus size={16} />
+              </button>
+              <button type="button" onClick={() => setRemover(n)} className="rounded-lg p-2 text-stone-400" title="Tirar serviço">
+                <X size={18} />
+              </button>
+            </>
+          ) : (
+            <span className="font-semibold tabular-nums">{qtdBR(i.quantidade)}</span>
+          )}
+        </div>
+      ))}
+      {editavel &&
+        (catalogo.length ? (
+          <select
+            value=""
+            onChange={(e) => {
+              const s = catalogo.find((c) => c.id === Number(e.target.value));
+              if (s) gravar([...itens, { servico_id: s.id, quantidade: 1, servico_nome: s.nome, unidade: s.unidade }]);
+            }}
+            className="rounded-xl bg-stone-100 p-3 text-base font-semibold text-blue-700 dark:bg-stone-800 dark:text-blue-300"
+          >
+            <option value="">+ Adicionar serviço</option>
+            {[...catalogo].sort((a, b) => a.nome.localeCompare(b.nome)).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome} ({c.unidade})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <p className="text-xs text-stone-500">Nenhum serviço no aparelho: sincronize com sinal para baixar o cadastro.</p>
+        ))}
+
+      {remover !== null && (
+        <ConfirmDialog
+          titulo="Tirar serviço"
+          mensagem={`Tirar "${itens[remover]?.servico_nome}" dos serviços feitos?`}
+          confirmar="Tirar"
+          onConfirmar={async () => {
+            await gravar(itens.filter((_, k) => k !== remover));
+            setRemover(null);
+          }}
+          onCancelar={() => setRemover(null)}
+        />
+      )}
+    </section>
   );
 };

@@ -35,6 +35,12 @@ export interface FieldDef {
   placeholder?: string;
   required?: boolean;
   readOnly?: boolean;
+  /** Só na alteração: o formulário de inclusão não mostra (ex.: fechamento da OS) */
+  soNaAlteracao?: boolean;
+  /** Campo só leitura mostrado dentro do formulário na edição (bloqueado), em vez da caixa de dados do banco */
+  mostrarNaEdicao?: boolean;
+  /** Campo de hora: ao preencher, acerta outro campo de hora somando estas horas (ex.: Das → Até + 2 h) */
+  somarHoras?: { campo: string; horas: number };
   listed?: boolean;
   searchable?: boolean;
   /** Aparece no painel de busca avançada */
@@ -95,6 +101,8 @@ export interface ResourceDef {
    * é a raiz e os demais aparecem como filhos (ex.: versões de uma proposta).
    */
   arvore?: { grupo: string; ordem: string };
+  /** O formulário não mostra a caixa "Dados gerados pelo banco" */
+  semDadosDoBanco?: boolean;
   /** A lista tem o filtro "Só as minhas" (as do usuário logado) */
   minhas?: boolean;
   /** Campo Sim/Não com filtro rápido Todas/Sim/Não na barra da lista */

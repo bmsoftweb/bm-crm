@@ -187,6 +187,9 @@ export const buscarProdutos = (q: string): Promise<ProdutoBusca[]> => get(`/api/
 
 /** Ordem de serviço completa para impressão (server/os.ts) */
 export const fetchOS = (id: Id): Promise<RegistroCrud> => get(`/api/os/${encodeURIComponent(String(id))}`);
+/** Fechamento da OS pela web: o que foi feito, horários, quem assinou e a lista inteira de serviços */
+export const encerrarOS = (id: Id, dados: RegistroCrud): Promise<{ ok: boolean }> =>
+  enviar('POST', `/api/os/${encodeURIComponent(String(id))}/encerrar`, dados);
 
 export type TipoDocumento = 'propostas' | 'pedidos';
 export const fetchDocumento = (tipo: TipoDocumento, id: Id): Promise<RegistroCrud> =>

@@ -1,5 +1,5 @@
 import { RegistroCrud } from '../types.js';
-import { formatCNPJ, formatDateBR, formatDateTimeBR } from './formatters.js';
+import { formatCNPJ, formatDateBR, formatDateTimeBR, formatMoeda } from './formatters.js';
 import { esc } from './imprimirDocumento.js';
 import { fetchOS } from '../services/api.js';
 
@@ -11,6 +11,8 @@ const TIPOS: Record<string, string> = {
   visita_tecnica: 'Visita técnica',
   outro: 'Outro',
 };
+
+const URL_FOTO = /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\/[^\s"'<>]+$/i;
 
 const hora = (v: unknown) => (v ? String(v).slice(0, 5) : '');
 
@@ -28,6 +30,33 @@ export function htmlOS(o: RegistroCrud): string {
   const horario = [hora(o.hora_inicio), hora(o.hora_fim)].filter(Boolean).join(' às ');
   const linha = (rotulo: string, valor: unknown) => (valor ? `<div><span class="rot">${rotulo}</span> ${esc(valor)}</div>` : '');
   const titulo = `Ordem de Serviço nº ${o.numero}`;
+  const qtd = (v: unknown) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(v) || 0);
+  const itens: RegistroCrud[] = o.itens || [];
+  const total = itens.reduce((t, i) => t + (Number(i.subtotal) || 0), 0);
+  // Serviços e produtos: os lançados e, enquanto a OS não foi encerrada, linhas em branco para o técnico anotar
+  const emBranco = o.status === 'concluida' ? 0 : Math.max(8 - itens.length, 4);
+  const servicos =
+    itens.length || emBranco
+      ? `<section><h3>Serviços e produtos utilizados</h3><table class="itens">
+    <thead><tr><th class="r" style="width:60px">Qtd.</th><th class="c" style="width:50px">Un.</th><th>Serviço / produto</th><th class="r" style="width:90px">Preço unit.</th><th class="r" style="width:80px">Desconto</th><th class="r" style="width:90px">Subtotal</th></tr></thead>
+    <tbody>${itens
+      .map(
+        (i) => `<tr><td class="r">${qtd(i.quantidade)}</td><td class="c">${esc(i.unidade)}</td>
+        <td>${esc(i.servico_nome)}${i.servico_codigo ? ` <span class="rot">(${esc(i.servico_codigo)})</span>` : ''}</td>
+        <td class="r">${formatMoeda(i.preco_unitario)}</td><td class="r">${Number(i.desconto) ? formatMoeda(i.desconto) : '—'}</td><td class="r b">${formatMoeda(i.subtotal)}</td></tr>`,
+      )
+      .join('')}${'<tr class="vazia"><td></td><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(emBranco)}</tbody>
+    ${itens.length && !emBranco ? `<tfoot><tr><td colspan="5" class="r b">Total</td><td class="r b">${formatMoeda(total)}</td></tr></tfoot>` : ''}
+  </table></section>`
+      : '';
+  // Fotos do app do técnico numa página à parte (só endereços do Vercel Blob)
+  const grade = (momento: string, rotulo: string) => {
+    const lista = (o.fotos || []).filter((f: RegistroCrud) => f.momento === momento && URL_FOTO.test(String(f.url)));
+    return lista.length
+      ? `<section><h3>${rotulo}</h3><div class="grade">${lista.map((f: RegistroCrud) => `<img src="${esc(f.url)}" alt="">`).join('')}</div></section>`
+      : '';
+  };
+  const fotos = (o.fotos || []).length ? `<div class="fotos">${grade('antes', 'Fotos de antes')}${grade('depois', 'Fotos de depois')}</div>` : '';
 
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)}</title>
@@ -58,7 +87,19 @@ export function htmlOS(o: RegistroCrud): string {
   footer > div { flex: 1; text-align: center; color: #57534e; }
   .ass { border-top: 1px solid #a8a29e; padding-top: 4px; }
   .assinatura { max-height: 70px; max-width: 100%; display: block; margin: 0 auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f5f5f4; font-size: 10px; text-align: left; padding: 5px 6px; border-bottom: 1px solid #d6d3d1; }
+  td { padding: 5px 6px; border-bottom: 1px solid #e7e5e4; vertical-align: top; }
+  tfoot td { border-top: 2px solid #1c1917; border-bottom: none; font-size: 12px; }
+  .r { text-align: right; white-space: nowrap; } .c { text-align: center; }
+  .itens td { border: 1px solid #d6d3d1; }
+  .itens th { border: 1px solid #d6d3d1; }
+  .vazia td { height: 24px; }
   .dados { text-align: left; margin-top: 10px; line-height: 2.2; }
+  .fotos { page-break-before: always; }
+  .fotos section { margin-bottom: 14px; }
+  .grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .grade img { width: 100%; height: 55mm; object-fit: cover; border-radius: 4px; page-break-inside: avoid; }
 </style></head>
 <body>
   <header>
@@ -88,6 +129,8 @@ export function htmlOS(o: RegistroCrud): string {
 
   <section><h3>O que será feito</h3><div class="caixa"><p class="pre">${esc(o.servico_solicitado || '')}</p></div></section>
 
+  ${servicos}
+
   <section><h3>O que foi feito</h3>${
     o.servico_executado ? `<div class="caixa"><p class="pre">${esc(o.servico_executado)}</p></div>` : '<div class="caixa linhas"></div>'
   }</section>
@@ -108,6 +151,7 @@ export function htmlOS(o: RegistroCrud): string {
       </div>
     </div>
   </footer>
+  ${fotos}
   <script>window.onload = () => { window.focus(); window.print(); };</script>
 </body></html>`;
 }

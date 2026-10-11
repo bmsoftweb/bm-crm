@@ -1,12 +1,107 @@
 import { Router, Request, Response } from 'express';
+import { del, put } from '@vercel/blob';
 import { pool } from './db.js';
 import { exigirAcesso } from './permissoes.js';
-import { aposGravar } from './regras.js';
+import { antesDeGravar, aposGravar } from './regras.js';
 
 /**
  * Ordens de Serviço: o cadastro é o CRUD genérico (schema.ts); aqui fica o que a tela genérica não faz.
- * Por enquanto, a OS completa para impressão (cliente, técnico e a empresa no cabeçalho).
+ * A OS completa para impressão e a sincronização do app do técnico (/tecnico), fotos de antes e depois inclusive.
  */
+
+/** Foto já reduzida no aparelho (1600 px, JPEG); folga para foto com muito detalhe */
+const MAX_FOTO = 1_500_000;
+const MAX_FOTOS_POR_MOMENTO = 10;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function erro(status: number, msg: string) {
+  return Object.assign(new Error(msg), { status });
+}
+
+/** OS do técnico logado e ainda dele: cancelada ou passada para outro recusa (409) */
+async function osDoTecnico(id: string, res: Response): Promise<{ status: string }> {
+  exigirAcesso(res, 'ordens_servico', 'as ordens de serviço');
+  const [r] = await pool.query<any[]>('SELECT status, tecnico_id FROM ordens_servico WHERE id = ? AND empresa_id = ?', [id, res.locals.empresaId]);
+  const os = r[0];
+  if (!os) throw erro(404, 'A OS não existe mais.');
+  if (Number(os.tecnico_id) !== Number(res.locals.usuarioId)) throw erro(409, 'A OS foi passada para outro técnico.');
+  if (os.status === 'cancelada') throw erro(409, 'A OS foi cancelada pelo escritório.');
+  return os;
+}
+
+/** Fotos das OS: { os_id: [{ uuid, momento, url }] } */
+async function fotosDas(ids: number[]): Promise<Record<number, { uuid: string; momento: string; url: string }[]>> {
+  if (!ids.length) return {};
+  const [r] = await pool.query<any[]>('SELECT os_id, uuid, momento, url FROM os_fotos WHERE os_id IN (?) ORDER BY id', [ids]);
+  const mapa: Record<number, any[]> = {};
+  for (const f of r) (mapa[f.os_id] ??= []).push({ uuid: f.uuid, momento: f.momento, url: f.url });
+  return mapa;
+}
+
+/** Data e hora da tela ("aaaa-mm-ddThh:mm") ou do app ("aaaa-mm-dd hh:mm:ss") → MySQL; vazio = null */
+function dataHora(v: unknown, rotulo: string): string | null {
+  if (v == null || v === '') return null;
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(:\d{2})?$/.exec(String(v));
+  if (!m) throw erro(400, `${rotulo}: data e hora inválidas.`);
+  return `${m[1]} ${m[2]}${m[3] ?? ':00'}`;
+}
+
+/**
+ * Troca os serviços da OS pela lista informada (a lista inteira: reenviar dá o mesmo resultado).
+ * Preço em branco = o do cadastro; subtotal e conferências pela mesma regra do painel (regras.ts).
+ */
+export async function gravarItensOS(osId: string | number, empresaId: string, lista: unknown) {
+  if (!Array.isArray(lista)) throw erro(400, 'Serviços em formato inválido.');
+  if (lista.length > 100) throw erro(400, 'No máximo 100 serviços por OS.');
+  const itens: Record<string, any>[] = [];
+  for (const i of lista) {
+    const [s] = await pool.query<any[]>('SELECT id FROM servicos WHERE id = ? AND empresa_id = ?', [i?.servico_id, empresaId]);
+    if (!s[0]) throw erro(400, 'Um dos serviços não existe nesta empresa.');
+    const item = {
+      servico_id: s[0].id,
+      quantidade: Number(i.quantidade ?? 1),
+      preco_unitario: i.preco_unitario === '' || i.preco_unitario == null ? null : Number(i.preco_unitario),
+      desconto: Number(i.desconto || 0),
+    };
+    await antesDeGravar('os_itens', item, empresaId);
+    itens.push(item);
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('DELETE FROM os_itens WHERE os_id = ?', [osId]);
+    for (const i of itens) {
+      await conn.query('INSERT INTO os_itens (os_id, servico_id, quantidade, preco_unitario, desconto, subtotal) VALUES (?, ?, ?, ?, ?, ?)', [
+        osId,
+        i.servico_id,
+        i.quantidade,
+        i.preco_unitario,
+        i.desconto,
+        i.subtotal,
+      ]);
+    }
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
+}
+
+/** Serviços da OS como o app e a tela de encerrar usam */
+async function itensDas(ids: number[]): Promise<Record<number, any[]>> {
+  if (!ids.length) return {};
+  const [r] = await pool.query<any[]>(
+    `SELECT i.os_id, i.servico_id, i.quantidade, i.preco_unitario, i.desconto, i.subtotal, s.nome AS servico_nome, s.codigo AS servico_codigo, s.unidade
+       FROM os_itens i JOIN servicos s ON s.id = i.servico_id WHERE i.os_id IN (?) ORDER BY i.id`,
+    [ids],
+  );
+  const mapa: Record<number, any[]> = {};
+  for (const { os_id, ...i } of r) (mapa[os_id] ??= []).push(i);
+  return mapa;
+}
+
 export function createOsRouter() {
   const router = Router();
 
@@ -27,7 +122,37 @@ export function createOsRouter() {
         [req.params.id, res.locals.empresaId],
       );
       if (!r[0]) return res.status(404).json({ error: 'Ordem de serviço não encontrada.' });
-      res.json(r[0]);
+      res.json({ ...r[0], itens: (await itensDas([r[0].id]))[r[0].id] ?? [], fotos: (await fotosDas([r[0].id]))[r[0].id] ?? [] });
+    } catch (err: any) {
+      res.status(err.status || 400).json({ error: err.message });
+    }
+  });
+
+  /**
+   * Encerrar pela web (a OS voltou no papel): o que foi feito, horários, quem assinou e os serviços, de uma vez.
+   * Encerrada pode ser encerrada de novo (corrige o fechamento); cancelada, não.
+   */
+  router.post('/os/:id/encerrar', async (req: Request, res: Response) => {
+    try {
+      exigirAcesso(res, 'ordens_servico', 'as ordens de serviço');
+      const [r] = await pool.query<any[]>('SELECT status FROM ordens_servico WHERE id = ? AND empresa_id = ?', [req.params.id, res.locals.empresaId]);
+      if (!r[0]) throw erro(404, 'Ordem de serviço não encontrada.');
+      if (r[0].status === 'cancelada') throw erro(409, 'OS cancelada não pode ser encerrada.');
+      const b = req.body || {};
+      const feito = String(b.servico_executado ?? '').trim().slice(0, 20000);
+      if (!feito) throw erro(400, 'Descreva o que foi feito.');
+      const inicio = dataHora(b.inicio_em, 'Início');
+      const fim = dataHora(b.fim_em, 'Término');
+      if (inicio && fim && fim < inicio) throw erro(400, 'O término não pode ser antes do início.');
+      await gravarItensOS(req.params.id, res.locals.empresaId, b.itens ?? []);
+      await pool.query(
+        `UPDATE ordens_servico SET status = 'concluida', servico_executado = ?, inicio_em = ?, fim_em = ?,
+                assinatura_nome = COALESCE(?, assinatura_nome), assinatura_documento = COALESCE(?, assinatura_documento)
+          WHERE id = ?`,
+        [feito, inicio, fim, String(b.assinatura_nome ?? '').trim().slice(0, 120) || null, String(b.assinatura_documento ?? '').trim().slice(0, 20) || null, req.params.id],
+      );
+      await aposGravar('ordens_servico', String(req.params.id));
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(err.status || 400).json({ error: err.message });
     }
@@ -54,6 +179,21 @@ export function createOsRouter() {
           LIMIT 500`,
         [res.locals.empresaId, res.locals.usuarioId],
       );
+      const fotos = await fotosDas(r.map((o) => o.id));
+      const itens = await itensDas(r.map((o) => o.id));
+      res.json(r.map((o) => ({ ...o, fotos: fotos[o.id] ?? [], itens: itens[o.id] ?? [] })));
+    } catch (err: any) {
+      res.status(err.status || 400).json({ error: err.message });
+    }
+  });
+
+  /** Catálogo de serviços para o app lançar sem sinal (os ativos) */
+  router.get('/os-tecnico-servicos', async (_req: Request, res: Response) => {
+    try {
+      exigirAcesso(res, 'ordens_servico', 'as ordens de serviço');
+      const [r] = await pool.query<any[]>('SELECT id, codigo, nome, unidade FROM servicos WHERE empresa_id = ? AND ativo = 1 ORDER BY nome', [
+        res.locals.empresaId,
+      ]);
       res.json(r);
     } catch (err: any) {
       res.status(err.status || 400).json({ error: err.message });
@@ -66,15 +206,7 @@ export function createOsRouter() {
    */
   router.post('/os-tecnico/:id', async (req: Request, res: Response) => {
     try {
-      exigirAcesso(res, 'ordens_servico', 'as ordens de serviço');
-      const [r] = await pool.query<any[]>('SELECT status, tecnico_id FROM ordens_servico WHERE id = ? AND empresa_id = ?', [
-        req.params.id,
-        res.locals.empresaId,
-      ]);
-      const os = r[0];
-      if (!os) return res.status(404).json({ error: 'A OS não existe mais.' });
-      if (Number(os.tecnico_id) !== Number(res.locals.usuarioId)) return res.status(409).json({ error: 'A OS foi passada para outro técnico.' });
-      if (os.status === 'cancelada') return res.status(409).json({ error: 'A OS foi cancelada pelo escritório.' });
+      const os = await osDoTecnico(req.params.id, res);
 
       const b = req.body || {};
       const dados: Record<string, unknown> = {};
@@ -103,10 +235,67 @@ export function createOsRouter() {
         if (!(dados.assinatura ?? (Number(atual.assinada) || null))) throw new Error('Para encerrar, colete a assinatura do cliente.');
       }
 
+      // Serviços feitos: a lista inteira do app troca a da OS
+      if ('itens' in b) await gravarItensOS(req.params.id, res.locals.empresaId, b.itens);
+
       const cols = Object.keys(dados);
       if (cols.length) {
         await pool.query(`UPDATE ordens_servico SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`, [...cols.map((c) => dados[c]), req.params.id]);
         await aposGravar('ordens_servico', String(req.params.id));
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(err.status || 400).json({ error: err.message });
+    }
+  });
+
+  /**
+   * Foto de antes/depois tirada no app (data URI JPEG). O uuid vem do aparelho: o mesmo envio repetido
+   * sobrescreve o mesmo arquivo e não cria outra linha. Vale também para OS já concluída (foto enviada depois).
+   */
+  router.post('/os-tecnico/:id/fotos', async (req: Request, res: Response) => {
+    try {
+      await osDoTecnico(req.params.id, res);
+      const { uuid, momento } = req.body || {};
+      if (!UUID.test(String(uuid))) throw erro(400, 'Foto sem identificação.');
+      if (!['antes', 'depois'].includes(momento)) throw erro(400, 'A foto precisa ser de antes ou de depois.');
+      const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.imagem ?? ''));
+      const dados = m ? Buffer.from(m[1], 'base64') : Buffer.alloc(0);
+      if (!(dados[0] === 0xff && dados[1] === 0xd8 && dados[2] === 0xff)) throw erro(415, 'A foto precisa chegar em JPEG.');
+      if (dados.length > MAX_FOTO) throw erro(413, 'Foto grande demais depois de reduzida.');
+      const [[n]] = await pool.query<any>('SELECT COUNT(*) AS n FROM os_fotos WHERE os_id = ? AND momento = ? AND uuid <> ?', [req.params.id, momento, uuid]);
+      if (n.n >= MAX_FOTOS_POR_MOMENTO) throw erro(409, `No máximo ${MAX_FOTOS_POR_MOMENTO} fotos de ${momento}.`);
+      if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_STORE_ID) throw erro(503, 'Storage de fotos não configurado (BLOB_READ_WRITE_TOKEN).');
+
+      // Mesma estrutura das fotos dos produtos: os/<empresa_id>/<id da OS com 9 dígitos>-<antes|depois>-<uuid>.jpg
+      // (público, mas o uuid no nome não é adivinhável; o arquivo nunca muda, então cache de 1 ano)
+      const blob = await put(`os/${res.locals.empresaId}/${String(req.params.id).padStart(9, '0')}-${momento}-${uuid}.jpg`, dados, {
+        access: 'public',
+        contentType: 'image/jpeg',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        cacheControlMaxAge: 31_536_000,
+      });
+      await pool.query(
+        `INSERT INTO os_fotos (empresa_id, os_id, uuid, momento, url, criado_por) VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE url = VALUES(url)`,
+        [res.locals.empresaId, req.params.id, uuid, momento, blob.url, res.locals.usuarioId],
+      );
+      res.json({ url: blob.url });
+    } catch (err: any) {
+      res.status(err.status || 400).json({ error: err.message });
+    }
+  });
+
+  /** Foto removida no app (só enquanto a OS está em execução); repetir não dá erro */
+  router.delete('/os-tecnico/:id/fotos/:uuid', async (req: Request, res: Response) => {
+    try {
+      const os = await osDoTecnico(req.params.id, res);
+      if (os.status === 'concluida') throw erro(409, 'A OS já foi encerrada: a foto não pode mais sair.');
+      const [r] = await pool.query<any[]>('SELECT id, url FROM os_fotos WHERE os_id = ? AND uuid = ?', [req.params.id, req.params.uuid]);
+      if (r[0]) {
+        await pool.query('DELETE FROM os_fotos WHERE id = ?', [r[0].id]);
+        await del(r[0].url).catch((e) => console.error(`OS: foto não apagada do Blob: ${e.message}`));
       }
       res.json({ ok: true });
     } catch (err: any) {

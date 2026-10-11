@@ -196,6 +196,11 @@ function mesmoValor(a: unknown, b: unknown) {
  * por aqui: ela aplica a cláusula de renovação do próprio contrato.
  */
 export async function conferirTrava(recurso: string, acao: 'incluir' | 'alterar' | 'excluir', id: string | null, payload: Record<string, any> | null) {
+  // OS: concluir só pelo Encerrar (web) ou pelo app, que gravam o que foi feito, os horários e os serviços
+  if (recurso === 'ordens_servico' && id && payload?.status === 'concluida') {
+    const [r] = await pool.query<any[]>('SELECT status FROM ordens_servico WHERE id = ?', [id]);
+    if (r[0] && r[0].status !== 'concluida') throw new Error('Para concluir a OS, use a ação Encerrar (o que foi feito, horários e serviços).');
+  }
   if (recurso === 'contratos' && id && acao !== 'incluir') {
     if (!travado(await situacaoTrava(id))) return;
     if (acao === 'excluir') throw new Error('Contrato assinado não pode ser excluído. Para encerrá-lo, mude a situação para Encerrado ou Cancelado.');
