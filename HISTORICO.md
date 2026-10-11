@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.148 — 2026-10-10
+
+- Chamados Ativos: o filtro "Encerrados" lista do último encerrado para o mais antigo (os demais filtros continuam na ordem de chegada).
+
 ## 0.0.147 — 2026-10-10
 
 - Impressão da OS: "O que foi feito" passa a vir antes do quadro "Serviços e produtos utilizados".

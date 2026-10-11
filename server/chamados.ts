@@ -159,7 +159,7 @@ export function createChamadosRouter(): Router {
     res.json(r.map((x, i) => ({ ...numeros(x), posicao: i + 1 })));
   }));
 
-  /** Chamados Ativos: filtro rápido (meus, todos, aguardando, andamento, encerrados) e busca; na ordem de chegada */
+  /** Chamados Ativos: filtro rápido (meus, todos, aguardando, andamento, encerrados) e busca; na ordem de chegada (Encerrados: o último encerrado primeiro) */
   router.get('/chamados', rota(async (req, res) => {
     const filtro = String(req.query.filtro || 'meus');
     const onde: string[] = ['c.empresa_id = ?'];
@@ -176,12 +176,14 @@ export function createChamadosRouter(): Router {
       onde.push('(c.titulo LIKE ? OR p.nome LIKE ? OR c.contato_nome LIKE ? OR c.numero = ?)');
       params.push(`%${q}%`, `%${q}%`, `%${q}%`, Number(q) || 0);
     }
+    // Encerrados: do encerrado por último para o mais antigo. Os demais: os 200 mais recentes, na ordem de chegada
+    const encerrados = filtro === 'encerrados';
     const [r] = await pool.query<any[]>(
-      `${SELECT} WHERE ${onde.join(' AND ')} ORDER BY c.criado_em DESC, c.id DESC LIMIT 200`,
+      `${SELECT} WHERE ${onde.join(' AND ')}
+        ORDER BY ${encerrados ? 'COALESCE(c.encerrado_em, c.atualizado_em) DESC,' : ''} c.criado_em DESC, c.id DESC LIMIT 200`,
       params,
     );
-    // Os 200 mais recentes, mostrados na ordem de chegada (em todos os filtros, inclusive Encerrados)
-    res.json(r.reverse().map(numeros));
+    res.json((encerrados ? r : r.reverse()).map(numeros));
   }));
 
   /** Quantos na fila (etiqueta do menu) */
