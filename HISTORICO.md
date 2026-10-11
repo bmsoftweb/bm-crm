@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.149 — 2026-10-10
+
+- Atividades/Tarefas: "Gerar OS" no menu de ações. Cria a Ordem de Serviço com o contato da atividade (ou o do negócio/chamado), quem executa (ou quem gerou), a data e a hora (Até = +2 h), o assunto e a observação, e o chamado de origem; a OS abre em seguida para conferir. Sem contato, avisa e não gera.
+
 ## 0.0.148 — 2026-10-10
 
 - Chamados Ativos: o filtro "Encerrados" lista do último encerrado para o mais antigo (os demais filtros continuam na ordem de chegada).

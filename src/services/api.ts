@@ -187,6 +187,9 @@ export const buscarProdutos = (q: string): Promise<ProdutoBusca[]> => get(`/api/
 
 /** Ordem de serviço completa para impressão (server/os.ts) */
 export const fetchOS = (id: Id): Promise<RegistroCrud> => get(`/api/os/${encodeURIComponent(String(id))}`);
+/** Cria a OS a partir da atividade (menu das Atividades); devolve a OS para abrir */
+export const gerarOSDaAtividade = (atividadeId: Id): Promise<{ id: number; numero: number }> =>
+  enviar('POST', `/api/os/da-atividade/${encodeURIComponent(String(atividadeId))}`);
 /** Fechamento da OS pela web: o que foi feito, horários, quem assinou e a lista inteira de serviços */
 export const encerrarOS = (id: Id, dados: RegistroCrud): Promise<{ ok: boolean }> =>
   enviar('POST', `/api/os/${encodeURIComponent(String(id))}/encerrar`, dados);

@@ -37,6 +37,7 @@ import { BotaoAcao } from './components/MenuAcoes';
 import { Headset, KeyRound, Printer } from 'lucide-react';
 import { imprimirOS } from './utils/imprimirOS';
 import { AcaoEncerrarOS } from './components/EncerrarOS';
+import { AcaoGerarOS } from './components/GerarOS';
 import { AcaoRetornoLigacao, PesquisasSatisfacao } from './components/PesquisasSatisfacao';
 import { PainelSuporte } from './components/PainelSuporte';
 import { Prospeccao } from './components/Prospeccao';
@@ -747,13 +748,22 @@ export default function App() {
                         : activeResource.name === 'atividades'
                           ? (row, { recarregar }) => {
                               const pendente = !Number(row.concluida);
-                              // Menu "...": Concluir (pendente), Conversa do Bot, Registrar retorno (ligação da pesquisa); Editar e Excluir vêm depois
+                              // Menu "...": Concluir (pendente), Conversa do Bot, Registrar retorno (ligação da pesquisa), Gerar OS; Editar e Excluir vêm depois
                               return (
                                 <>
                                   {pendente && <AcaoConcluir registro={row} onFeito={() => (showToast('Atividade concluída.'), recarregar())} />}
                                   {Number(row.executor_bot) === 1 && <AcaoConversaBot atividadeId={row.id as string} />}
                                   {pendente && row.origem === 'pesquisa' && row.tipo === 'ligacao' && (
                                     <AcaoRetornoLigacao atividadeId={row.id as string} onGravado={() => (showToast('Retorno registrado.'), recarregar())} />
+                                  )}
+                                  {podeAcessar(usuario, 'ordens_servico') && (
+                                    <AcaoGerarOS
+                                      registro={row}
+                                      onGerada={(os) => {
+                                        showToast(`OS nº ${os.numero} gerada.`);
+                                        navegarRegistro('ordens_servico', os.id);
+                                      }}
+                                    />
                                   )}
                                 </>
                               );
