@@ -55,10 +55,15 @@ export async function gravarItensOS(osId: string | number, empresaId: string, li
   if (lista.length > 100) throw erro(400, 'No máximo 100 serviços por OS.');
   const itens: Record<string, any>[] = [];
   for (const i of lista) {
-    const [s] = await pool.query<any[]>('SELECT id FROM servicos WHERE id = ? AND empresa_id = ?', [i?.servico_id, empresaId]);
-    if (!s[0]) throw erro(400, 'Um dos serviços não existe nesta empresa.');
+    // Um serviço ou um produto da empresa
+    const ehProduto = Boolean(i?.produto_id) && !i?.servico_id;
+    const [s] = ehProduto
+      ? await pool.query<any[]>('SELECT id FROM produtos WHERE id = ? AND empresa_id = ?', [i.produto_id, empresaId])
+      : await pool.query<any[]>('SELECT id FROM servicos WHERE id = ? AND empresa_id = ?', [i?.servico_id, empresaId]);
+    if (!s[0]) throw erro(400, `Um dos ${ehProduto ? 'produtos' : 'serviços'} não existe nesta empresa.`);
     const item = {
-      servico_id: s[0].id,
+      servico_id: ehProduto ? null : s[0].id,
+      produto_id: ehProduto ? s[0].id : null,
       quantidade: Number(i.quantidade ?? 1),
       preco_unitario: i.preco_unitario === '' || i.preco_unitario == null ? null : Number(i.preco_unitario),
       desconto: Number(i.desconto || 0),
@@ -71,9 +76,10 @@ export async function gravarItensOS(osId: string | number, empresaId: string, li
     await conn.beginTransaction();
     await conn.query('DELETE FROM os_itens WHERE os_id = ?', [osId]);
     for (const i of itens) {
-      await conn.query('INSERT INTO os_itens (os_id, servico_id, quantidade, preco_unitario, desconto, subtotal) VALUES (?, ?, ?, ?, ?, ?)', [
+      await conn.query('INSERT INTO os_itens (os_id, servico_id, produto_id, quantidade, preco_unitario, desconto, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)', [
         osId,
         i.servico_id,
+        i.produto_id,
         i.quantidade,
         i.preco_unitario,
         i.desconto,
@@ -89,12 +95,16 @@ export async function gravarItensOS(osId: string | number, empresaId: string, li
   }
 }
 
-/** Serviços da OS como o app e a tela de encerrar usam */
+/** Serviços e produtos da OS como o app, a impressão e a tela de encerrar usam */
 async function itensDas(ids: number[]): Promise<Record<number, any[]>> {
   if (!ids.length) return {};
   const [r] = await pool.query<any[]>(
-    `SELECT i.os_id, i.servico_id, i.quantidade, i.preco_unitario, i.desconto, i.subtotal, s.nome AS servico_nome, s.codigo AS servico_codigo, s.unidade
-       FROM os_itens i JOIN servicos s ON s.id = i.servico_id WHERE i.os_id IN (?) ORDER BY i.id`,
+    `SELECT i.os_id, i.servico_id, i.produto_id, i.quantidade, i.preco_unitario, i.desconto, i.subtotal,
+            COALESCE(s.nome, p.nome) AS item_nome, COALESCE(s.codigo, p.codigo_sku) AS item_codigo, COALESCE(s.unidade, p.unidade_medida) AS unidade
+       FROM os_itens i
+       LEFT JOIN servicos s ON s.id = i.servico_id
+       LEFT JOIN produtos p ON p.id = i.produto_id
+      WHERE i.os_id IN (?) ORDER BY i.id`,
     [ids],
   );
   const mapa: Record<number, any[]> = {};
@@ -187,13 +197,16 @@ export function createOsRouter() {
     }
   });
 
-  /** Catálogo de serviços para o app lançar sem sinal (os ativos) */
+  /** Catálogo de serviços e produtos ativos para o app lançar sem sinal (chave "s:id" ou "p:id") */
   router.get('/os-tecnico-servicos', async (_req: Request, res: Response) => {
     try {
       exigirAcesso(res, 'ordens_servico', 'as ordens de serviço');
-      const [r] = await pool.query<any[]>('SELECT id, codigo, nome, unidade FROM servicos WHERE empresa_id = ? AND ativo = 1 ORDER BY nome', [
-        res.locals.empresaId,
-      ]);
+      const [r] = await pool.query<any[]>(
+        `SELECT CONCAT('s:', id) AS chave, 'servico' AS tipo, id, codigo, nome, unidade FROM servicos WHERE empresa_id = ? AND ativo = 1
+         UNION ALL
+         SELECT CONCAT('p:', id), 'produto', id, codigo_sku, nome, unidade_medida FROM produtos WHERE empresa_id = ? AND ativo = 1`,
+        [res.locals.empresaId, res.locals.empresaId],
+      );
       res.json(r);
     } catch (err: any) {
       res.status(err.status || 400).json({ error: err.message });

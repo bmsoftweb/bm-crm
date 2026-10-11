@@ -2,6 +2,14 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.144 — 2026-10-10
+
+- Ordens de Serviço: produtos (peças, materiais) junto dos serviços. Cada linha é um serviço ou um produto (o servidor confere); preço em branco = o do serviço ou o de tabela do produto. O painel passa a se chamar "Serviços e produtos".
+- Encerrar OS (web): busca única "Adicionar serviço ou produto" por nome ou código (serviços primeiro; produtos buscados no servidor, como no pedido). Esc fecha só a lista da busca.
+- App do técnico: no fechamento, busca de serviço ou produto (nome ou código) no catálogo guardado no celular; o catálogo é baixado de novo a cada hora. "Foto" de antes/depois abre direto a câmera traseira (sem a galeria).
+- Impressão da OS: produtos lançados saem no quadro "Serviços e produtos utilizados", com o código.
+- Banco: os_itens com produto_id e servico_id opcional (extras/os_itens_produtos.sql).
+
 ## 0.0.143 — 2026-10-10
 
 - Cadastros › Serviços: código, nome, unidade (UN, HR, VISITA...), preço, descrição e ativo; inativo continua nas OS antigas, marcado.

@@ -74,11 +74,15 @@ export async function antesDeGravar(recurso: string, payload: Record<string, any
       throw new Error('O fim do contrato não pode ser antes do início.');
     }
   }
-  if ((recurso === 'contrato_itens' && payload.produto_id) || (recurso === 'os_itens' && payload.servico_id)) {
-    // Sem valor informado, vale o preço de tabela do produto (contrato) ou o do serviço (OS)
+  // Item da OS: um serviço ou um produto, nunca os dois nem nenhum
+  if (recurso === 'os_itens' && ['os_id', 'servico_id', 'produto_id'].some((k) => k in payload) && Boolean(payload.servico_id) === Boolean(payload.produto_id)) {
+    throw new Error('Escolha um serviço ou um produto (só um dos dois).');
+  }
+  if ((recurso === 'contrato_itens' && payload.produto_id) || (recurso === 'os_itens' && (payload.servico_id || payload.produto_id))) {
+    // Sem valor informado, vale o preço do cadastro: o do serviço ou o de tabela do produto
     if (payload.preco_unitario == null || payload.preco_unitario === '') {
       const [rows] =
-        recurso === 'os_itens'
+        recurso === 'os_itens' && payload.servico_id
           ? await pool.query<any[]>('SELECT preco FROM servicos WHERE id = ?', [payload.servico_id])
           : await pool.query<any[]>('SELECT preco_tabela AS preco FROM produtos WHERE id = ?', [payload.produto_id]);
       payload.preco_unitario = Number(rows[0]?.preco) || 0;

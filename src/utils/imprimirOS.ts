@@ -42,7 +42,7 @@ export function htmlOS(o: RegistroCrud): string {
     <tbody>${itens
       .map(
         (i) => `<tr><td class="r">${qtd(i.quantidade)}</td><td class="c">${esc(i.unidade)}</td>
-        <td>${esc(i.servico_nome)}${i.servico_codigo ? ` <span class="rot">(${esc(i.servico_codigo)})</span>` : ''}</td>
+        <td>${esc(i.item_nome)}${i.item_codigo ? ` <span class="rot">(${esc(i.item_codigo)})</span>` : ''}</td>
         <td class="r">${formatMoeda(i.preco_unitario)}</td><td class="r">${Number(i.desconto) ? formatMoeda(i.desconto) : '—'}</td><td class="r b">${formatMoeda(i.subtotal)}</td></tr>`,
       )
       .join('')}${'<tr class="vazia"><td></td><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(emBranco)}</tbody>

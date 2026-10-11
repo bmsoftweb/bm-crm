@@ -39,18 +39,22 @@ export interface OS {
   erro?: string | null;
 }
 
+/** Linha da OS: um serviço ou um produto */
 export interface ItemOS {
-  servico_id: number;
+  servico_id?: number | null;
+  produto_id?: number | null;
   quantidade: number | string;
   /** Do escritório (vêm do servidor e voltam como estão); lançado no app vai sem: vale o do cadastro */
   preco_unitario?: number | string | null;
   desconto?: number | string | null;
-  servico_nome: string;
+  item_nome: string;
   unidade: string;
 }
 
-/** Catálogo de serviços ativos, para lançar sem sinal */
-export interface Servico {
+/** Catálogo de serviços e produtos ativos, para lançar sem sinal (chave "s:id" ou "p:id") */
+export interface ItemCatalogo {
+  chave: string;
+  tipo: 'servico' | 'produto';
   id: number;
   codigo: string | null;
   nome: string;
@@ -83,12 +87,14 @@ class Banco extends Dexie {
   os!: Table<OS, number>;
   fila!: Table<Pendencia, number>;
   fotos!: Table<Foto, string>;
-  servicos!: Table<Servico, number>;
+  catalogo!: Table<ItemCatalogo, string>;
   constructor() {
     super('crmweb_tecnico');
     this.version(1).stores({ os: 'id', fila: '++seq, osId' });
     this.version(2).stores({ fotos: 'uuid, osId' });
     this.version(3).stores({ servicos: 'id' });
+    // Serviços e produtos juntos (a tabela "servicos" só tinha serviços)
+    this.version(4).stores({ servicos: null, catalogo: 'chave' });
   }
 }
 
@@ -162,15 +168,23 @@ export async function descartar(osId: number) {
 }
 
 export async function limparTudo() {
-  await db.transaction('rw', db.os, db.fila, db.fotos, db.servicos, async () => {
+  await db.transaction('rw', db.os, db.fila, db.fotos, db.catalogo, async () => {
     await db.os.clear();
     await db.fila.clear();
     await db.fotos.clear();
-    await db.servicos.clear();
+    await db.catalogo.clear();
   });
+  try {
+    localStorage.removeItem(CATALOGO_EM);
+  } catch {
+    /* sem storage: o catálogo só vem de novo na próxima sincronização */
+  }
 }
 
 export class SessaoExpirada extends Error {}
+
+/** Quando o catálogo foi baixado (ms) */
+const CATALOGO_EM = 'crmweb_tecnico_catalogo_em';
 
 let emAndamento: Promise<void> | null = null;
 
@@ -220,13 +234,28 @@ export function sincronizar(token: string): Promise<void> {
     const r = await fetch('/api/os-tecnico', { headers: auth });
     if (r.status === 401) throw new SessaoExpirada('Sessão expirada. Entre novamente.');
     if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `Falha ao baixar as OS (HTTP ${r.status}).`);
-    const cat = await fetch('/api/os-tecnico-servicos', { headers: auth });
-    if (cat.ok) {
-      const servicos: Servico[] = await cat.json();
-      await db.transaction('rw', db.servicos, async () => {
-        await db.servicos.clear();
-        await db.servicos.bulkPut(servicos);
-      });
+    // Catálogo (pode ter milhares de produtos): de novo só a cada hora ou se estiver vazio
+    const ultimo = (() => {
+      try {
+        return Number(localStorage.getItem(CATALOGO_EM)) || 0;
+      } catch {
+        return 0;
+      }
+    })();
+    if (Date.now() - ultimo > 3600_000 || !(await db.catalogo.count())) {
+      const cat = await fetch('/api/os-tecnico-servicos', { headers: auth });
+      if (cat.ok) {
+        const lista: ItemCatalogo[] = await cat.json();
+        await db.transaction('rw', db.catalogo, async () => {
+          await db.catalogo.clear();
+          await db.catalogo.bulkPut(lista);
+        });
+        try {
+          localStorage.setItem(CATALOGO_EM, String(Date.now()));
+        } catch {
+          /* sem storage: baixa de novo na próxima */
+        }
+      }
     }
 
     const recebidas: (OS & { fotos: { uuid: string; momento: Foto['momento']; url: string }[] })[] = await r.json();

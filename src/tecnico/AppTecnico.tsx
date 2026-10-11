@@ -28,6 +28,7 @@ import { FIELD_CLASS, LABEL_CLASS } from '../utils/formStyles';
 import { Assinatura } from './Assinatura';
 import {
   Foto,
+  ItemCatalogo,
   ItemOS,
   OS,
   SessaoExpirada,
@@ -524,7 +525,7 @@ const MOMENTOS = [
 ] as const;
 const MAX_FOTOS = 10;
 
-/** Fotos de antes e depois: da câmera ou da galeria, reduzidas e guardadas no aparelho até haver sinal */
+/** Fotos de antes e depois: tiradas na câmera, reduzidas e guardadas no aparelho até haver sinal */
 const FotosOS: React.FC<{ os: OS; editavel: boolean; onSincronizar: () => void }> = ({ os, editavel, onSincronizar }) => {
   const fotos = useConsulta(() => db.fotos.where('osId').equals(os.id).filter((f) => !f.remover).sortBy('criada'), [os.id]) ?? [];
   const [lendo, setLendo] = useState(false);
@@ -580,10 +581,11 @@ const FotosOS: React.FC<{ os: OS; editavel: boolean; onSincronizar: () => void }
                 <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-300 text-xs font-semibold text-stone-500 dark:border-stone-600">
                   <Camera size={24} />
                   {lendo ? 'Lendo…' : 'Foto'}
+                  {/* capture: abre direto a câmera traseira (sem a galeria), uma foto por vez */}
                   <input
                     type="file"
                     accept="image/*"
-                    multiple
+                    capture="environment"
                     hidden
                     disabled={lendo}
                     onChange={(e) => {
@@ -626,26 +628,51 @@ const FotosOS: React.FC<{ os: OS; editavel: boolean; onSincronizar: () => void }
 
 const qtdBR = (v: unknown) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(v) || 0);
 
-/** Serviços feitos: escolhidos do catálogo guardado no aparelho; cada mudança manda a lista inteira para a fila */
+/**
+ * Serviços e produtos da OS: escolhidos no catálogo guardado no aparelho (busca por nome ou código);
+ * cada mudança manda a lista inteira para a fila
+ */
 const ServicosOS: React.FC<{ os: OS; editavel: boolean }> = ({ os, editavel }) => {
-  const catalogo = useConsulta(() => db.servicos.orderBy('id').toArray()) ?? [];
+  const [busca, setBusca] = useState('');
+  const termo = busca.trim().toLowerCase();
+  const temCatalogo = (useConsulta(() => db.catalogo.count()) ?? 0) > 0;
+  // Até 20 achados: serviços primeiro, depois produtos
+  const achados =
+    useConsulta(
+      async () =>
+        termo.length < 2
+          ? []
+          : (await db.catalogo.filter((c) => `${c.nome} ${c.codigo ?? ''}`.toLowerCase().includes(termo)).limit(60).toArray())
+              .sort((a, b) => (a.tipo === b.tipo ? a.nome.localeCompare(b.nome) : a.tipo === 'servico' ? -1 : 1))
+              .slice(0, 20),
+      [termo],
+    ) ?? [];
   const itens = os.itens ?? [];
   const [remover, setRemover] = useState<number | null>(null);
   const gravar = (lista: ItemOS[]) => alterar(os.id, { itens: lista });
   const somar = (n: number, delta: number) =>
     gravar(itens.map((i, k) => (k === n ? { ...i, quantidade: Math.max(1, (Number(i.quantidade) || 0) + delta) } : i)));
+  const adicionar = (c: ItemCatalogo) => {
+    gravar([
+      ...itens,
+      { servico_id: c.tipo === 'servico' ? c.id : null, produto_id: c.tipo === 'produto' ? c.id : null, quantidade: 1, item_nome: c.nome, unidade: c.unidade },
+    ]);
+    setBusca('');
+  };
 
   return (
     <section className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-sm dark:bg-stone-900">
-      <h2 className={LABEL_CLASS}>{editavel || os.status === 'concluida' ? 'Serviços feitos' : 'Serviços lançados'}</h2>
+      <h2 className={LABEL_CLASS}>{editavel || os.status === 'concluida' ? 'Serviços e produtos utilizados' : 'Serviços e produtos lançados'}</h2>
       {!editavel && os.status !== 'concluida' && <p className="text-xs text-stone-500">Lançados pelo escritório. No fechamento da OS, confira e ajuste.</p>}
-      {editavel && itens.length > 0 && <p className="text-xs text-stone-500">Confira os serviços: ajuste a quantidade, tire ou adicione.</p>}
-      {itens.length === 0 && <p className="text-sm text-stone-500">Nenhum serviço lançado.</p>}
+      {editavel && itens.length > 0 && <p className="text-xs text-stone-500">Confira: ajuste a quantidade, tire ou adicione.</p>}
+      {itens.length === 0 && <p className="text-sm text-stone-500">Nada lançado.</p>}
       {itens.map((i, n) => (
-        <div key={`${i.servico_id}-${n}`} className="flex items-center gap-2 rounded-lg bg-stone-50 p-2 dark:bg-stone-800/60">
+        <div key={`${i.servico_id ?? 'p' + i.produto_id}-${n}`} className="flex items-center gap-2 rounded-lg bg-stone-50 p-2 dark:bg-stone-800/60">
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{i.servico_nome}</div>
-            <div className="text-xs text-stone-500">{i.unidade}</div>
+            <div className="truncate text-sm font-semibold">{i.item_nome}</div>
+            <div className="text-xs text-stone-500">
+              {i.produto_id ? 'Produto' : 'Serviço'} • {i.unidade}
+            </div>
           </div>
           {editavel ? (
             <>
@@ -656,7 +683,7 @@ const ServicosOS: React.FC<{ os: OS; editavel: boolean }> = ({ os, editavel }) =
               <button type="button" onClick={() => somar(n, 1)} className="rounded-lg bg-white p-2 shadow-sm dark:bg-stone-700" title="Mais">
                 <Plus size={16} />
               </button>
-              <button type="button" onClick={() => setRemover(n)} className="rounded-lg p-2 text-stone-400" title="Tirar serviço">
+              <button type="button" onClick={() => setRemover(n)} className="rounded-lg p-2 text-stone-400" title="Tirar item">
                 <X size={18} />
               </button>
             </>
@@ -666,30 +693,45 @@ const ServicosOS: React.FC<{ os: OS; editavel: boolean }> = ({ os, editavel }) =
         </div>
       ))}
       {editavel &&
-        (catalogo.length ? (
-          <select
-            value=""
-            onChange={(e) => {
-              const s = catalogo.find((c) => c.id === Number(e.target.value));
-              if (s) gravar([...itens, { servico_id: s.id, quantidade: 1, servico_nome: s.nome, unidade: s.unidade }]);
-            }}
-            className="rounded-xl bg-stone-100 p-3 text-base font-semibold text-blue-700 dark:bg-stone-800 dark:text-blue-300"
-          >
-            <option value="">+ Adicionar serviço</option>
-            {[...catalogo].sort((a, b) => a.nome.localeCompare(b.nome)).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome} ({c.unidade})
-              </option>
-            ))}
-          </select>
+        (temCatalogo ? (
+          <div className="flex flex-col gap-1">
+            <input
+              type="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="+ Adicionar serviço ou produto (nome ou código)"
+              className="rounded-xl bg-stone-100 p-3 text-base text-stone-800 placeholder:font-semibold placeholder:text-blue-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-blue-300"
+            />
+            {termo.length >= 2 &&
+              (achados.length ? (
+                <div className="max-h-72 overflow-y-auto rounded-xl border border-stone-200 dark:border-stone-700">
+                  {achados.map((c) => (
+                    <button
+                      key={c.chave}
+                      type="button"
+                      onClick={() => adicionar(c)}
+                      className="flex w-full items-center gap-2 border-b border-stone-100 p-3 text-left text-sm last:border-0 active:bg-stone-100 dark:border-stone-800 dark:active:bg-stone-800"
+                    >
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${c.tipo === 'servico' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-800'}`}>
+                        {c.tipo === 'servico' ? 'Serviço' : 'Produto'}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{c.nome}</span>
+                      <span className="shrink-0 text-xs text-stone-500">{c.unidade}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-stone-500">Nada encontrado com "{busca.trim()}".</p>
+              ))}
+          </div>
         ) : (
-          <p className="text-xs text-stone-500">Nenhum serviço no aparelho: sincronize com sinal para baixar o cadastro.</p>
+          <p className="text-xs text-stone-500">Nenhum serviço ou produto no aparelho: sincronize com sinal para baixar o cadastro.</p>
         ))}
 
       {remover !== null && (
         <ConfirmDialog
-          titulo="Tirar serviço"
-          mensagem={`Tirar "${itens[remover]?.servico_nome}" dos serviços feitos?`}
+          titulo="Tirar item"
+          mensagem={`Tirar "${itens[remover]?.item_nome}" da OS?`}
           confirmar="Tirar"
           onConfirmar={async () => {
             await gravar(itens.filter((_, k) => k !== remover));
