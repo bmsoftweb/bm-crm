@@ -399,6 +399,8 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
           <p className="mt-1 whitespace-pre-wrap text-sm">{os.servico_solicitado}</p>
         </section>
 
+        {!preenchendo && <HistoricoCliente os={os} />}
+
         {os.status === 'aberta' && (
           <button type="button" onClick={iniciar} disabled={iniciando} className={`${BOTAO} bg-blue-600 text-white`}>
             <Play size={20} /> {iniciando ? 'Registrando a chegada…' : 'Iniciar atendimento'}
@@ -741,5 +743,62 @@ const ServicosOS: React.FC<{ os: OS; editavel: boolean }> = ({ os, editavel }) =
         />
       )}
     </section>
+  );
+};
+
+/** Histórico do cliente: as últimas OS concluídas (de qualquer técnico), recolhidas; tocar abre o que foi feito */
+const HistoricoCliente: React.FC<{ os: OS }> = ({ os }) => {
+  const lista = os.historico ?? [];
+  return (
+    <details className="group rounded-xl bg-white p-3 shadow-sm dark:bg-stone-900">
+      <summary className="flex cursor-pointer list-none items-center justify-between">
+        <span className={LABEL_CLASS}>Histórico do cliente ({lista.length})</span>
+        <ChevronRight size={18} className="text-stone-400 transition-transform group-open:rotate-90" />
+      </summary>
+      {lista.length === 0 ? (
+        <p className="mt-2 text-sm text-stone-500">Nenhuma OS concluída deste cliente.</p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          {lista.map((h) => (
+            <details key={h.id} className="rounded-lg bg-stone-50 p-2.5 dark:bg-stone-800/60">
+              <summary className="cursor-pointer list-none">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-stone-600 dark:text-stone-300">Nº {h.numero}</span>
+                  <span className="text-stone-500">{formatDateBR(String(h.fim_em ?? h.data_agendada ?? ''))}</span>
+                </div>
+                <div className="text-xs text-stone-500">
+                  {TIPOS[h.tipo] || h.tipo}
+                  {h.tecnico_nome ? ` • ${h.tecnico_nome}` : ''}
+                </div>
+                <div className="mt-0.5 line-clamp-2 text-sm">{h.servico_executado || h.servico_solicitado}</div>
+              </summary>
+              <div className="mt-2 flex flex-col gap-1.5 border-t border-stone-200 pt-2 text-sm dark:border-stone-700">
+                {h.servico_solicitado && (
+                  <div>
+                    <span className="text-xs text-stone-500">O que seria feito: </span>
+                    <span className="whitespace-pre-wrap">{h.servico_solicitado}</span>
+                  </div>
+                )}
+                {h.servico_executado && (
+                  <div>
+                    <span className="text-xs text-stone-500">O que foi feito: </span>
+                    <span className="whitespace-pre-wrap">{h.servico_executado}</span>
+                  </div>
+                )}
+                {h.itens.length > 0 && (
+                  <ul className="text-xs text-stone-600 dark:text-stone-300">
+                    {h.itens.map((i, n) => (
+                      <li key={n}>
+                        {qtdBR(i.quantidade)} {i.unidade} • {i.item_nome}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </details>
   );
 };

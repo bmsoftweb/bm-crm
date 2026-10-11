@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.145 — 2026-10-10
+
+- App do técnico: "Histórico do cliente" no detalhe da OS (recolhido; fora da tela de fechamento): as últimas 10 OS concluídas do mesmo cliente, de qualquer técnico, com número, data, tipo, técnico e o que foi feito; tocar abre o que seria feito, o que foi feito e os serviços e produtos usados. Vem na sincronização e funciona sem sinal.
+
 ## 0.0.144 — 2026-10-10
 
 - Ordens de Serviço: produtos (peças, materiais) junto dos serviços. Cada linha é um serviço ou um produto (o servidor confere); preço em branco = o do serviço ou o de tabela do produto. O painel passa a se chamar "Serviços e produtos".

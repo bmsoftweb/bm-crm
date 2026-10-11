@@ -112,6 +112,32 @@ async function itensDas(ids: number[]): Promise<Record<number, any[]>> {
   return mapa;
 }
 
+/** Últimas OS concluídas de cada cliente (de qualquer técnico), com os serviços e produtos: o histórico do app */
+const HISTORICO_POR_CLIENTE = 10;
+async function historicoDos(empresaId: string, pessoas: number[]): Promise<Record<number, any[]>> {
+  const ids = [...new Set(pessoas)];
+  if (!ids.length) return {};
+  // ponytail: traz as concluídas dos clientes e corta 10 por cliente aqui; com milhares por cliente, cortar no SQL (ROW_NUMBER)
+  const [r] = await pool.query<any[]>(
+    `SELECT o.id, o.pessoa_id, o.numero, o.tipo, o.data_agendada, o.fim_em, o.servico_solicitado, o.servico_executado, u.nome AS tecnico_nome
+       FROM ordens_servico o
+       LEFT JOIN usuarios u ON u.id = o.tecnico_id
+      WHERE o.empresa_id = ? AND o.pessoa_id IN (?) AND o.status = 'concluida'
+      ORDER BY o.pessoa_id, COALESCE(o.fim_em, o.data_agendada) DESC
+      LIMIT 2000`,
+    [empresaId, ids],
+  );
+  const mapa: Record<number, any[]> = {};
+  for (const { pessoa_id, ...h } of r) {
+    const lista = (mapa[pessoa_id] ??= []);
+    // Um a mais: a própria OS sai da lista dela
+    if (lista.length <= HISTORICO_POR_CLIENTE) lista.push(h);
+  }
+  const itens = await itensDas(Object.values(mapa).flat().map((h) => h.id));
+  for (const lista of Object.values(mapa)) for (const h of lista) h.itens = (itens[h.id] ?? []).map((i) => ({ item_nome: i.item_nome, quantidade: i.quantidade, unidade: i.unidade }));
+  return mapa;
+}
+
 export function createOsRouter() {
   const router = Router();
 
@@ -180,7 +206,7 @@ export function createOsRouter() {
         `SELECT o.id, o.numero, o.tipo, o.status, o.data_agendada, o.hora_inicio, o.hora_fim, o.contato_nome, o.contato_telefone,
                 o.endereco, o.servico_solicitado, o.servico_executado, o.inicio_em, o.fim_em, o.assinatura_nome,
                 o.assinatura_documento, o.assinatura IS NOT NULL AS assinada, o.atualizado_em,
-                p.nome AS pessoa_nome, p.cpf AS pessoa_cpf, p.telefone AS pessoa_telefone, p.whatsapp AS pessoa_whatsapp
+                o.pessoa_id, p.nome AS pessoa_nome, p.cpf AS pessoa_cpf, p.telefone AS pessoa_telefone, p.whatsapp AS pessoa_whatsapp
            FROM ordens_servico o
            JOIN pessoas p ON p.id = o.pessoa_id
           WHERE o.empresa_id = ? AND o.tecnico_id = ?
@@ -191,7 +217,16 @@ export function createOsRouter() {
       );
       const fotos = await fotosDas(r.map((o) => o.id));
       const itens = await itensDas(r.map((o) => o.id));
-      res.json(r.map((o) => ({ ...o, fotos: fotos[o.id] ?? [], itens: itens[o.id] ?? [] })));
+      const historico = await historicoDos(res.locals.empresaId, r.map((o) => o.pessoa_id));
+      res.json(
+        r.map(({ pessoa_id, ...o }) => ({
+          ...o,
+          fotos: fotos[o.id] ?? [],
+          itens: itens[o.id] ?? [],
+          // Histórico do cliente sem a própria OS
+          historico: (historico[pessoa_id] ?? []).filter((h) => h.id !== o.id).slice(0, HISTORICO_POR_CLIENTE),
+        })),
+      );
     } catch (err: any) {
       res.status(err.status || 400).json({ error: err.message });
     }

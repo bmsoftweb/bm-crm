@@ -33,10 +33,24 @@ export interface OS {
   pessoa_cpf: string | null;
   pessoa_telefone: string | null;
   pessoa_whatsapp: string | null;
+  /** Últimas OS concluídas do mesmo cliente (de qualquer técnico), só para consulta */
+  historico?: HistoricoOS[];
   /** Serviços feitos (lista inteira: o app manda a lista toda a cada mudança) */
   itens?: ItemOS[];
   /** O servidor recusou uma alteração desta OS (ex.: cancelada): a fila dela para até o técnico decidir */
   erro?: string | null;
+}
+
+export interface HistoricoOS {
+  id: number;
+  numero: number;
+  tipo: string;
+  data_agendada: string | null;
+  fim_em: string | null;
+  servico_solicitado: string | null;
+  servico_executado: string | null;
+  tecnico_nome: string | null;
+  itens: { item_nome: string; quantidade: number | string; unidade: string }[];
 }
 
 /** Linha da OS: um serviço ou um produto */
