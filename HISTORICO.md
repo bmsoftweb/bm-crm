@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.147 — 2026-10-10
+
+- Impressão da OS: "O que foi feito" passa a vir antes do quadro "Serviços e produtos utilizados".
+
 ## 0.0.146 — 2026-10-10
 
 - App do técnico: mapa do endereço do cliente no detalhe da OS (Google Maps embutido; sem sinal, um aviso no lugar). O botão "Mapa" virou "Como chegar" e abre a rota no app de mapas do celular.

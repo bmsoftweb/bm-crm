@@ -129,11 +129,11 @@ export function htmlOS(o: RegistroCrud): string {
 
   <section><h3>O que será feito</h3><div class="caixa"><p class="pre">${esc(o.servico_solicitado || '')}</p></div></section>
 
-  ${servicos}
-
   <section><h3>O que foi feito</h3>${
     o.servico_executado ? `<div class="caixa"><p class="pre">${esc(o.servico_executado)}</p></div>` : '<div class="caixa linhas"></div>'
   }</section>
+
+  ${servicos}
 
   <div class="horas">
     <div><span class="rot">Início:</span> ${o.inicio_em ? esc(formatDateTimeBR(o.inicio_em)) : '<span class="branco">&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;&nbsp;</span>'}</div>
