@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { useGrudarNoFim } from '../utils/grudarNoFim';
 import { AlertCircle, ArrowLeft, ArrowRightLeft, Bot, Building2, CircleCheck, CircleSlash, Hand, Lock, LockOpen, Network, Pause, Check, CheckCheck, Clock, FileText, Hash, Loader2, MessageCircle, MessageSquarePlus, Mic, Paperclip, Play, Reply, Search, SendHorizontal, Trash2, User, UserPlus, X } from 'lucide-react';
 import { ArquivoConversa, ConversaResumo, DestinoConversa, MensagemWhatsApp, createRecord, fetchDestinosConversa, fetchMidiaMensagem, fetchNumeroConversa, mudarAtendimentoConversa, encerrarConversa, descartarConversa, limparConversa, atenderConversa, marcarMensagemPrivada, apagarMensagem, pausarConversa, transferirConversa, fetchConversa, fetchOptions, fetchConversaDaAtividade, fetchConversas, responderConversa } from '../services/api';
@@ -607,7 +608,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
           <div title="As conversas sem departamento, as do seu departamento e as que você assumiu">
             <Toggle size="sm" checked={minhas} onChange={setMinhas} label="Só as minhas" />
           </div>
-          <select
+          <SelectAuto
             value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value as typeof filtroEstado)}
             title="Mostrar só as conversas neste estado, ou só as do WhatsApp das campanhas"
@@ -619,7 +620,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
             <option value="aguardando,atendimento">Aguardando + Em atendimento</option>
             <option value="encerrado">Encerradas</option>
             <option value="campanhas">Só Campanhas</option>
-          </select>
+          </SelectAuto>
         </div>
         <div className="flex-1 overflow-y-auto">
           {conversas === null ? (
@@ -1144,7 +1145,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
             {conversa?.tem_campanhas && (
               <div className="shrink-0 px-3 py-2 flex flex-wrap items-center gap-2 text-[11px] text-stone-500 dark:text-stone-400">
                 <label htmlFor="cv-sai-por" className="font-semibold">Sai pelo</label>
-                <select
+                <SelectAuto
                   id="cv-sai-por"
                   value={numeroEnvio}
                   onChange={(e) => setSaiPor(e.target.value as 'provedor' | 'campanhas')}
@@ -1153,7 +1154,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
                 >
                   <option value="provedor">WhatsApp principal</option>
                   <option value="campanhas">WhatsApp das campanhas</option>
-                </select>
+                </SelectAuto>
                 {numeroEnvio !== numeroPadrao && (
                   <span className="text-amber-700 dark:text-amber-400">
                     {ultimaMsg?.campanha ? 'A campanha chegou' : 'O cliente escreveu'} pelo {numeroPadrao === 'campanhas' ? 'número das campanhas' : 'número principal'}: no celular dele, esta mensagem cai em outro chat.
@@ -1291,7 +1292,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
                   <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">Transferir a conversa</h3>
                   <div className={FIELD_CLASS}>
                     <label htmlFor="transferir-para" className={LABEL_CLASS}>Para</label>
-                    <select id="transferir-para" autoFocus value={transferir} onChange={(e) => setTransferir(e.target.value)} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+                    <SelectAuto id="transferir-para" autoFocus value={transferir} onChange={(e) => setTransferir(e.target.value)} className={`${INPUT_CLASS} w-full cursor-pointer`}>
                       <option value="">Escolha...</option>
                       <optgroup label="Atendente (já fica com ele)">
                         {destinos.usuarios
@@ -1309,7 +1310,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
                           </option>
                         ))}
                       </optgroup>
-                    </select>
+                    </SelectAuto>
                   </div>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setTransferir(null)} className="px-4 py-2 rounded-lg text-xs font-semibold border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">

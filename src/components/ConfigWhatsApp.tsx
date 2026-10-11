@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Loader2, PlugZap, QrCode, Save, Smartphone, Unplug, Webhook, X } from 'lucide-react';
 import { ativarRecebimentoWhatsApp, conectarWhatsApp, ContaWhats, desconectarWhatsApp, fetchConfig, salvarConfig, testarWhatsApp } from '../services/api';
 import { INPUT_CLASS, LABEL_CLASS, FIELD_CLASS, HINT_CLASS } from '../utils/formStyles';
@@ -186,11 +187,11 @@ export const ConfigWhatsApp: React.FC<Props> = ({ somenteLeitura, onToast, conta
       <fieldset disabled={somenteLeitura} className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className={`${FIELD_CLASS} sm:col-span-2`}>
           <label htmlFor={idc('provedor')} className={LABEL_CLASS}>Provedor</label>
-          <select id={idc('provedor')} value={v.provedor} onChange={(e) => alterar({ provedor: e.target.value as Whats['provedor'] })} className={`${campo} cursor-pointer`}>
+          <SelectAuto id={idc('provedor')} value={v.provedor} onChange={(e) => alterar({ provedor: e.target.value as Whats['provedor'] })} className={`${campo} cursor-pointer`}>
             <option value="">{campanhas ? '— Nenhum (as campanhas usam o WhatsApp padrão) —' : '— Nenhum (usa o .env do servidor) —'}</option>
             <option value="evolution">Evolution API</option>
             <option value="zapi">Z-API</option>
-          </select>
+          </SelectAuto>
         </div>
         <div className={FIELD_CLASS}>
           <label htmlFor={idc('intervalo')} className={LABEL_CLASS}>Intervalo (segundos)</label>

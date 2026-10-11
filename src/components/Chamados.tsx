@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { AlertTriangle, ArrowRightLeft, Bell, CheckCircle2, Circle, ClipboardList, Hand, History, X, Inbox, Loader2, Lock, MessageCircle, Monitor, MonitorSmartphone, Pause, Pencil, Plus, Search, Send, StickyNote, UserRound, Headset } from 'lucide-react';
 import {
   acessarComputador,
@@ -1457,7 +1458,7 @@ const Transferir: React.FC<{ c: ChamadoDetalhe; onFechar: () => void; onFeito: (
       <div className="flex flex-col gap-3">
         <div className={FIELD_CLASS}>
           <label htmlFor="ch-destino" className={LABEL_CLASS}>Para</label>
-          <select id="ch-destino" autoFocus value={destino} onChange={(e) => setDestino(e.target.value)} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+          <SelectAuto id="ch-destino" autoFocus value={destino} onChange={(e) => setDestino(e.target.value)} className={`${INPUT_CLASS} w-full cursor-pointer`}>
             <option value="">Escolha...</option>
             <optgroup label="Usuários">
               {usuarios
@@ -1475,7 +1476,7 @@ const Transferir: React.FC<{ c: ChamadoDetalhe; onFechar: () => void; onFeito: (
                 </option>
               ))}
             </optgroup>
-          </select>
+          </SelectAuto>
         </div>
         <div className={FIELD_CLASS}>
           <label htmlFor="ch-obs" className={LABEL_CLASS}>Observação (opcional)</label>
@@ -1567,32 +1568,32 @@ const NovoChamado: React.FC<{ onFechar: () => void; onCriado: (id: number, numer
         <div className="grid grid-cols-3 gap-2">
           <div className={FIELD_CLASS}>
             <label htmlFor="ch-cat" className={LABEL_CLASS}>Categoria</label>
-            <select id="ch-cat" value={v.categoria_id} onChange={(e) => alterar({ categoria_id: e.target.value })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+            <SelectAuto id="ch-cat" value={v.categoria_id} onChange={(e) => alterar({ categoria_id: e.target.value })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
               <option value="">—</option>
               {categorias.map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label}
                 </option>
               ))}
-            </select>
+            </SelectAuto>
           </div>
           <div className={FIELD_CLASS}>
             <label htmlFor="ch-prio" className={LABEL_CLASS}>Prioridade</label>
-            <select id="ch-prio" value={v.prioridade} onChange={(e) => alterar({ prioridade: e.target.value })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+            <SelectAuto id="ch-prio" value={v.prioridade} onChange={(e) => alterar({ prioridade: e.target.value })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
               <option value="baixa">Baixa</option>
               <option value="normal">Normal</option>
               <option value="alta">Alta</option>
               <option value="urgente">Urgente</option>
-            </select>
+            </SelectAuto>
           </div>
           <div className={FIELD_CLASS}>
             <label htmlFor="ch-canal" className={LABEL_CLASS}>Canal</label>
-            <select id="ch-canal" value={v.canal} onChange={(e) => alterar({ canal: e.target.value })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+            <SelectAuto id="ch-canal" value={v.canal} onChange={(e) => alterar({ canal: e.target.value })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
               <option value="telefone">Telefone</option>
               <option value="whatsapp">WhatsApp</option>
               <option value="email">E-mail</option>
               <option value="interno">Interno</option>
-            </select>
+            </SelectAuto>
           </div>
         </div>
         <div className={FIELD_CLASS}>

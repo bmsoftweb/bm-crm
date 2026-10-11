@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Bot, Loader2, Save } from 'lucide-react';
 import { fetchConfig, fetchOptions, listRecords, salvarConfig, testarChatbot } from '../services/api';
 import { OpcaoRef } from '../types';
@@ -132,13 +133,13 @@ export const ConfigChatbot: React.FC<Props> = ({ somenteLeitura, onToast }) => {
           </div>
           <div className={FIELD_CLASS}>
             <label htmlFor="bot-ia" className={LABEL_CLASS}>IA</label>
-            <select id="bot-ia" value={v.ia} onChange={(e) => trocarIa(e.target.value as Ia)} required className={`${campo} cursor-pointer`}>
+            <SelectAuto id="bot-ia" value={v.ia} onChange={(e) => trocarIa(e.target.value as Ia)} required className={`${campo} cursor-pointer`}>
               {v.ias.map((i) => (
                 <option key={i.value} value={i.value}>
                   {i.label}
                 </option>
               ))}
-            </select>
+            </SelectAuto>
             <span className={HINT_CLASS}>Cada IA tem a sua chave; trocar não apaga a chave da outra</span>
           </div>
           <div className={FIELD_CLASS}>
@@ -158,13 +159,13 @@ export const ConfigChatbot: React.FC<Props> = ({ somenteLeitura, onToast }) => {
           </div>
           <div className={FIELD_CLASS}>
             <label htmlFor="bot-modelo" className={LABEL_CLASS}>Modelo</label>
-            <select id="bot-modelo" value={v.modelo} onChange={(e) => alterar({ modelo: e.target.value })} required className={`${campo} cursor-pointer`}>
+            <SelectAuto id="bot-modelo" value={v.modelo} onChange={(e) => alterar({ modelo: e.target.value })} required className={`${campo} cursor-pointer`}>
               {modelos.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
               ))}
-            </select>
+            </SelectAuto>
             <span className={HINT_CLASS}>{ajuda.modelos}</span>
           </div>
           <div className={FIELD_CLASS}>
@@ -211,7 +212,7 @@ export const ConfigChatbot: React.FC<Props> = ({ somenteLeitura, onToast }) => {
           {v.analisar_conversas !== false && (
             <div className={`${FIELD_CLASS} sm:w-1/2`}>
               <label htmlFor="bot-diretor" className={LABEL_CLASS}>Responsável pelas pendências sem dono</label>
-              <select
+              <SelectAuto
                 id="bot-diretor"
                 value={v.responsavel_pendencias_id ? String(v.responsavel_pendencias_id) : ''}
                 onChange={(e) => alterar({ responsavel_pendencias_id: Number(e.target.value) || null })}
@@ -223,7 +224,7 @@ export const ConfigChatbot: React.FC<Props> = ({ somenteLeitura, onToast }) => {
                     {u.label}
                   </option>
                 ))}
-              </select>
+              </SelectAuto>
               <span className={HINT_CLASS}>Recebe a tarefa quando não dá para saber o usuário nem o departamento (por exemplo, o diretor)</span>
             </div>
           )}

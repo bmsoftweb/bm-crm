@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { TrocarProprietario } from './TrocarProprietario';
 import { CalendarPlus, Check, FileText, KanbanSquare, Loader2, Plus, Search, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { CardNegocio, Funil, Id, OpcaoRef, ResourceDef } from '../types';
@@ -234,7 +235,7 @@ export const Kanban: React.FC<KanbanProps> = ({ resourceNegocios, refreshToken, 
     <div className="flex-1 flex flex-col min-h-0">
       {/* Barra de ferramentas */}
       <div className="px-4 py-2.5 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 flex flex-wrap items-center gap-3 shrink-0">
-        <select
+        <SelectAuto
           value={funil?.id || ''}
           onChange={(e) => escolherFunil(e.target.value)}
           title="Funil de vendas"
@@ -245,7 +246,7 @@ export const Kanban: React.FC<KanbanProps> = ({ resourceNegocios, refreshToken, 
               {f.nome}
             </option>
           ))}
-        </select>
+        </SelectAuto>
         <div className="relative w-56">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
           <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Filtrar negócios…" className={`${INPUT_CLASS} w-full pl-9`} />
@@ -569,11 +570,11 @@ const NovoNegocioModal: React.FC<{ funil: Funil; onFechar: () => void; onCriado:
           </div>
           <div className={FIELD_CLASS}>
             <label htmlFor="nn-etapa" className={LABEL_CLASS}>Etapa<span className="text-rose-500 ml-1">*</span></label>
-            <select id="nn-etapa" required value={etapaId} onChange={(e) => setEtapaId(e.target.value)} className={`${campo} cursor-pointer`}>
+            <SelectAuto id="nn-etapa" required value={etapaId} onChange={(e) => setEtapaId(e.target.value)} className={`${campo} cursor-pointer`}>
               {funil.etapas.map((et) => (
                 <option key={et.id} value={et.id}>{et.nome}</option>
               ))}
-            </select>
+            </SelectAuto>
           </div>
           <div className={FIELD_CLASS}>
             <label htmlFor="nn-pessoa" className={LABEL_CLASS}>Contato</label>

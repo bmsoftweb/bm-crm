@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Dices, Eye, Loader2, Mail, MessageCircle, Phone, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   buscarPessoasPesquisa,
@@ -489,11 +490,11 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
               </div>
               <div className={FIELD_CLASS}>
                 <label htmlFor="ps-canal" className={LABEL_CLASS}>Tipo de contato</label>
-                <select id="ps-canal" value={v.canal} disabled={Boolean(atual && atual.situacao !== 'rascunho')} onChange={(e) => setV({ ...v, canal: e.target.value as CanalPesquisa })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+                <SelectAuto id="ps-canal" value={v.canal} disabled={Boolean(atual && atual.situacao !== 'rascunho')} onChange={(e) => setV({ ...v, canal: e.target.value as CanalPesquisa })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
                   {CANAIS.map((c) => (
                     <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
-                </select>
+                </SelectAuto>
               </div>
               <div className={`${FIELD_CLASS} sm:col-span-3`}>
                 <label htmlFor="ps-objetivo" className={LABEL_CLASS}>Objetivo</label>
@@ -503,22 +504,22 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
               {v.canal === 'whatsapp' && (
                 <div className={FIELD_CLASS}>
                   <label htmlFor="ps-conta" className={LABEL_CLASS}>Sai pelo</label>
-                  <select id="ps-conta" value={v.conta} disabled={Boolean(atual && atual.situacao !== 'rascunho')} onChange={(e) => setV({ ...v, conta: e.target.value as DadosPesquisa['conta'] })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+                  <SelectAuto id="ps-conta" value={v.conta} disabled={Boolean(atual && atual.situacao !== 'rascunho')} onChange={(e) => setV({ ...v, conta: e.target.value as DadosPesquisa['conta'] })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
                     <option value="campanhas">WhatsApp das campanhas</option>
                     <option value="provedor">WhatsApp principal</option>
-                  </select>
+                  </SelectAuto>
                   <span className={HINT_CLASS}>Sem o WhatsApp das campanhas configurado, sai pelo principal</span>
                 </div>
               )}
               {v.canal === 'ligacao' && (
                 <div className={FIELD_CLASS}>
                   <label htmlFor="ps-responsavel" className={LABEL_CLASS}>Quem liga</label>
-                  <select id="ps-responsavel" value={v.responsavel_id ?? ''} onChange={(e) => setV({ ...v, responsavel_id: Number(e.target.value) || null })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+                  <SelectAuto id="ps-responsavel" value={v.responsavel_id ?? ''} onChange={(e) => setV({ ...v, responsavel_id: Number(e.target.value) || null })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
                     <option value="">O técnico de cada atendimento</option>
                     {opcoes.usuarios.filter((u) => !u.label.endsWith('(inativo)')).map((u) => (
                       <option key={u.value} value={u.value}>{u.label}</option>
                     ))}
-                  </select>
+                  </SelectAuto>
                 </div>
               )}
             </div>

@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { SelectAuto } from './SelectAuto';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Grade, ModoLargura, TamanhoCampo, lerConfigLista, salvarConfigLista } from '../utils/configListas';
 import {
@@ -1101,7 +1102,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
           {campoRapido && (
             <label className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-stone-600 dark:text-stone-300">
               {campoRapido.label}
-              <select
+              <SelectAuto
                 value={rapido}
                 onChange={(e) => {
                   setRapido(e.target.value);
@@ -1113,7 +1114,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
                 <option value="">Todas</option>
                 <option value="1">Sim</option>
                 <option value="0">Não</option>
-              </select>
+              </SelectAuto>
             </label>
           )}
 
@@ -1173,7 +1174,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
           )}
 
           {visao === 'lista' && (
-            <select
+            <SelectAuto
               value={limit}
               onChange={(e) => {
                 setLimit(Number(e.target.value));
@@ -1187,7 +1188,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
                   {n} por página
                 </option>
               ))}
-            </select>
+            </SelectAuto>
           )}
 
           {acoesLista?.(() => {

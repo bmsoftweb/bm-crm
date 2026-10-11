@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Bell, CheckCircle2, Download, Headset, Loader2, MonitorSmartphone, Send, Star } from 'lucide-react';
 import { formatDateTimeBR } from '../utils/formatters';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -282,14 +283,14 @@ const Abrir: React.FC<{
       {categorias.length > 0 && (
         <div>
           <label htmlFor="sp-cat" className={rotulo}>Assunto</label>
-          <select id="sp-cat" autoFocus={primeiroVazio === 'sp-cat'} value={v.categoria_id} onChange={(e) => alterar({ categoria_id: e.target.value })} className={`${campo} cursor-pointer`}>
+          <SelectAuto id="sp-cat" autoFocus={primeiroVazio === 'sp-cat'} value={v.categoria_id} onChange={(e) => alterar({ categoria_id: e.target.value })} className={`${campo} cursor-pointer`}>
             <option value="">Escolha...</option>
             {categorias.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nome}
               </option>
             ))}
-          </select>
+          </SelectAuto>
         </div>
       )}
       <div>

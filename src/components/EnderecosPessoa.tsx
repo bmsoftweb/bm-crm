@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Loader2, MapPin, Plus, Search, Trash2 } from 'lucide-react';
 import { Endereco } from '../types';
 import { INPUT_CLASS, LABEL_CLASS, FIELD_CLASS, HINT_CLASS } from '../utils/formStyles';
@@ -128,7 +129,7 @@ export const EnderecosPessoa: React.FC<Props> = ({ enderecos, onChange, carregan
         {enderecos.map((e, i) => (
           <div key={e.id ?? `novo-${i}`} className="p-3 rounded-lg bg-stone-50/60 dark:bg-stone-800/30 border border-stone-200 dark:border-stone-800">
             <div className="flex items-center gap-3 mb-3">
-              <select
+              <SelectAuto
                 aria-label="Tipo do endereço"
                 value={e.tipo}
                 onChange={(ev) => alterar(i, { tipo: ev.target.value })}
@@ -137,7 +138,7 @@ export const EnderecosPessoa: React.FC<Props> = ({ enderecos, onChange, carregan
                 {TIPOS.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
-              </select>
+              </SelectAuto>
               <Toggle
                 checked={Boolean(Number(e.principal))}
                 onChange={(v) => v && marcarPrincipal(i)}
@@ -191,7 +192,7 @@ export const EnderecosPessoa: React.FC<Props> = ({ enderecos, onChange, carregan
               <div className="lg:col-span-2">{texto(i, 'cidade', 'Cidade', { maxLength: 100 })}</div>
               <div className={FIELD_CLASS}>
                 <label htmlFor={`end-${i}-uf`} className={LABEL_CLASS}>UF</label>
-                <select
+                <SelectAuto
                   id={`end-${i}-uf`}
                   value={String(e.uf ?? '')}
                   onChange={(ev) => alterar(i, { uf: ev.target.value })}
@@ -201,7 +202,7 @@ export const EnderecosPessoa: React.FC<Props> = ({ enderecos, onChange, carregan
                   {UFS.map((u) => (
                     <option key={u} value={u}>{u}</option>
                   ))}
-                </select>
+                </SelectAuto>
               </div>
               {texto(i, 'obs', 'Observação', { maxLength: 255 })}
             </div>

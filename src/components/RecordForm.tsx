@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Save, Loader2, Eye, EyeOff, X, Columns3, Search, Move, Scaling, RotateCcw, Lock } from 'lucide-react';
 import { Endereco, FieldDef, Id, OpcaoRef, RegistroCrud, ResourceDef } from '../types';
 import { maskCNPJ, cleanCNPJ, toInputDate, toInputDateTime, hojeIso, formatDateTimeBR } from '../utils/formatters';
@@ -481,7 +482,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({
 
       case 'enum':
         return (
-          <select
+          <SelectAuto
             id={inputId}
             value={String(value ?? '')}
             onChange={(e) => setValue(field.name, e.target.value)}
@@ -494,7 +495,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({
                 {o.label}
               </option>
             ))}
-          </select>
+          </SelectAuto>
         );
 
       case 'imagem':

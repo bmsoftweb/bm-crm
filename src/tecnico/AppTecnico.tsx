@@ -181,7 +181,7 @@ const Painel: React.FC<{ sessao: Sessao; onSair: (aviso?: string) => void }> = (
   }, [sinc]);
 
   const aberta = lista?.find((o) => o.id === abertaId);
-  if (aberta) return <Detalhe os={aberta} pendente={comFila.has(aberta.id)} onVoltar={() => setAbertaId(null)} onSincronizar={sinc} />;
+  if (aberta) return <Detalhe os={aberta} pendente={comFila.has(aberta.id)} online={online} onVoltar={() => setAbertaId(null)} onSincronizar={sinc} />;
 
   const ordem = (a: OS, b: OS) => `${a.data_agendada}${a.hora_inicio}${a.numero}`.localeCompare(`${b.data_agendada}${b.hora_inicio}${b.numero}`);
   const afazer = (lista ?? []).filter((o) => o.status === 'aberta' || o.status === 'em_execucao').sort(ordem);
@@ -289,7 +289,13 @@ const Painel: React.FC<{ sessao: Sessao; onSair: (aviso?: string) => void }> = (
   );
 };
 
-const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSincronizar: () => void }> = ({ os, pendente, onVoltar, onSincronizar }) => {
+const Detalhe: React.FC<{ os: OS; pendente: boolean; online: boolean; onVoltar: () => void; onSincronizar: () => void }> = ({
+  os,
+  pendente,
+  online,
+  onVoltar,
+  onSincronizar,
+}) => {
   const [feito, setFeito] = useState(os.servico_executado ?? '');
   const [assinando, setAssinando] = useState(false);
   const [encerrar, setEncerrar] = useState(false);
@@ -370,6 +376,19 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
           <div className="text-base font-bold">{os.pessoa_nome}</div>
           {os.pessoa_cpf && <div className="text-xs text-stone-500">{os.pessoa_cpf}</div>}
           {os.endereco && <div className="mt-1 text-sm">{os.endereco}</div>}
+          {/* Mapa do endereço (Google Maps embutido, sem chave); sem sinal não carrega */}
+          {os.endereco && !preenchendo &&
+            (online ? (
+              <iframe
+                title="Mapa do endereço"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(os.endereco)}&z=16&output=embed`}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="mt-2 h-48 w-full rounded-lg border-0 bg-stone-100 dark:bg-stone-800"
+              />
+            ) : (
+              <p className="mt-2 rounded-lg bg-stone-100 p-2 text-xs text-stone-500 dark:bg-stone-800">Sem sinal: o mapa aparece quando o celular voltar a ter internet.</p>
+            ))}
           {(os.contato_nome || os.contato_telefone) && (
             <div className="mt-1 text-sm">
               <span className="text-stone-500">Falar com:</span> {[os.contato_nome, os.contato_telefone].filter(Boolean).join(' • ')}
@@ -377,8 +396,8 @@ const Detalhe: React.FC<{ os: OS; pendente: boolean; onVoltar: () => void; onSin
           )}
           <div className="mt-3 flex gap-2">
             {os.endereco && (
-              <a className={link} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(os.endereco)}`} target="_blank" rel="noreferrer">
-                <MapPin size={20} /> Mapa
+              <a className={link} href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(os.endereco)}`} target="_blank" rel="noreferrer">
+                <MapPin size={20} /> Como chegar
               </a>
             )}
             {tel && (

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { CalendarPlus, Loader2, X } from 'lucide-react';
 import { createRecord, criarTarefaChamado, fetchOptions } from '../services/api';
 import { Id, OpcaoRef } from '../types';
@@ -154,37 +155,37 @@ export const AtividadeModal: React.FC<AtividadeModalProps> = ({ negocioId, pesso
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className={FIELD_CLASS}>
               <label htmlFor="atv-quem" className={LABEL_CLASS}>Quem executa</label>
-              <select id="atv-quem" value={quem} onChange={(e) => setQuem(e.target.value as typeof quem)} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+              <SelectAuto id="atv-quem" value={quem} onChange={(e) => setQuem(e.target.value as typeof quem)} className={`${INPUT_CLASS} w-full cursor-pointer`}>
                 <option value="qualquer">Qualquer pessoa</option>
                 <option value="usuario">Um usuário</option>
                 <option value="departamento">Um departamento</option>
                 <option value="bot">Bot (a IA conversa no dia e hora)</option>
-              </select>
+              </SelectAuto>
             </div>
             {quem === 'usuario' && (
               <div className={FIELD_CLASS}>
                 <label htmlFor="atv-executor" className={LABEL_CLASS}>Usuário<span className="text-rose-500 ml-1">*</span></label>
-                <select id="atv-executor" value={executorId} onChange={(e) => setExecutorId(e.target.value)} required className={`${INPUT_CLASS} w-full cursor-pointer`}>
+                <SelectAuto id="atv-executor" value={executorId} onChange={(e) => setExecutorId(e.target.value)} required className={`${INPUT_CLASS} w-full cursor-pointer`}>
                   <option value="">Escolha...</option>
                   {usuarios.map((u) => (
                     <option key={u.value} value={u.value}>
                       {u.label}
                     </option>
                   ))}
-                </select>
+                </SelectAuto>
               </div>
             )}
             {quem === 'departamento' && (
               <div className={FIELD_CLASS}>
                 <label htmlFor="atv-departamento" className={LABEL_CLASS}>Departamento<span className="text-rose-500 ml-1">*</span></label>
-                <select id="atv-departamento" value={departamentoId} onChange={(e) => setDepartamentoId(e.target.value)} required className={`${INPUT_CLASS} w-full cursor-pointer`}>
+                <SelectAuto id="atv-departamento" value={departamentoId} onChange={(e) => setDepartamentoId(e.target.value)} required className={`${INPUT_CLASS} w-full cursor-pointer`}>
                   <option value="">{departamentos.length ? 'Escolha...' : 'Nenhum: cadastre em Cadastros › Departamentos'}</option>
                   {departamentos.map((d) => (
                     <option key={d.value} value={d.value}>
                       {d.label}
                     </option>
                   ))}
-                </select>
+                </SelectAuto>
               </div>
             )}
           </div>
@@ -199,13 +200,13 @@ export const AtividadeModal: React.FC<AtividadeModalProps> = ({ negocioId, pesso
 
           <div className={FIELD_CLASS}>
             <label htmlFor="atv-lembrete" className={LABEL_CLASS}>{quem === 'bot' ? 'O Bot conversa com' : 'Lembrete por WhatsApp para'}</label>
-            <select id="atv-lembrete" value={lembretePara} onChange={(e) => setLembretePara(e.target.value)} className={`${INPUT_CLASS} w-full sm:w-1/2 cursor-pointer`}>
+            <SelectAuto id="atv-lembrete" value={lembretePara} onChange={(e) => setLembretePara(e.target.value)} className={`${INPUT_CLASS} w-full sm:w-1/2 cursor-pointer`}>
               {LEMBRETE_PARA.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </SelectAuto>
             {quem === 'bot' && (
               <span className={HINT_CLASS}>
                 No dia e hora (sem hora: 8h), a IA conversa pelo WhatsApp seguindo o assunto e a observação, até cumprir a atividade; sem WhatsApp, manda um e-mail.

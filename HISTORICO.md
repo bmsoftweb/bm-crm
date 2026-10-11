@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.146 — 2026-10-10
+
+- App do técnico: mapa do endereço do cliente no detalhe da OS (Google Maps embutido; sem sinal, um aviso no lugar). O botão "Mapa" virou "Como chegar" e abre a rota no app de mapas do celular.
+- Listas suspensas com mais de 20 opções viram combo digitável (filtra ao digitar, setas/Enter/Esc), em todo o sistema: UF do endereço, executor e departamento da atividade, transferir chamado/conversa, funil e etapa, responsável da pesquisa, modelos, critérios, importação de arquivo etc. Até 20 opções continua a lista comum.
+
 ## 0.0.145 — 2026-10-10
 
 - App do técnico: "Histórico do cliente" no detalhe da OS (recolhido; fora da tela de fechamento): as últimas 10 OS concluídas do mesmo cliente, de qualquer técnico, com número, data, tipo, técnico e o que foi feito; tocar abre o que seria feito, o que foi feito e os serviços e produtos usados. Vem na sincronização e funciona sem sinal.

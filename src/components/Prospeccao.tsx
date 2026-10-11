@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Check, ExternalLink, Globe, Instagram, Loader2, MapPin, MessageCircle, Plus, Search, Star, UserPlus, X } from 'lucide-react';
 import {
   abrirBuscaProspeccao,
@@ -188,12 +189,12 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
           </div>
           <div className={FIELD_CLASS}>
             <label htmlFor="pr-nota" className={LABEL_CLASS}>Nota mínima</label>
-            <select id="pr-nota" value={filtro.nota_min} onChange={(e) => mudar('nota_min', Number(e.target.value))} className={`${INPUT_CLASS} w-full`}>
+            <SelectAuto id="pr-nota" value={filtro.nota_min} onChange={(e) => mudar('nota_min', Number(e.target.value))} className={`${INPUT_CLASS} w-full`}>
               <option value={0}>Qualquer</option>
               <option value={3.5}>3,5 ou mais</option>
               <option value={4}>4,0 ou mais</option>
               <option value={4.5}>4,5 ou mais</option>
-            </select>
+            </SelectAuto>
           </div>
           <div className={FIELD_CLASS}>
             <label htmlFor="pr-avaliacoes" className={LABEL_CLASS}>Avaliações mínimas</label>
@@ -210,11 +211,11 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <div className="flex items-center gap-2">
             <label htmlFor="pr-maximo" className={LABEL_CLASS}>Buscar até</label>
-            <select id="pr-maximo" value={filtro.maximo} onChange={(e) => mudar('maximo', Number(e.target.value))} className={INPUT_CLASS}>
+            <SelectAuto id="pr-maximo" value={filtro.maximo} onChange={(e) => mudar('maximo', Number(e.target.value))} className={INPUT_CLASS}>
               <option value={20}>20 empresas</option>
               <option value={40}>40 empresas</option>
               <option value={60}>60 empresas</option>
-            </select>
+            </SelectAuto>
           </div>
           <Toggle id="pr-celular" size="sm" checked={filtro.somente_celular} onChange={(v) => mudar('somente_celular', v)} label={<span className="text-xs font-semibold text-stone-700 dark:text-stone-200">Só com celular</span>} />
           <Toggle id="pr-site" size="sm" checked={filtro.exigir_site} onChange={(v) => mudar('exigir_site', v)} label={<span className="text-xs font-semibold text-stone-700 dark:text-stone-200">Só com site</span>} />
@@ -228,7 +229,7 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
           />
           <div className="flex items-center gap-2 ml-auto">
             <label htmlFor="pr-anteriores" className={LABEL_CLASS}>Buscas anteriores</label>
-            <select
+            <SelectAuto
               id="pr-anteriores"
               value={buscaAberta}
               onChange={(e) => reabrir(e.target.value)}
@@ -242,7 +243,7 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
                   {b.quando} • {b.termo} em {b.local} ({b.qtd})
                 </option>
               ))}
-            </select>
+            </SelectAuto>
             {buscaAberta && onVerLeads && (
               <button
                 type="button"

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import {
   Background,
   Controls,
@@ -395,10 +396,10 @@ const Editor: React.FC<Props> = ({ somenteLeitura, onToast, chave = 'jornada' })
           <Toggle checked={ativo} onChange={setAtivo} label={<span className="text-xs font-semibold text-stone-700 dark:text-stone-200">Automação ligada</span>} />
           <div className={FIELD_CLASS}>
             <label htmlFor="jor-modo" className={LABEL_CLASS}>Atende</label>
-            <select id="jor-modo" value={modo} onChange={(e) => setModo(e.target.value as 'teste' | 'todos')} className={`${INPUT_CLASS} cursor-pointer`}>
+            <SelectAuto id="jor-modo" value={modo} onChange={(e) => setModo(e.target.value as 'teste' | 'todos')} className={`${INPUT_CLASS} cursor-pointer`}>
               <option value="teste">Só os números de teste</option>
               <option value="todos">Todos os clientes</option>
-            </select>
+            </SelectAuto>
           </div>
           {modo === 'teste' && (
             <div className={`${FIELD_CLASS} flex-1 min-w-60`}>
@@ -604,25 +605,25 @@ const FunilEtapa: React.FC<{ funilId: number | null; etapaId: number | null; idC
     <>
       <div className={FIELD_CLASS}>
         <label htmlFor={idCampo('funil')} className={LABEL_CLASS}>Funil</label>
-        <select id={idCampo('funil')} value={funilId ?? ''} onChange={(e) => onChange({ funil_id: Number(e.target.value) || null, etapa_id: null })} className={`${campo} cursor-pointer`}>
+        <SelectAuto id={idCampo('funil')} value={funilId ?? ''} onChange={(e) => onChange({ funil_id: Number(e.target.value) || null, etapa_id: null })} className={`${campo} cursor-pointer`}>
           <option value="">O primeiro funil</option>
           {funis.map((f) => (
             <option key={f.id} value={f.id}>
               {f.nome}
             </option>
           ))}
-        </select>
+        </SelectAuto>
       </div>
       <div className={FIELD_CLASS}>
         <label htmlFor={idCampo('etapa')} className={LABEL_CLASS}>Etapa</label>
-        <select id={idCampo('etapa')} value={etapaId ?? ''} onChange={(e) => onChange({ etapa_id: Number(e.target.value) || null })} disabled={!funilId} className={`${campo} cursor-pointer`}>
+        <SelectAuto id={idCampo('etapa')} value={etapaId ?? ''} onChange={(e) => onChange({ etapa_id: Number(e.target.value) || null })} disabled={!funilId} className={`${campo} cursor-pointer`}>
           <option value="">A primeira etapa</option>
           {etapas.map((e) => (
             <option key={e.id} value={e.id}>
               {e.nome}
             </option>
           ))}
-        </select>
+        </SelectAuto>
       </div>
     </>
   );
@@ -655,13 +656,13 @@ const PainelNo: React.FC<PainelProps> = ({ no, somenteLeitura, departamentos, va
     </div>
   );
   const operador = (valor: string, onChange: (v: string) => void, idCampo: string) => (
-    <select id={idCampo} value={valor} onChange={(e) => onChange(e.target.value)} className={`${campo} cursor-pointer`}>
+    <SelectAuto id={idCampo} value={valor} onChange={(e) => onChange(e.target.value)} className={`${campo} cursor-pointer`}>
       {OPERADORES.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
         </option>
       ))}
-    </select>
+    </SelectAuto>
   );
   const botaoRemover = (onClick: () => void, titulo: string) => (
     <button type="button" onClick={onClick} title={titulo} className="p-1 text-stone-400 hover:text-red-600 cursor-pointer shrink-0">
@@ -717,12 +718,12 @@ const PainelNo: React.FC<PainelProps> = ({ no, somenteLeitura, departamentos, va
         <>
           <div className={FIELD_CLASS}>
             <label htmlFor={id('tipo')} className={LABEL_CLASS}>Verificar</label>
-            <select id={id('tipo')} value={d.tipo} onChange={(e) => set({ tipo: e.target.value })} className={`${campo} cursor-pointer`}>
+            <SelectAuto id={id('tipo')} value={d.tipo} onChange={(e) => set({ tipo: e.target.value })} className={`${campo} cursor-pointer`}>
               <option value="horario">Horário de atendimento</option>
               <option value="cadastrado">Cliente cadastrado no CRM</option>
               <option value="negocio">Cliente com negócio aberto</option>
               <option value="variavel">Valor de uma variável</option>
-            </select>
+            </SelectAuto>
           </div>
           {d.tipo === 'horario' && (
             <>
@@ -860,14 +861,14 @@ const PainelNo: React.FC<PainelProps> = ({ no, somenteLeitura, departamentos, va
         <>
           <div className={FIELD_CLASS}>
             <label htmlFor={id('dep')} className={LABEL_CLASS}>Departamento (opcional)</label>
-            <select id={id('dep')} value={d.departamento_id ?? ''} onChange={(e) => set({ departamento_id: Number(e.target.value) || null })} className={`${campo} cursor-pointer`}>
+            <SelectAuto id={id('dep')} value={d.departamento_id ?? ''} onChange={(e) => set({ departamento_id: Number(e.target.value) || null })} className={`${campo} cursor-pointer`}>
               <option value="">Toda a equipe</option>
               {departamentos.map((x) => (
                 <option key={x.value} value={x.value}>
                   {x.label}
                 </option>
               ))}
-            </select>
+            </SelectAuto>
           </div>
           {linha('assunto', 'Assunto', 'Retornar contato: {{nome}}')}
           {textoCom('observacao', 'Observação (opcional)', 3)}
@@ -879,14 +880,14 @@ const PainelNo: React.FC<PainelProps> = ({ no, somenteLeitura, departamentos, va
         <>
           <div className={FIELD_CLASS}>
             <label htmlFor={id('dep')} className={LABEL_CLASS}>Departamento</label>
-            <select id={id('dep')} value={d.departamento_id ?? ''} onChange={(e) => set({ departamento_id: Number(e.target.value) || null })} className={`${campo} cursor-pointer`}>
+            <SelectAuto id={id('dep')} value={d.departamento_id ?? ''} onChange={(e) => set({ departamento_id: Number(e.target.value) || null })} className={`${campo} cursor-pointer`}>
               <option value="">{departamentos.length ? 'Escolha...' : 'Cadastre em Cadastros › Departamentos'}</option>
               {departamentos.map((x) => (
                 <option key={x.value} value={x.value}>
                   {x.label}
                 </option>
               ))}
-            </select>
+            </SelectAuto>
           </div>
           {textoCom('texto', 'Mensagem ao cliente (opcional)', 3)}
         </>
@@ -991,11 +992,11 @@ const CamposApi: React.FC<{
 }> = ({ d, set, setItem, removerItem, idBase, botaoIncluir, botaoRemover }) => (
   <>
     <div className="grid grid-cols-[6rem_1fr] gap-2">
-      <select aria-label="Método" value={d.metodo} onChange={(e) => set({ metodo: e.target.value })} className={`${campo} cursor-pointer`}>
+      <SelectAuto aria-label="Método" value={d.metodo} onChange={(e) => set({ metodo: e.target.value })} className={`${campo} cursor-pointer`}>
         {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => (
           <option key={m}>{m}</option>
         ))}
-      </select>
+      </SelectAuto>
       <input aria-label="URL" value={d.url ?? ''} onChange={(e) => set({ url: e.target.value })} onFocus={selecionar} placeholder="https://api.exemplo.com/clientes/{{numero}}" className={campo} />
     </div>
     <span className={LABEL_CLASS}>Cabeçalhos</span>

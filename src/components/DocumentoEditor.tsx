@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -502,7 +503,7 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
             </div>
             <div className={FIELD_CLASS}>
               <label htmlFor="doc-status" className={LABEL_CLASS}>Status</label>
-              <select
+              <SelectAuto
                 id="doc-status"
                 value={cab.status}
                 onChange={(e) => campo('status')(e.target.value)}
@@ -514,7 +515,7 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
                     {STATUS_LABELS[s]}
                   </option>
                 ))}
-              </select>
+              </SelectAuto>
             </div>
           </fieldset>
 
@@ -694,7 +695,7 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
                           )}
                         </td>
                         <td className="px-3 py-1.5">
-                          <select
+                          <SelectAuto
                             value={x.forma_pagamento}
                             disabled={bloqueado}
                             onChange={(e) => alterarParcela(x.chave, { forma_pagamento: e.target.value })}
@@ -705,7 +706,7 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
                                 {f}
                               </option>
                             ))}
-                          </select>
+                          </SelectAuto>
                         </td>
                         <td className="px-3 py-1.5">
                           <NumberField

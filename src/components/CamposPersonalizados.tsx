@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { ArrowDown, ArrowUp, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { CampoPersonalizado } from '../types';
 import { fetchConfig, invalidarCamposPersonalizados, salvarConfig } from '../services/api';
@@ -161,7 +162,7 @@ export const CamposPersonalizados: React.FC<Props> = ({ somenteLeitura, onToast 
 
               <div className="flex flex-col gap-1 lg:col-span-2">
                 <label className={`${LABEL_CLASS} lg:hidden`}>Tipo</label>
-                <select
+                <SelectAuto
                   value={c.tipo}
                   onChange={(e) => alterar(i, { tipo: e.target.value as CampoPersonalizado['tipo'] })}
                   className={`${INPUT_CLASS} w-full cursor-pointer`}
@@ -171,7 +172,7 @@ export const CamposPersonalizados: React.FC<Props> = ({ somenteLeitura, onToast 
                       {t.label}
                     </option>
                   ))}
-                </select>
+                </SelectAuto>
               </div>
 
               <div className="flex flex-col gap-1 lg:col-span-3">

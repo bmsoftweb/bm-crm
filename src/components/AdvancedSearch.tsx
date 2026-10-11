@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { SelectBusca } from './SelectBusca';
 import { SlidersHorizontal, X, Search, Eraser } from 'lucide-react';
 import { FieldDef, FiltroAvancado, OpcaoRef, ResourceDef } from '../types';
@@ -161,7 +162,7 @@ export const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
     // Booleano: Todos / Sim / Não
     if (f.type === 'boolean') {
       return (
-        <select
+        <SelectAuto
           value={valores[f.name] || ''}
           onChange={(e) => setValor(f.name, e.target.value)}
           className={`${inputClass} cursor-pointer`}
@@ -169,14 +170,14 @@ export const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
           <option value="">Todos</option>
           <option value="1">Somente {f.label.toLowerCase()} = Sim</option>
           <option value="0">Somente {f.label.toLowerCase()} = Não</option>
-        </select>
+        </SelectAuto>
       );
     }
 
     // Enumeração
     if (f.type === 'enum') {
       return (
-        <select
+        <SelectAuto
           value={valores[f.name] || ''}
           onChange={(e) => setValor(f.name, e.target.value)}
           className={`${inputClass} cursor-pointer`}
@@ -187,7 +188,7 @@ export const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
               {o.label}
             </option>
           ))}
-        </select>
+        </SelectAuto>
       );
     }
 

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { createPortal } from 'react-dom';
 import { Ban, Download, FilePlus2, FileSignature, Loader2, Lock, LockOpen, Paperclip, RefreshCw, Send, Trash2, Upload, X } from 'lucide-react';
 import { RegistroCrud } from '../types';
@@ -302,7 +303,7 @@ const JanelaDocumentos: React.FC<{ registro: RegistroCrud; onFechar: (alterou: b
               )}
             </span>
             {modelos && modelos.length > 1 && (
-              <select
+              <SelectAuto
                 aria-label="Modelo de contrato"
                 value={modeloId}
                 onChange={(e) => setModeloId(e.target.value)}
@@ -313,7 +314,7 @@ const JanelaDocumentos: React.FC<{ registro: RegistroCrud; onFechar: (alterou: b
                     {m.descricao}
                   </option>
                 ))}
-              </select>
+              </SelectAuto>
             )}
             <button
               onClick={gerarMinuta}
@@ -330,13 +331,13 @@ const JanelaDocumentos: React.FC<{ registro: RegistroCrud; onFechar: (alterou: b
           <div className="flex flex-wrap items-end gap-3">
             <div className={FIELD_CLASS}>
               <label htmlFor="doc-tipo" className={LABEL_CLASS}>Tipo</label>
-              <select id="doc-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)} className={`${INPUT_CLASS} cursor-pointer`}>
+              <SelectAuto id="doc-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)} className={`${INPUT_CLASS} cursor-pointer`}>
                 {TIPOS.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
                   </option>
                 ))}
-              </select>
+              </SelectAuto>
             </div>
             <div className={`${FIELD_CLASS} flex-1 min-w-56`}>
               <label htmlFor="doc-arquivo" className={LABEL_CLASS}>Arquivo (PDF para assinatura; até {MAX_MB} MB)</label>

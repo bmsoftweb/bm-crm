@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { AlertCircle, CalendarClock, CalendarX2, Handshake, Loader2, Star, ThumbsDown, ThumbsUp, TriangleAlert } from 'lucide-react';
 import { DashboardData } from '../types';
 import { STATUS_COLORS, STATUS_LABELS, formatMoeda } from '../utils/formatters';
@@ -60,7 +61,7 @@ const GraficoFunil: React.FC<{ etapas: DashboardData['porEtapa']; onClick: () =>
       <div className="flex items-center justify-between gap-3 mb-3">
         <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">Funil de vendas</h3>
         {funis.length > 1 && (
-          <select
+          <SelectAuto
             value={funil}
             onChange={(e) => setFunil(e.target.value)}
             aria-label="Funil"
@@ -69,7 +70,7 @@ const GraficoFunil: React.FC<{ etapas: DashboardData['porEtapa']; onClick: () =>
             {funis.map((f) => (
               <option key={f} value={f}>{f}</option>
             ))}
-          </select>
+          </SelectAuto>
         )}
       </div>
       {lista.length === 0 ? (

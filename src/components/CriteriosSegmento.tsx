@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Plus, Trash2 } from 'lucide-react';
 import { OpcaoRef } from '../types';
 import { INPUT_CLASS } from '../utils/formStyles';
@@ -79,13 +80,13 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
     if (tipo === 'sim_nao') return <Toggle checked={Boolean(Number(c.valor))} onChange={(v) => alterar(i, { valor: v ? 1 : 0 })} />;
     if (tipo === 'tipo_pessoa')
       return (
-        <select value={String(c.valor)} onChange={(e) => alterar(i, { valor: e.target.value })} required className={`${cls} cursor-pointer`}>
+        <SelectAuto value={String(c.valor)} onChange={(e) => alterar(i, { valor: e.target.value })} required className={`${cls} cursor-pointer`}>
           {TIPOS_PESSOA.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
           ))}
-        </select>
+        </SelectAuto>
       );
     if (tipo === 'segmento')
       return <SelectBusca value={c.valor} options={segmentos} onChange={(v) => alterar(i, { valor: v })} required vazioLabel="— Selecione —" className={cls} />;
@@ -100,7 +101,7 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
         const operadores = r?.valor === 'numero' ? OPERADORES_NUMERO : OPERADORES_IGUALDADE;
         return (
           <div key={i} className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-2 items-center">
-            <select
+            <SelectAuto
               value={c.regra}
               onChange={(e) => {
                 const nova = regraDe(e.target.value);
@@ -114,14 +115,14 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
                   {o.rotulo}
                 </option>
               ))}
-            </select>
-            <select value={c.operador} onChange={(e) => alterar(i, { operador: e.target.value })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
+            </SelectAuto>
+            <SelectAuto value={c.operador} onChange={(e) => alterar(i, { operador: e.target.value })} className={`${INPUT_CLASS} w-full cursor-pointer`}>
               {operadores.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </SelectAuto>
             {campoValor(c, i)}
             <button
               type="button"

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import {
   AlignCenter,
   AlignJustify,
@@ -325,7 +326,7 @@ const EditorModelo: React.FC<{
 
       {/* Barra de ferramentas */}
       <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950/60 sticky top-0 z-10">
-        <select
+        <SelectAuto
           aria-label="Estilo do bloco"
           disabled={somenteLeitura || modo === 'html'}
           onChange={(e) => {
@@ -343,7 +344,7 @@ const EditorModelo: React.FC<{
               {b.rotulo}
             </option>
           ))}
-        </select>
+        </SelectAuto>
         {FERRAMENTAS.map((f) => (
           <button
             key={f.cmd}
@@ -359,7 +360,7 @@ const EditorModelo: React.FC<{
           </button>
         ))}
         <span className="w-px h-6 bg-stone-300 dark:bg-stone-700 mx-1" />
-        <select
+        <SelectAuto
           aria-label="Inserir variável"
           disabled={somenteLeitura}
           value=""
@@ -372,7 +373,7 @@ const EditorModelo: React.FC<{
               {v.descricao} — {`{{${v.nome}}}`}
             </option>
           ))}
-        </select>
+        </SelectAuto>
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"

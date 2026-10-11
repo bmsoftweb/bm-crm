@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { ArrowLeft, ArrowRight, CheckCircle2, FileSpreadsheet, FileText, FileUp, Loader2, Upload, X } from 'lucide-react';
 import { fetchCamposPersonalizados, importarPessoasArquivo } from '../services/api';
 import { CampoPersonalizado } from '../types';
@@ -120,12 +121,12 @@ const CampoPadrao: React.FC<{ campo: CampoImportacao; value: string; onChange: (
   if (tipo === 'lista' || tipo === 'boolean') {
     const opcoes = tipo === 'boolean' ? ['Sim', 'Não'] : campo.personalizado?.opcoes || [];
     return (
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLASS}>
+      <SelectAuto value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLASS}>
         <option value="">—</option>
         {opcoes.map((o) => (
           <option key={o} value={o}>{o}</option>
         ))}
-      </select>
+      </SelectAuto>
     );
   }
   if (tipo === 'data') return <DateField value={value} onChange={onChange} className={INPUT_CLASS} />;
@@ -511,19 +512,19 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
                   <>
                     <div className={FIELD_CLASS}>
                       <label htmlFor="imp-sep" className={LABEL_CLASS}>Separador de campos</label>
-                      <select id="imp-sep" value={separador} onChange={(e) => setSeparador(e.target.value)} className={INPUT_CLASS}>
+                      <SelectAuto id="imp-sep" value={separador} onChange={(e) => setSeparador(e.target.value)} className={INPUT_CLASS}>
                         {SEPARADORES.map((s) => (
                           <option key={s.rotulo} value={s.valor}>{s.rotulo}</option>
                         ))}
-                      </select>
+                      </SelectAuto>
                     </div>
                     <div className={FIELD_CLASS}>
                       <label htmlFor="imp-cod" className={LABEL_CLASS}>Codificação</label>
-                      <select id="imp-cod" value={codificacao} onChange={(e) => setCodificacao(e.target.value as any)} className={INPUT_CLASS}>
+                      <SelectAuto id="imp-cod" value={codificacao} onChange={(e) => setCodificacao(e.target.value as any)} className={INPUT_CLASS}>
                         <option value="auto">Automática</option>
                         <option value="utf-8">UTF-8</option>
                         <option value="windows-1252">Windows (ANSI)</option>
-                      </select>
+                      </SelectAuto>
                     </div>
                     <div className={FIELD_CLASS}>
                       <span className={LABEL_CLASS}>Textos entre aspas</span>
@@ -536,11 +537,11 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
                 {arquivo?.tipo === 'excel' && pasta && (
                   <div className={`${FIELD_CLASS} col-span-2`}>
                     <label htmlFor="imp-aba" className={LABEL_CLASS}>Planilha (aba)</label>
-                    <select id="imp-aba" value={aba} onChange={(e) => setAba(e.target.value)} className={INPUT_CLASS}>
+                    <SelectAuto id="imp-aba" value={aba} onChange={(e) => setAba(e.target.value)} className={INPUT_CLASS}>
                       {pasta.abas.map((a) => (
                         <option key={a} value={a}>{a}</option>
                       ))}
-                    </select>
+                    </SelectAuto>
                   </div>
                 )}
                 {arquivo?.tipo === 'pdf' && (
@@ -608,7 +609,7 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
                       {c.dica && <p className={`${HINT_CLASS} truncate`} title={c.dica}>{c.dica}</p>}
                     </div>
                     <ArrowLeft className="w-3.5 h-3.5 text-stone-300 dark:text-stone-600" />
-                    <select
+                    <SelectAuto
                       value={dePara[c.campo] ?? -1}
                       required={c.obrigatorio}
                       onChange={(e) => setDePara((d) => ({ ...d, [c.campo]: Number(e.target.value) }))}
@@ -618,7 +619,7 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
                       {cabecalho.map((h, i) => (
                         <option key={i} value={i}>{h}</option>
                       ))}
-                    </select>
+                    </SelectAuto>
                     <CampoPadrao
                       campo={c}
                       value={padrao[c.campo] ?? ''}

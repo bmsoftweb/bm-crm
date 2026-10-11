@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { Loader2, PlugZap, Save, Webhook } from 'lucide-react';
 import { cadastrarWebhookCofreD4Sign, fetchConfig, salvarConfig, testarD4Sign } from '../services/api';
 import { INPUT_CLASS, LABEL_CLASS, FIELD_CLASS, HINT_CLASS } from '../utils/formStyles';
@@ -123,11 +124,11 @@ export const ConfigAssinatura: React.FC<Props> = ({ somenteLeitura, onToast }) =
       <fieldset disabled={somenteLeitura} className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className={`${FIELD_CLASS} sm:col-span-2`}>
           <label htmlFor="d4-ambiente" className={LABEL_CLASS}>Ambiente</label>
-          <select id="d4-ambiente" value={v.ambiente} onChange={(e) => alterar({ ambiente: e.target.value as D4['ambiente'] })} className={`${campo} cursor-pointer`}>
+          <SelectAuto id="d4-ambiente" value={v.ambiente} onChange={(e) => alterar({ ambiente: e.target.value as D4['ambiente'] })} className={`${campo} cursor-pointer`}>
             <option value="">— Desligado —</option>
             <option value="producao">Produção (secure.d4sign.com.br)</option>
             <option value="sandbox">Testes / sandbox (sandbox.d4sign.com.br)</option>
-          </select>
+          </SelectAuto>
         </div>
 
         {ativo && (
@@ -164,14 +165,14 @@ export const ConfigAssinatura: React.FC<Props> = ({ somenteLeitura, onToast }) =
             <div className={`${FIELD_CLASS} sm:col-span-2`}>
               <label htmlFor="d4-cofre" className={LABEL_CLASS}>Cofre dos contratos</label>
               {cofres?.length ? (
-                <select id="d4-cofre" value={v.cofre} onChange={(e) => alterar({ cofre: e.target.value })} required className={`${campo} cursor-pointer`}>
+                <SelectAuto id="d4-cofre" value={v.cofre} onChange={(e) => alterar({ cofre: e.target.value })} required className={`${campo} cursor-pointer`}>
                   <option value="">— Selecione —</option>
                   {cofres.map((c) => (
                     <option key={c.uuid} value={c.uuid}>
                       {c.nome}
                     </option>
                   ))}
-                </select>
+                </SelectAuto>
               ) : (
                 <input id="d4-cofre" value={v.cofre} onChange={(e) => alterar({ cofre: e.target.value })} maxLength={100} autoComplete="off" placeholder="UUID do cofre" className={campo} />
               )}

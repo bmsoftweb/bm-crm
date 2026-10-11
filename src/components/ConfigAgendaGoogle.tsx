@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { SelectAuto } from './SelectAuto';
 import { CalendarCheck, Loader2, RefreshCw, Save, Unplug } from 'lucide-react';
 import {
   conectarAgendaGoogle,
@@ -145,7 +146,7 @@ export const ConfigAgendaGoogle: React.FC<Props> = ({ somenteLeitura, onToast })
               Visitas e reuniões do CRM vão para
             </label>
             <div className="flex items-stretch gap-2">
-              <select
+              <SelectAuto
                 id="agenda-destino"
                 value={destinoEscolhido ?? ''}
                 disabled={somenteLeitura}
@@ -157,7 +158,7 @@ export const ConfigAgendaGoogle: React.FC<Props> = ({ somenteLeitura, onToast })
                     {a.nome}
                   </option>
                 ))}
-              </select>
+              </SelectAuto>
               {!somenteLeitura && (
                 <button
                   type="button"
