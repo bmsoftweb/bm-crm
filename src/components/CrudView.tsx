@@ -8,6 +8,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   CornerDownRight,
   ArrowUp,
   ArrowDown,
@@ -1519,20 +1521,26 @@ export const CrudView: React.FC<CrudViewProps> = ({
             Página {page} de {totalPages}
           </span>
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="p-1.5 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="p-1.5 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            {/* Primeira, anterior, próxima e última página */}
+            {(
+              [
+                [ChevronsLeft, 'Primeira página', 1, page <= 1],
+                [ChevronLeft, 'Página anterior', Math.max(1, page - 1), page <= 1],
+                [ChevronRight, 'Próxima página', Math.min(totalPages, page + 1), page >= totalPages],
+                [ChevronsRight, 'Última página', totalPages, page >= totalPages],
+              ] as const
+            ).map(([Icone, titulo, destino, desabilitado]) => (
+              <button
+                key={titulo}
+                type="button"
+                onClick={() => setPage(destino)}
+                disabled={desabilitado}
+                title={titulo}
+                className="p-1.5 rounded-lg border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                <Icone className="w-4 h-4" />
+              </button>
+            ))}
           </div>
         </div>
       )}
