@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Trash2, Wrench } from 'lucide-react';
 import { FiltroAvancado, RegistroCrud, ResourceDef } from '../types';
 import { listRecords, updateRecord } from '../services/api';
 import { comPrefixo } from '../utils/crm';
@@ -31,6 +31,8 @@ interface Props {
   podeExcluir: (row: RegistroCrud) => boolean;
   /** Pede a exclusão (a tela confirma antes) */
   onExcluir: (row: RegistroCrud) => void;
+  /** "Gerar OS" no botão direito da atividade (sem ele, quem não acessa as OS, o menu não oferece) */
+  onGerarOS?: (row: RegistroCrud) => void;
 }
 
 /** Arraste em andamento: a atividade e, na grade da semana, quantos minutos abaixo do início ela foi pega */
@@ -131,6 +133,7 @@ export const AgendaCalendario: React.FC<Props> = ({
   onAlterado,
   podeExcluir,
   onExcluir,
+  onGerarOS,
 }) => {
   const [menu, setMenu] = useState<MenuDia | null>(null);
 
@@ -543,7 +546,23 @@ export const AgendaCalendario: React.FC<Props> = ({
                 <span className="text-xs font-medium whitespace-nowrap text-stone-800 dark:text-stone-100">Novo</span>
               </button>
             )}
-            {onNovo && <div className="my-1 border-t border-stone-100 dark:border-stone-800" />}
+            {onGerarOS && menu.row && (
+              <button
+                role="menuitem"
+                type="button"
+                title="Cria a ordem de serviço com o contato, o executor, a data e o assunto da atividade"
+                onClick={() => {
+                  const row = menu.row!;
+                  setMenu(null);
+                  onGerarOS(row);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                <Wrench className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                <span className="text-xs font-medium whitespace-nowrap text-stone-800 dark:text-stone-100">Gerar OS</span>
+              </button>
+            )}
+            {(onNovo || (onGerarOS && menu.row)) && <div className="my-1 border-t border-stone-100 dark:border-stone-800" />}
             <button
               role="menuitem"
               type="button"

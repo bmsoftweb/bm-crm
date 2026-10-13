@@ -37,7 +37,7 @@ import { BotaoAcao } from './components/MenuAcoes';
 import { Headset, KeyRound, Printer } from 'lucide-react';
 import { imprimirOS } from './utils/imprimirOS';
 import { AcaoEncerrarOS } from './components/EncerrarOS';
-import { AcaoGerarOS } from './components/GerarOS';
+import { AcaoGerarOS, ConfirmarGerarOS } from './components/GerarOS';
 import { AcaoRetornoLigacao, PesquisasSatisfacao } from './components/PesquisasSatisfacao';
 import { PainelSuporte } from './components/PainelSuporte';
 import { Prospeccao } from './components/Prospeccao';
@@ -96,6 +96,8 @@ export default function App() {
   /** Chamados aguardando na fila (etiqueta do menu) e o chamado a abrir em Chamados Ativos */
   const [filaChamados, setFilaChamados] = useState(0);
   const [chamadoAbrir, setChamadoAbrir] = useState<number | null>(null);
+  /** Botão direito na atividade da agenda: confirmação do "Gerar OS" */
+  const [gerarOSDe, setGerarOSDe] = useState<RegistroCrud | null>(null);
   /** Conversas passadas ao meu departamento que já tocaram o aviso (telefone + quando) */
   const avisadasRef = useRef(new Set<string>());
   /** Última conversa transferida para mim já avisada (null = ainda não carregou: sem campainha na abertura) */
@@ -647,6 +649,7 @@ export default function App() {
                     : undefined
               }
               acoesEmMenu={['propostas', 'pedidos', 'campanhas', 'atividades', 'ordens_servico'].includes(activeResource.name)}
+              onGerarOS={activeResource.name === 'atividades' && podeAcessar(usuario, 'ordens_servico') ? setGerarOSDe : undefined}
               aoDuploClique={
                 activeResource.name === 'atividades'
                   ? (row) => {
@@ -795,6 +798,16 @@ export default function App() {
                 ) : null
               }
             />
+            {gerarOSDe && (
+              <ConfirmarGerarOS
+                registro={gerarOSDe}
+                onFechar={() => setGerarOSDe(null)}
+                onGerada={(os) => {
+                  showToast(`OS nº ${os.numero} gerada.`);
+                  navegarRegistro('ordens_servico', os.id);
+                }}
+              />
+            )}
           </main>
         ) : (
           <main className="flex-1 overflow-y-auto min-h-0 w-full">

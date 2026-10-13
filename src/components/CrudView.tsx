@@ -67,6 +67,8 @@ interface CrudViewProps {
   acoesLista?: (recarregar: () => void) => React.ReactNode;
   /** Botões extras da coluna Ações de cada linha (ex.: Clonar proposta) */
   acoesLinha?: (row: RegistroCrud, ctx: { abrir: (row: RegistroCrud) => void; recarregar: () => void }) => React.ReactNode;
+  /** Agenda (Atividades): "Gerar OS" no botão direito da atividade */
+  onGerarOS?: (row: RegistroCrud) => void;
   /** Ações da linha (as de acoesLinha, Editar e Excluir) num menu "..." com descrição, em vez de ícones soltos */
   acoesEmMenu?: boolean;
   /** Coluna estreita logo depois do indicador, com um botão rápido por linha (ex.: Concluir atividade) */
@@ -124,6 +126,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
   renderEditor,
   acoesLista,
   acoesLinha,
+  onGerarOS,
   acoesEmMenu,
   colunaInicial,
   aoDuploClique,
@@ -1275,6 +1278,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
           podeMover={resource.canUpdate}
           podeExcluir={(row) => resource.canDelete && podeExcluirAtividade(row, usuario)}
           onExcluir={setDeleting}
+          onGerarOS={onGerarOS}
           onAlterado={recarregarComDetalhe}
           onNovo={resource.canCreate ? (data, hora) => abrirAbaNovo({ data_vencimento: data, ...(hora ? { hora_vencimento: hora } : {}) }) : undefined}
           onVisao={trocarVisao}
