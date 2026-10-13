@@ -493,7 +493,19 @@ export function createCrudRouter() {
       const newId = String(result.insertId);
       await aposGravar(resource.name, newId, [], pool, Number(res.locals.usuarioId) || null);
       if (filhos) await filhos(newId);
-      const aviso = resource.name === 'campanhas' ? await (await import('./campanhas.js')).gerarDisparosAoGravar(newId, empresaId) : null;
+      let aviso = resource.name === 'campanhas' ? await (await import('./campanhas.js')).gerarDisparosAoGravar(newId, empresaId) : null;
+      // Visita e Reunião Externa já nascem com a OS (quem não acessa as OS só grava a atividade)
+      if (resource.name === 'atividades') {
+        const os = await import('./os.js');
+        if (os.ATIVIDADES_COM_OS.includes(String(payload.tipo))) {
+          try {
+            exigirAcesso(res, 'ordens_servico', 'as ordens de serviço');
+            aviso = `OS nº ${(await os.criarOSDaAtividade(newId, empresaId, Number(res.locals.usuarioId))).numero} criada.`;
+          } catch (err: any) {
+            aviso = `A OS não foi criada: ${err.message}`;
+          }
+        }
+      }
       res.json({ success: true, id: newId, aviso });
     } catch (err: any) {
       res.status(400).json({ error: friendlyDbError(err, resource?.labelSingular) });

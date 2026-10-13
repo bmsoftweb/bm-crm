@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.151 — 2026-10-13
+
+- Atividades: incluir uma atividade do tipo Visita ou Reunião Externa já cria a OS (mesma regra do "Gerar OS": cliente, técnico, data/hora com fim 2 h depois, assunto e observação). O aviso da gravação diz o nº da OS ou, se não deu (sem contato, sem acesso às OS), o motivo; a atividade é gravada mesmo assim. Só na inclusão pela tela (alterar o tipo depois ou atividades do Google Agenda não criam OS).
+
 ## 0.0.150 — 2026-10-11
 
 - Grids: botões de primeira e última página na paginação (além de anterior e próxima).

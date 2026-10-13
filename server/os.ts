@@ -139,6 +139,44 @@ async function historicoDos(empresaId: string, pessoas: number[]): Promise<Recor
   return mapa;
 }
 
+/** Tipos de atividade que já criam a OS ao serem incluídos (Visita e Reunião Externa) */
+export const ATIVIDADES_COM_OS = ['visita', 'reuniao_externa'];
+
+/**
+ * OS com os dados da atividade. Cliente: o contato da atividade, senão o do negócio ou o do chamado.
+ * Técnico: quem executa, senão quem gerou.
+ */
+export async function criarOSDaAtividade(atividadeId: string | number, empresaId: string | number, usuarioId: number): Promise<{ id: number; numero: number }> {
+  const [r] = await pool.query<any[]>(
+    `SELECT a.assunto, a.observacao, a.executor_id, a.chamado_id, DATE_FORMAT(a.data_vencimento, '%Y-%m-%d') AS data,
+            TIME_FORMAT(a.hora_vencimento, '%H:%i') AS hora, COALESCE(a.pessoa_id, n.pessoa_id, c.pessoa_id) AS pessoa_id
+       FROM atividades a
+       LEFT JOIN negocios n ON n.id = a.negocio_id
+       LEFT JOIN chamados c ON c.id = a.chamado_id
+      WHERE a.id = ? AND a.empresa_id = ?`,
+    [atividadeId, empresaId],
+  );
+  const a = r[0];
+  if (!a) throw erro(404, 'Atividade não encontrada.');
+  if (!a.pessoa_id) throw erro(400, 'A atividade não tem contato (nem pelo negócio ou chamado): informe o contato antes de gerar a OS.');
+  // Mesma regra do formulário da OS: o fim previsto é o início + 2 h (sem passar da meia-noite)
+  let horaFim: string | null = null;
+  if (a.hora) {
+    const [h, m] = a.hora.split(':').map(Number);
+    const min = Math.min(23 * 60 + 59, h * 60 + m + 120);
+    horaFim = `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  }
+  const solicitado = [assuntoComIcone(String(a.assunto ?? ''), null).trim(), String(a.observacao ?? '').trim()].filter(Boolean).join('\n\n');
+  const [[n]] = await pool.query<any>('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM ordens_servico WHERE empresa_id = ?', [empresaId]);
+  const [ins] = await pool.query<any>(
+    `INSERT INTO ordens_servico (empresa_id, numero, pessoa_id, chamado_id, tecnico_id, tipo, status, data_agendada, hora_inicio, hora_fim, servico_solicitado, criado_por)
+     VALUES (?, ?, ?, ?, ?, 'visita_tecnica', 'aberta', COALESCE(?, CURDATE()), ?, ?, ?, ?)`,
+    [empresaId, n.n, a.pessoa_id, a.chamado_id, a.executor_id || usuarioId, a.data, a.hora, horaFim, solicitado || 'Atendimento', usuarioId],
+  );
+  await aposGravar('ordens_servico', String(ins.insertId));
+  return { id: ins.insertId, numero: n.n };
+}
+
 export function createOsRouter() {
   const router = Router();
 
@@ -165,42 +203,11 @@ export function createOsRouter() {
     }
   });
 
-  /**
-   * "Gerar OS" do menu das Atividades: cria a OS com os dados da atividade e devolve o id (a tela abre a OS).
-   * Cliente: o contato da atividade, senão o do negócio ou o do chamado. Técnico: quem executa, senão quem gerou.
-   */
+  /** "Gerar OS" do menu das Atividades (ver criarOSDaAtividade); a tela abre a OS */
   router.post('/os/da-atividade/:id', async (req: Request, res: Response) => {
     try {
       exigirAcesso(res, 'ordens_servico', 'as ordens de serviço');
-      const empresaId = res.locals.empresaId;
-      const [r] = await pool.query<any[]>(
-        `SELECT a.assunto, a.observacao, a.executor_id, a.chamado_id, DATE_FORMAT(a.data_vencimento, '%Y-%m-%d') AS data,
-                TIME_FORMAT(a.hora_vencimento, '%H:%i') AS hora, COALESCE(a.pessoa_id, n.pessoa_id, c.pessoa_id) AS pessoa_id
-           FROM atividades a
-           LEFT JOIN negocios n ON n.id = a.negocio_id
-           LEFT JOIN chamados c ON c.id = a.chamado_id
-          WHERE a.id = ? AND a.empresa_id = ?`,
-        [req.params.id, empresaId],
-      );
-      const a = r[0];
-      if (!a) throw erro(404, 'Atividade não encontrada.');
-      if (!a.pessoa_id) throw erro(400, 'A atividade não tem contato (nem pelo negócio ou chamado): informe o contato antes de gerar a OS.');
-      // Mesma regra do formulário da OS: o fim previsto é o início + 2 h (sem passar da meia-noite)
-      let horaFim: string | null = null;
-      if (a.hora) {
-        const [h, m] = a.hora.split(':').map(Number);
-        const min = Math.min(23 * 60 + 59, h * 60 + m + 120);
-        horaFim = `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-      }
-      const solicitado = [assuntoComIcone(String(a.assunto ?? ''), null).trim(), String(a.observacao ?? '').trim()].filter(Boolean).join('\n\n');
-      const [[n]] = await pool.query<any>('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM ordens_servico WHERE empresa_id = ?', [empresaId]);
-      const [ins] = await pool.query<any>(
-        `INSERT INTO ordens_servico (empresa_id, numero, pessoa_id, chamado_id, tecnico_id, tipo, status, data_agendada, hora_inicio, hora_fim, servico_solicitado, criado_por)
-         VALUES (?, ?, ?, ?, ?, 'visita_tecnica', 'aberta', COALESCE(?, CURDATE()), ?, ?, ?, ?)`,
-        [empresaId, n.n, a.pessoa_id, a.chamado_id, a.executor_id || res.locals.usuarioId, a.data, a.hora, horaFim, solicitado || 'Atendimento', res.locals.usuarioId],
-      );
-      await aposGravar('ordens_servico', String(ins.insertId));
-      res.json({ id: ins.insertId, numero: n.n });
+      res.json(await criarOSDaAtividade(req.params.id, res.locals.empresaId, res.locals.usuarioId));
     } catch (err: any) {
       res.status(err.status || 400).json({ error: err.message });
     }
