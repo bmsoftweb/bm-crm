@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.156 — 2026-10-14
+
+- Chamados Ativos: os filtros da lista (Meus, Todos abertos, Aguardando, Em atendimento, Encerrados) viram ícones numa linha só, com o nome no tooltip.
+
 ## 0.0.155 — 2026-10-14
 
 - Chamados Ativos: quadro "Técnicos agora" no pé da lista, com cada técnico e quantos atendimentos faz no momento (chamados abertos com ele e conversas do WhatsApp em atendimento). Entram os usuários ativos que atendem agora ou atenderam chamado nos últimos 30 dias; quem está livre aparece em cinza. Atualiza junto com a lista.

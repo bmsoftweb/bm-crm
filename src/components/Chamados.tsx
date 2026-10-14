@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { AlertTriangle, ArrowRightLeft, Bell, CheckCircle2, Circle, ClipboardList, Hand, History, X, Inbox, Loader2, Lock, MessageCircle, Monitor, MonitorSmartphone, Pause, Pencil, Plus, Search, Send, StickyNote, UserRound, Headset } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Bell, CheckCircle2, Circle, Clock, ClipboardList, Hand, History, X, Inbox, Loader2, Lock, MessageCircle, Monitor, MonitorSmartphone, Pause, Pencil, Plus, Search, Send, StickyNote, UserRound, Headset } from 'lucide-react';
 import {
   acessarComputador,
   apelidarComputador,
@@ -414,12 +414,13 @@ export const ChamadosFila: React.FC<FilaProps> = ({ refreshToken, onAbrir, onMud
 // Chamados Ativos
 // ------------------------------------------------------------
 
-const FILTROS: [FiltroChamados, string][] = [
-  ['meus', 'Meus'],
-  ['todos', 'Todos abertos'],
-  ['aguardando', 'Aguardando'],
-  ['andamento', 'Em atendimento'],
-  ['encerrados', 'Encerrados'],
+/** Filtros da lista: só o ícone, com o nome no tooltip (cabem numa linha) */
+const FILTROS: [FiltroChamados, string, typeof Inbox][] = [
+  ['meus', 'Meus', UserRound],
+  ['todos', 'Todos abertos', Inbox],
+  ['aguardando', 'Aguardando', Clock],
+  ['andamento', 'Em atendimento', Headset],
+  ['encerrados', 'Encerrados', CheckCircle2],
 ];
 
 interface AtivosProps {
@@ -535,17 +536,20 @@ export const ChamadosAtivos: React.FC<AtivosProps> = ({ refreshToken, abrir, onM
               <Plus className="w-3.5 h-3.5" /> Novo
             </button>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {FILTROS.map(([id, nome]) => (
+          <div className="flex gap-1">
+            {FILTROS.map(([id, nome, Icone]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setFiltro(id)}
-                className={`px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer ${
+                title={nome}
+                aria-label={nome}
+                aria-pressed={filtro === id}
+                className={`flex-1 flex items-center justify-center py-1.5 rounded-md cursor-pointer ${
                   filtro === id ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
                 }`}
               >
-                {nome}
+                <Icone className="w-4 h-4" />
               </button>
             ))}
           </div>
