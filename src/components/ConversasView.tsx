@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
 import { useGrudarNoFim } from '../utils/grudarNoFim';
-import { AlertCircle, ArrowLeft, ArrowRightLeft, Bot, Building2, CircleCheck, CircleSlash, Hand, Lock, LockOpen, Network, Pause, Check, CheckCheck, Clock, FileText, Hash, Loader2, MessageCircle, MessageSquarePlus, Mic, Paperclip, Play, Reply, Search, SendHorizontal, Trash2, User, UserPlus, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRightLeft, Bot, Building2, CircleCheck, CircleSlash, Hand, Headset, Inbox, Layers, Lock, LockOpen, Megaphone, Network, Pause, Check, CheckCheck, Clock, FileText, Hash, Loader2, MessageCircle, MessageSquarePlus, Mic, Paperclip, Play, Reply, Search, SendHorizontal, Trash2, User, UserPlus, X } from 'lucide-react';
 import { ArquivoConversa, ConversaResumo, DestinoConversa, MensagemWhatsApp, createRecord, fetchDestinosConversa, fetchMidiaMensagem, fetchNumeroConversa, mudarAtendimentoConversa, encerrarConversa, descartarConversa, limparConversa, atenderConversa, marcarMensagemPrivada, apagarMensagem, pausarConversa, transferirConversa, fetchConversa, fetchOptions, fetchConversaDaAtividade, fetchConversas, responderConversa } from '../services/api';
 import { INPUT_CLASS, LABEL_CLASS, FIELD_CLASS, HINT_CLASS } from '../utils/formStyles';
 import { formatDateTimeBR, hojeIso, horaChegada } from '../utils/formatters';
@@ -12,7 +12,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { BotaoTemplates } from './BotaoTemplates';
 import { BotaoEmoji } from './BotaoEmoji';
 import { lerSessao } from '../utils/session';
-import { Toggle } from './Toggle';
+import { TecnicosAgora } from './Chamados';
 
 /** Quem pediu para abrir uma conversa (seq muda a cada clique) */
 export interface PedidoConversa {
@@ -583,8 +583,9 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
       {dialogoPrivada}
       {dialogoApagar}
       {/* Lista de conversas */}
-      <aside className={`${aberta ? 'hidden lg:flex' : 'flex'} w-full lg:w-80 xl:w-96 shrink-0 flex-col min-h-0 border-r border-stone-200 dark:border-stone-800`}>
-        <div className="p-3 border-b border-stone-200 dark:border-stone-800 flex items-stretch gap-2">
+      <aside className={`${aberta ? 'hidden lg:flex' : 'flex'} w-full lg:w-88 shrink-0 flex-col min-h-0 border-r border-stone-200 dark:border-stone-800`}>
+        {/* Busca e filtros num bloco só, com uma linha embaixo (como em Chamados Ativos) */}
+        <div className="px-3 pt-3 flex items-stretch gap-2">
           <div className="relative flex-1 min-w-0">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
             <input
@@ -604,23 +605,44 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
             <span className="hidden sm:inline">Nova</span>
           </button>
         </div>
-        <div className="px-3 py-2 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-2">
-          <div title="As conversas sem departamento, as do seu departamento e as que você assumiu">
-            <Toggle size="sm" checked={minhas} onChange={setMinhas} label="Só as minhas" />
-          </div>
-          <SelectAuto
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value as typeof filtroEstado)}
-            title="Mostrar só as conversas neste estado, ou só as do WhatsApp das campanhas"
-            className={`${INPUT_CLASS} py-1`}
+        {/* Filtros só com ícone numa linha (como em Chamados Ativos); o nome fica no tooltip */}
+        <div className="px-3 pt-2 pb-3 border-b border-stone-200 dark:border-stone-800 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setMinhas(!minhas)}
+            title="Só as minhas: as conversas sem departamento, as do seu departamento e as que você assumiu"
+            aria-label="Só as minhas"
+            aria-pressed={minhas}
+            className={`flex-1 flex items-center justify-center py-1.5 rounded-md cursor-pointer ${
+              minhas ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+            }`}
           >
-            <option value="">Todas</option>
-            <option value="aguardando">Aguardando</option>
-            <option value="atendimento">Em atendimento</option>
-            <option value="aguardando,atendimento">Aguardando + Em atendimento</option>
-            <option value="encerrado">Encerradas</option>
-            <option value="campanhas">Só Campanhas</option>
-          </SelectAuto>
+            <User className="w-4 h-4" />
+          </button>
+          {(
+            [
+              ['', 'Todas', Layers],
+              ['aguardando,atendimento', 'Aguardando + Em atendimento', Inbox],
+              ['aguardando', 'Aguardando', Clock],
+              ['atendimento', 'Em atendimento', Headset],
+              ['encerrado', 'Encerradas', CircleCheck],
+              ['campanhas', 'Só Campanhas (WhatsApp das campanhas)', Megaphone],
+            ] as const
+          ).map(([valor, nome, Icone]) => (
+            <button
+              key={valor || 'todas'}
+              type="button"
+              onClick={() => setFiltroEstado(valor)}
+              title={nome}
+              aria-label={nome}
+              aria-pressed={filtroEstado === valor}
+              className={`flex-1 flex items-center justify-center py-1.5 rounded-md cursor-pointer ${
+                filtroEstado === valor ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+              }`}
+            >
+              <Icone className="w-4 h-4" />
+            </button>
+          ))}
         </div>
         <div className="flex-1 overflow-y-auto">
           {conversas === null ? (
@@ -759,6 +781,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
             })
           )}
         </div>
+        <TecnicosAgora />
       </aside>
 
       {/* Conversa aberta */}

@@ -2,6 +2,12 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.157 — 2026-10-14
+
+- Conversas do WhatsApp: quadro "Técnicos agora" no pé da lista, o mesmo dos Chamados Ativos (chamados e conversas em atendimento de cada técnico).
+- Conversas do WhatsApp: filtros só com ícones numa linha, com o nome no tooltip (Só as minhas, Todas, Aguardando + Em atendimento, Aguardando, Em atendimento, Encerradas, Só Campanhas), no mesmo bloco da busca, como nos Chamados Ativos.
+- Chamados Ativos e Conversas do WhatsApp: a lista lateral passa a ter a mesma largura nas duas telas (352 px).
+
 ## 0.0.156 — 2026-10-14
 
 - Chamados Ativos: os filtros da lista (Meus, Todos abertos, Aguardando, Em atendimento, Encerrados) viram ícones numa linha só, com o nome no tooltip.
