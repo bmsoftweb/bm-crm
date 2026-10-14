@@ -31,6 +31,7 @@ const OPERADORES_NUMERO = [
   { value: '<=', label: 'menor ou igual a' },
 ];
 const OPERADORES_IGUALDADE = OPERADORES_NUMERO.slice(0, 2);
+const OPERADORES_TEXTO = [...OPERADORES_IGUALDADE, { value: 'contem', label: 'que contém' }, { value: 'comeca', label: 'começa com' }];
 
 const TIPOS_PESSOA = [
   { value: 'lead', label: 'Lead' },
@@ -98,7 +99,7 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
       {erro && <span className="text-xs text-rose-600">{erro}</span>}
       {lista.map((c, i) => {
         const r = regraDe(c.regra);
-        const operadores = r?.valor === 'numero' ? OPERADORES_NUMERO : OPERADORES_IGUALDADE;
+        const operadores = r?.valor === 'numero' ? OPERADORES_NUMERO : r?.valor === 'texto' ? OPERADORES_TEXTO : OPERADORES_IGUALDADE;
         return (
           <div key={i} className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-2 items-center">
             <SelectAuto

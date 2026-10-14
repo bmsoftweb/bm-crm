@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.153 — 2026-10-14
+
+- Campanhas, critérios do público: regra "Cód. integração" com igual a, diferente de, que contém e começa com. As regras de texto (UF e Cidade também) ganham "que contém" e "começa com"; "diferente de" inclui quem não tem o campo preenchido.
+
 ## 0.0.152 — 2026-10-13
 
 - Agenda (Atividades, visão semanal e mensal): "Gerar OS" no menu do botão direito em cima da atividade, com a mesma confirmação do menu da lista; a OS abre em seguida. Só para quem acessa as Ordens de Serviço.

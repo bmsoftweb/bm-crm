@@ -17,7 +17,9 @@ type Executor = { query: typeof pool.query };
 // Critérios de segmentação
 // ------------------------------------------------------------
 
-export const OPERADORES = ['=', '<>', '>', '>=', '<', '<='] as const;
+export const OPERADORES = ['=', '<>', '>', '>=', '<', '<=', 'contem', 'comeca'] as const;
+/** Só nas regras de texto: "que contém" e "começa com" (LIKE) */
+const OPERADORES_TEXTO: readonly string[] = ['=', '<>', 'contem', 'comeca'];
 type Operador = (typeof OPERADORES)[number];
 
 /**
@@ -27,6 +29,7 @@ type Operador = (typeof OPERADORES)[number];
  */
 export const REGRAS: Record<string, { rotulo: string; valor: 'numero' | 'texto' | 'sim_nao' | 'tipo_pessoa' | 'segmento'; sql: string }> = {
   tipo: { rotulo: 'Tipo da pessoa', valor: 'tipo_pessoa', sql: 'p.tipo' },
+  cod_integracao: { rotulo: 'Cód. integração', valor: 'texto', sql: 'p.cod_integracao' },
   segmento: { rotulo: 'Segmento da pessoa', valor: 'segmento', sql: 'p.segmento_id' },
   uf: {
     rotulo: 'UF do endereço principal',
@@ -126,6 +129,12 @@ export function normalizarCriterios(bruto: unknown): Criterio[] {
       valor = String(valor).trim();
       if (!valor) throw new Error(`Critério ${i + 1} (${regra.rotulo}): informe o valor.`);
     }
+    if ((operador === 'contem' || operador === 'comeca') && regra.valor !== 'texto') {
+      throw new Error(`Critério ${i + 1} (${regra.rotulo}): "que contém" e "começa com" só valem para texto.`);
+    }
+    if (regra.valor === 'texto' && !OPERADORES_TEXTO.includes(operador)) {
+      throw new Error(`Critério ${i + 1} (${regra.rotulo}): use igual a, diferente de, que contém ou começa com.`);
+    }
     return { regra: String(c.regra), operador, valor };
   });
 }
@@ -135,8 +144,17 @@ export function sqlCriterios(criterios: Criterio[], empresaId: string | number):
   const partes = ['p.empresa_id = ?'];
   const params: any[] = [empresaId];
   for (const c of criterios) {
-    partes.push(`${REGRAS[c.regra].sql} ${c.operador} ?`);
-    params.push(c.valor);
+    const regra = REGRAS[c.regra];
+    // Texto vazio conta como '': "diferente de X" pega também quem não tem o campo preenchido
+    const expr = regra.valor === 'texto' ? `COALESCE(${regra.sql}, '')` : regra.sql;
+    if (c.operador === 'contem' || c.operador === 'comeca') {
+      const literal = String(c.valor).replace(/[\\%_]/g, (x) => `\\${x}`);
+      partes.push(`${expr} LIKE ?`);
+      params.push(c.operador === 'contem' ? `%${literal}%` : `${literal}%`);
+    } else {
+      partes.push(`${expr} ${c.operador} ?`);
+      params.push(c.valor);
+    }
   }
   return { where: partes.join(' AND '), params };
 }

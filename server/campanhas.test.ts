@@ -13,6 +13,14 @@ assert.throws(() => normalizarCriterios([{ regra: 'tem_email', operador: '>', va
 assert.throws(() => normalizarCriterios([{ regra: 'qtd_pedidos', operador: '=', valor: 'abc' }]), /número/);
 assert.throws(() => normalizarCriterios([]), /ao menos um/);
 
+// Cód. integração: "que contém"/"começa com" viram LIKE com % e _ escapados; vazio conta como ''
+{
+  const r = sqlCriterios(normalizarCriterios([{ regra: 'cod_integracao', operador: 'contem', valor: '10%_a' }, { regra: 'cod_integracao', operador: 'comeca', valor: 'BM' }]), 1);
+  assert.ok(r.where.includes("COALESCE(p.cod_integracao, '') LIKE ?"));
+  assert.deepStrictEqual(r.params, [1, '%10\\%\\_a%', 'BM%']);
+  assert.throws(() => normalizarCriterios([{ regra: 'dias_cadastro', operador: 'contem', valor: 5 }]), /só valem para texto/);
+  assert.throws(() => normalizarCriterios([{ regra: 'cod_integracao', operador: '>', valor: 'x' }]), /igual a, diferente de/);
+}
 const { where, params } = sqlCriterios(normalizarCriterios([{ regra: 'tipo', operador: '=', valor: "x' OR '1'='1" }]), 7);
 assert.strictEqual(where, 'p.empresa_id = ? AND p.tipo = ?');
 assert.deepStrictEqual(params, [7, "x' OR '1'='1"]);
