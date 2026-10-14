@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.155 — 2026-10-14
+
+- Chamados Ativos: quadro "Técnicos agora" no pé da lista, com cada técnico e quantos atendimentos faz no momento (chamados abertos com ele e conversas do WhatsApp em atendimento). Entram os usuários ativos que atendem agora ou atenderam chamado nos últimos 30 dias; quem está livre aparece em cinza. Atualiza junto com a lista.
+
 ## 0.0.154 — 2026-10-14
 
 - Campanhas, critérios do público: botão "Testar". Com os critérios como estão na tela (sem gravar), mostra o total do público e as 50 primeiras pessoas por nome (nome, cód. integração, tipo, cidade/UF, telefone e e-mail). Quem pediu para não receber campanhas fica de fora, como no público real.

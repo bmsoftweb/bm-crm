@@ -970,6 +970,8 @@ export const fetchContagemChamados = (): Promise<{
 }> => get('/api/chamados/contagem');
 export const fetchChamados = (filtro: FiltroChamados, q = ''): Promise<ChamadoResumo[]> =>
   get(`/api/chamados?filtro=${filtro}${q ? `&q=${encodeURIComponent(q)}` : ''}`);
+/** Técnicos e quantos atendimentos fazem agora (chamados abertos com ele e conversas do WhatsApp) */
+export const fetchTecnicosChamados = (): Promise<{ id: number; nome: string; chamados: number; whatsapp: number }[]> => get('/api/chamados/tecnicos');
 export const fetchChamado = (id: number): Promise<ChamadoDetalhe> => get(`/api/chamados/${id}`);
 export const buscarPessoasChamado = (q: string): Promise<{ id: number; nome: string; telefone: string | null }[]> =>
   get(`/api/chamados/pessoas?q=${encodeURIComponent(q)}`);

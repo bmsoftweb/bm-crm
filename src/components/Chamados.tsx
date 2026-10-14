@@ -20,7 +20,7 @@ import {
   encerrarChamado,
   enviarMensagemChamado,
   fetchChamado,
-  fetchChamados,
+  fetchChamados, fetchTecnicosChamados,
   fetchFilaChamados,
   cutucarCliente,
   pausarChamado,
@@ -442,6 +442,8 @@ export const ChamadosAtivos: React.FC<AtivosProps> = ({ refreshToken, abrir, onM
   const [erro, setErro] = useState<string | null>(null);
   /** Chamados que o técnico logado atende: uma aba cada, acima do chat */
   const [meus, setMeus] = useState<ChamadoResumo[]>([]);
+  /** Técnicos e quantos atendimentos fazem agora (pé da lista) */
+  const [tecnicos, setTecnicos] = useState<{ id: number; nome: string; chamados: number; whatsapp: number }[]>([]);
   /** Recarga do chamado aberto depois de assumir pelo duplo clique */
   const [recarga, setRecarga] = useState(0);
   /** Chamados abertos que não são do técnico (de outro ou aguardando): aba com X para fechar */
@@ -474,6 +476,9 @@ export const ChamadosAtivos: React.FC<AtivosProps> = ({ refreshToken, abrir, onM
     fetchChamados('meus', '')
       .then(setMeus)
       .catch((e) => setErro(e.message));
+    fetchTecnicosChamados()
+      .then(setTecnicos)
+      .catch(() => {});
   }, [filtro, busca]);
   useEffect(() => {
     const t = setTimeout(carregar, busca ? 300 : 0);
@@ -592,6 +597,31 @@ export const ChamadosAtivos: React.FC<AtivosProps> = ({ refreshToken, abrir, onM
           )}
         </div>
 
+        {/* Técnicos: quantos atendimentos cada um faz agora (chamados e WhatsApp) */}
+        {tecnicos.length > 0 && (
+          <div className="shrink-0 max-h-48 overflow-y-auto border-t border-stone-200 dark:border-stone-800 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Técnicos agora</div>
+            {tecnicos.map((t) => (
+              <div key={t.id} className="flex items-center gap-2 py-0.5 text-xs">
+                <UserRound className="w-3 h-3 shrink-0 text-stone-400" />
+                <span className={`min-w-0 flex-1 truncate ${t.chamados || t.whatsapp ? 'font-semibold text-stone-800 dark:text-stone-100' : 'text-stone-400'}`}>{t.nome}</span>
+                <span
+                  title={`${t.chamados} chamado(s) em atendimento`}
+                  className={`shrink-0 min-w-6 text-center rounded-full px-1.5 text-[11px] font-bold ${t.chamados ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300' : 'bg-stone-100 text-stone-400 dark:bg-stone-800'}`}
+                >
+                  {t.chamados}
+                </span>
+                <span
+                  title={`${t.whatsapp} conversa(s) do WhatsApp em atendimento`}
+                  className={`shrink-0 inline-flex items-center gap-0.5 min-w-8 justify-center rounded-full px-1.5 text-[11px] font-bold ${t.whatsapp ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-stone-100 text-stone-400 dark:bg-stone-800'}`}
+                >
+                  <MessageCircle className="w-3 h-3" />
+                  {t.whatsapp}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Chamado aberto */}

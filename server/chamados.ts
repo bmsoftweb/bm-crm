@@ -160,6 +160,26 @@ export function createChamadosRouter(): Router {
   }));
 
   /** Chamados Ativos: filtro rápido (meus, todos, aguardando, andamento, encerrados) e busca; na ordem de chegada (Encerrados: o último encerrado primeiro) */
+  /**
+   * Técnicos e quantos atendimentos fazem agora: chamados com ele (abertos) e conversas do WhatsApp em atendimento.
+   * Entram os usuários ativos que atendem agora ou atenderam chamado nos últimos 30 dias
+   */
+  router.get('/chamados/tecnicos', rota(async (_req, res) => {
+    const [r] = await pool.query<any[]>(
+      `SELECT u.id, u.nome,
+              (SELECT COUNT(*) FROM chamados c WHERE c.empresa_id = u.empresa_id AND c.atendente_id = u.id AND c.status NOT IN ${ENCERRADOS}) AS chamados,
+              (SELECT COUNT(*) FROM whatsapp_conversas w WHERE w.empresa_id = u.empresa_id AND w.atendente_id = u.id) AS whatsapp
+         FROM usuarios u
+        WHERE u.empresa_id = ? AND u.ativo = 1
+          AND (EXISTS (SELECT 1 FROM chamados c WHERE c.empresa_id = u.empresa_id AND c.atendente_id = u.id
+                        AND (c.status NOT IN ${ENCERRADOS} OR c.assumido_em >= NOW() - INTERVAL 30 DAY))
+               OR EXISTS (SELECT 1 FROM whatsapp_conversas w WHERE w.empresa_id = u.empresa_id AND w.atendente_id = u.id))
+        ORDER BY u.nome`,
+      [emp(res)],
+    );
+    res.json(r.map((t) => ({ id: t.id, nome: t.nome, chamados: Number(t.chamados), whatsapp: Number(t.whatsapp) })));
+  }));
+
   router.get('/chamados', rota(async (req, res) => {
     const filtro = String(req.query.filtro || 'meus');
     const onde: string[] = ['c.empresa_id = ?'];
