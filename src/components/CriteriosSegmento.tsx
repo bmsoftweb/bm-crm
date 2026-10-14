@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { SelectAuto } from './SelectAuto';
-import { Plus, Trash2 } from 'lucide-react';
+import { FlaskConical, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { OpcaoRef } from '../types';
 import { INPUT_CLASS } from '../utils/formStyles';
-import { fetchOptions, fetchRegrasCriterio, RegraCriterio } from '../services/api';
+import { fetchOptions, fetchRegrasCriterio, RegraCriterio, testarCriterios, TesteCriterios } from '../services/api';
 import { NumberField } from './NumberField';
 import { SelectBusca } from './SelectBusca';
 import { Toggle } from './Toggle';
@@ -61,6 +62,29 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
   const [segmentos, setSegmentos] = useState<OpcaoRef[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [removendo, setRemovendo] = useState<number | null>(null);
+  const [testando, setTestando] = useState(false);
+  const [teste, setTeste] = useState<TesteCriterios | null>(null);
+
+  // Esc fecha o resultado do teste
+  useEffect(() => {
+    if (!teste) return;
+    const tecla = (e: KeyboardEvent) => e.key === 'Escape' && setTeste(null);
+    document.addEventListener('keydown', tecla);
+    return () => document.removeEventListener('keydown', tecla);
+  }, [teste]);
+
+  /** "Testar": os critérios como estão na tela (ainda sem gravar) */
+  const testar = async () => {
+    setTestando(true);
+    setErro(null);
+    try {
+      setTeste(await testarCriterios(lista));
+    } catch (e: any) {
+      setErro(e.message);
+    } finally {
+      setTestando(false);
+    }
+  };
 
   useEffect(() => {
     fetchRegrasCriterio().then(setRegras).catch((e) => setErro(e.message));
@@ -136,15 +160,79 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
           </div>
         );
       })}
-      <button
-        type="button"
-        onClick={adicionar}
-        disabled={!regras.length}
-        className="self-start flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer disabled:opacity-40"
-      >
-        <Plus className="w-3.5 h-3.5" />
-        Adicionar critério
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={adicionar}
+          disabled={!regras.length}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer disabled:opacity-40"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Adicionar critério
+        </button>
+        <button
+          type="button"
+          onClick={testar}
+          disabled={!lista.length || testando}
+          title="Mostra quantas pessoas entram no público e as 50 primeiras, com os critérios como estão agora (sem gravar)"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-stone-700 dark:text-stone-200 border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer disabled:opacity-40"
+        >
+          {testando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />}
+          Testar
+        </button>
+      </div>
+
+      {teste &&
+        createPortal(
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-stone-950/70 backdrop-blur-xs" onClick={() => setTeste(null)} aria-hidden="true" />
+            <div role="dialog" aria-modal="true" className="relative w-full max-w-4xl max-h-[85vh] flex flex-col bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl shadow-2xl z-10">
+              <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">Teste dos critérios</h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    <strong>{teste.total.toLocaleString('pt-BR')}</strong> pessoa(s) no público
+                    {teste.total > teste.pessoas.length ? `; aqui as ${teste.pessoas.length} primeiras, por nome` : ''}. Quem pediu para não receber campanhas fica de fora.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setTeste(null)} title="Fechar" className="p-1 rounded text-stone-400 hover:text-stone-700 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="overflow-auto">
+                {!teste.pessoas.length ? (
+                  <p className="p-5 text-xs text-stone-500">Ninguém atende aos critérios.</p>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">Nome</th>
+                        <th className="text-left font-semibold px-3 py-2">Cód. integração</th>
+                        <th className="text-left font-semibold px-3 py-2">Tipo</th>
+                        <th className="text-left font-semibold px-3 py-2">Cidade / UF</th>
+                        <th className="text-left font-semibold px-3 py-2">Telefone</th>
+                        <th className="text-left font-semibold px-3 py-2">E-mail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teste.pessoas.map((p) => (
+                        <tr key={p.id} className="border-t border-stone-100 dark:border-stone-800 text-stone-700 dark:text-stone-200">
+                          <td className="px-3 py-1.5 font-semibold">{p.nome}</td>
+                          <td className="px-3 py-1.5 font-mono">{p.cod_integracao || '—'}</td>
+                          <td className="px-3 py-1.5">{p.tipo === 'cliente' ? 'Cliente' : p.tipo === 'lead' ? 'Lead' : p.tipo}</td>
+                          <td className="px-3 py-1.5">{p.cidade || '—'}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">{p.telefone || '—'}</td>
+                          <td className="px-3 py-1.5">{p.email || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {removendo !== null && (
         <ConfirmDialog

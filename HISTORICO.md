@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.154 — 2026-10-14
+
+- Campanhas, critérios do público: botão "Testar". Com os critérios como estão na tela (sem gravar), mostra o total do público e as 50 primeiras pessoas por nome (nome, cód. integração, tipo, cidade/UF, telefone e e-mail). Quem pediu para não receber campanhas fica de fora, como no público real.
+
 ## 0.0.153 — 2026-10-14
 
 - Campanhas, critérios do público: regra "Cód. integração" com igual a, diferente de, que contém e começa com. As regras de texto (UF e Cidade também) ganham "que contém" e "começa com"; "diferente de" inclui quem não tem o campo preenchido.

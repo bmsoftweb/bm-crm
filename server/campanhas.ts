@@ -220,6 +220,18 @@ export async function contarPublico(criterios: unknown, empresaId: string | numb
   return Number(r[0].n);
 }
 
+/** Botão "Testar" dos critérios: o total do público e as 50 primeiras pessoas (por nome), sem gravar nada */
+export async function testarCriterios(criterios: unknown, empresaId: string | number) {
+  const { where, params } = sqlCriterios(normalizarCriterios(criterios), empresaId);
+  const [r] = await pool.query<any[]>(
+    `SELECT p.id, p.nome, p.tipo, p.cod_integracao, COALESCE(NULLIF(p.whatsapp, ''), p.telefone) AS telefone, p.email,
+            (SELECT CONCAT_WS(' / ', e.cidade, e.uf) FROM pessoas_enderecos e WHERE e.pessoa_id = p.id ORDER BY e.principal DESC, e.id LIMIT 1) AS cidade
+       FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS} ORDER BY p.nome LIMIT 50`,
+    params,
+  );
+  return { total: await contarPublico(criterios, empresaId), pessoas: r };
+}
+
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Celular para WhatsApp (só dígitos, com DDI); no Brasil só celular (DDD + 9 + 8 dígitos): fixo não tem WhatsApp */
@@ -553,6 +565,15 @@ export function createCampanhasRouter() {
   const router = Router();
 
   /** Regras disponíveis para o editor de critérios */
+  /** Testar os critérios da tela (ainda sem gravar): total e as 50 primeiras pessoas */
+  router.post('/campanhas/criterios/testar', async (req: Request, res: Response) => {
+    try {
+      res.json(await testarCriterios(req.body?.criterios, res.locals.empresaId));
+    } catch (err: any) {
+      res.status(err.status || 400).json({ error: friendlyDbError(err, 'campanha') });
+    }
+  });
+
   router.get('/campanhas/regras', (_req: Request, res: Response) => {
     res.json(Object.entries(REGRAS).map(([regra, r]) => ({ regra, rotulo: r.rotulo, valor: r.valor })));
   });

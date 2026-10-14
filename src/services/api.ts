@@ -407,6 +407,13 @@ export interface RegraCriterio {
   valor: 'numero' | 'texto' | 'sim_nao' | 'tipo_pessoa' | 'segmento';
 }
 let regrasCache: Promise<RegraCriterio[]> | null = null;
+/** Botão "Testar" dos critérios da campanha: total do público e as 50 primeiras pessoas */
+export interface TesteCriterios {
+  total: number;
+  pessoas: { id: number; nome: string; tipo: string; cod_integracao: string | null; telefone: string | null; email: string | null; cidade: string | null }[];
+}
+export const testarCriterios = (criterios: unknown): Promise<TesteCriterios> => enviar('POST', '/api/campanhas/criterios/testar', { criterios });
+
 export const fetchRegrasCriterio = (): Promise<RegraCriterio[]> =>
   (regrasCache ??= get('/api/campanhas/regras').catch((err: Error) => {
     regrasCache = null;
