@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.161 — 2026-10-15
+
+- CRM como PWA: dá para instalar no computador e no celular (manifesto com nome, cor e ícones PNG 192/512, ícone adaptável para Android e ícone do iPhone). O service worker (sw.js) não guarda cache: o CRM continua sempre com a versão nova e os dados ao vivo. Vale só no CRM em si; o link de aceite, o widget de suporte, a tela remota e o app do técnico (/tecnico, com o PWA dele) ficam de fora.
+
 ## 0.0.160 — 2026-10-15
 
 - Tarefas automáticas (análise da conversa no fim do chamado): a IA lê também a conclusão que o técnico escreveu ao encerrar. O que a conclusão der claramente como concluído (resolvido, feito, enviado…) não vira tarefa; se ela não disser que algo foi concluído, a análise segue normal, só pela conversa.

@@ -20,6 +20,15 @@ const suporte = /^\/suporte\/?$/.test(window.location.pathname) ? new URLSearchP
 const telaRemota = /^\/tela-remota\/?$/.test(window.location.pathname);
 const tecnico = /^\/tecnico\/?$/.test(window.location.pathname);
 
+// CRM como PWA (instalável): manifesto e service worker só no CRM em si (não no link de aceite, no widget de suporte,
+// na tela remota nem no app do técnico, que tem os seus). No modo dev o service worker atrapalharia o Vite
+if (!aceite && !suporte && !telaRemota && !tecnico) {
+  document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'manifest', href: '/manifest.webmanifest' }));
+  if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((e) => console.warn('Service worker:', e));
+  }
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {aceite ? (
