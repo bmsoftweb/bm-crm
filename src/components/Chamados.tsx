@@ -965,7 +965,9 @@ const ChamadoAberto: React.FC<{
   return (
     <>
       {/* Cabeçalho do chamado */}
-      <div className="px-5 py-3 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 flex flex-wrap items-start gap-3">
+      <div className="px-5 py-3 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900">
+      {/* 1ª linha: número e etiquetas à esquerda, ações à direita; embaixo, o título na largura toda */}
+      <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">Chamado nº {c.numero}</span>
@@ -974,14 +976,6 @@ const ChamadoAberto: React.FC<{
             <Prioridade p={c.prioridade} />
             <Categoria c={c} />
             {c.sla_vencido && <Sla />}
-          </div>
-          <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 mt-1">{c.titulo}</h3>
-          <div className="text-[11px] text-stone-500 dark:text-stone-400 flex flex-wrap gap-x-3">
-            <span>{nomeChamado(c)}{c.canal === 'web' && ' • pelo site'}</span>
-            <span>Atendente: {c.atendente_nome || '—'}{c.eu_atendo && ' (você)'}</span>
-            {c.tecnico_padrao_nome && c.tecnico_padrao_id !== c.atendente_id && <span>Técnico padrão: {c.tecnico_padrao_nome}</span>}
-            {c.departamento_nome && <span>Departamento: {c.departamento_nome}</span>}
-            {c.sla_prazo && <span>SLA até {formatDateTimeBR(c.sla_prazo)}</span>}
           </div>
         </div>
         {soVer ? (
@@ -1168,6 +1162,15 @@ const ChamadoAberto: React.FC<{
           )}
         </div>
         )}
+      </div>
+        <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 mt-2 whitespace-pre-wrap break-words">{c.titulo}</h3>
+        <div className="text-[11px] text-stone-500 dark:text-stone-400 flex flex-wrap gap-x-3">
+          <span>{nomeChamado(c)}{c.canal === 'web' && ' • pelo site'}</span>
+          <span>Atendente: {c.atendente_nome || '—'}{c.eu_atendo && ' (você)'}</span>
+          {c.tecnico_padrao_nome && c.tecnico_padrao_id !== c.atendente_id && <span>Técnico padrão: {c.tecnico_padrao_nome}</span>}
+          {c.departamento_nome && <span>Departamento: {c.departamento_nome}</span>}
+          {c.sla_prazo && <span>SLA até {formatDateTimeBR(c.sla_prazo)}</span>}
+        </div>
       </div>
 
       {erro && (

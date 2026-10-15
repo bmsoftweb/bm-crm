@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.158 — 2026-10-15
+
+- Chamados: no cabeçalho do chamado aberto, a descrição do problema (título) passa a ocupar a largura toda, numa linha abaixo do número/etiquetas e dos botões de ação (antes ficava espremida numa coluna estreita).
+
 ## 0.0.157 — 2026-10-14
 
 - Conversas do WhatsApp: quadro "Técnicos agora" no pé da lista, o mesmo dos Chamados Ativos (chamados e conversas em atendimento de cada técnico).
