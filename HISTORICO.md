@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.160 — 2026-10-15
+
+- Tarefas automáticas (análise da conversa no fim do chamado): a IA lê também a conclusão que o técnico escreveu ao encerrar. O que a conclusão der claramente como concluído (resolvido, feito, enviado…) não vira tarefa; se ela não disser que algo foi concluído, a análise segue normal, só pela conversa.
+
 ## 0.0.159 — 2026-10-15
 
 - Quadro "Técnicos agora" (Chamados Ativos e Conversas do WhatsApp): linha "Na fila agora:" no topo, com quantos chamados aguardam na fila (aguardando ou pausados, sem técnico) e quantas conversas do WhatsApp aguardam atendente.

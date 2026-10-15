@@ -27,6 +27,8 @@ interface Fonte {
   conversa: string;
   /** Quem atendeu (candidato natural quando se comprometeu com algo) */
   atendente: string | null;
+  /** Conclusão que o técnico escreveu ao encerrar (chamado): o que ele der como resolvido não vira tarefa */
+  conclusao?: string | null;
   vinculos: { negocio_id?: number | null; chamado_id?: number | null };
   /** Onde anotar o resultado (linha na conversa do WhatsApp ou no chamado) */
   anotar: (texto: string) => Promise<unknown>;
@@ -83,7 +85,17 @@ Leia a conversa inteira (${f.origem}) e liste só o que ficou para a EQUIPE faze
 2. reclamacao: o cliente reclamou de algo e precisa de um retorno;
 3. pedido: o cliente pediu algo (ou alguém da empresa prometeu algo) que não foi resolvido na conversa.
 Não liste o que já foi resolvido na conversa nem o que já está nas tarefas abertas abaixo. Conversa sem pendência: lista vazia.
-
+${
+  f.conclusao
+    ? `
+CONCLUSÃO DO TÉCNICO ao encerrar (${f.atendente ?? 'equipe'}): "${f.conclusao}"
+A conclusão só tira pendências: o que o técnico deu claramente como concluído, resolvido, feito, orientado, enviado ou atendido NÃO é
+pendência, mesmo que a conversa pareça deixar algo em aberto; se ela der o atendimento todo como concluído, responda com a lista vazia.
+Se a conclusão não disser claramente que algo foi concluído (ex.: só descreve o problema, ou deixa algo para depois), ignore-a e analise
+a conversa normalmente, listando as pendências como faria sem ela.
+`
+    : ''
+}
 Para cada pendência, quem deve cuidar:
 - "usuario": nome exato de um usuário da lista, só se a conversa deixar claro quem (o cliente citou a pessoa, ou quem atendeu se comprometeu a fazer);
 - senão "departamento": nome exato de um departamento da lista, se o assunto deixar claro (ex.: cobrança = financeiro, problema no sistema = suporte, compra = comercial);
@@ -204,13 +216,13 @@ export function analisarChamado(chamadoId: number) {
     for (const m of ms) {
       linhas.push(m.autor === 'cliente' ? `Cliente: ${m.texto}` : `${m.interna ? 'Nota interna' : 'Atendente'} (${m.usuario ?? 'equipe'}): ${m.texto}`);
     }
-    if (c[0].conclusao) linhas.push(`Conclusão do técnico (${c[0].atendente ?? 'equipe'}): ${c[0].conclusao}`);
     return {
       empresaId: c[0].empresa_id,
       pessoaId: c[0].pessoa_id,
       origem: `chamado nº ${c[0].numero}`,
       conversa: linhas.join('\n'),
       atendente: c[0].atendente,
+      conclusao: String(c[0].conclusao ?? '').trim() || null,
       vinculos: { chamado_id: chamadoId },
       anotar: (t) => mensagemChamado({ chamado_id: chamadoId, autor: 'sistema', texto: t }),
     };
