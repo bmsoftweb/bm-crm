@@ -420,15 +420,36 @@ export const ChamadosFila: React.FC<FilaProps> = ({ refreshToken, onAbrir, onMud
  */
 export const TecnicosAgora: React.FC = () => {
   const [tecnicos, setTecnicos] = useState<{ id: number; nome: string; chamados: number; whatsapp: number }[]>([]);
+  const [fila, setFila] = useState<{ chamados: number; whatsapp: number } | null>(null);
   useEffect(() => {
-    const ler = () => !document.hidden && fetchTecnicosChamados().then(setTecnicos).catch(() => {});
+    const ler = () =>
+      !document.hidden &&
+      fetchTecnicosChamados()
+        .then((r) => {
+          setTecnicos(r.tecnicos);
+          setFila(r.fila);
+        })
+        .catch(() => {});
     ler();
     const i = setInterval(ler, 15_000);
     return () => clearInterval(i);
   }, []);
-  if (!tecnicos.length) return null;
+  if (!tecnicos.length && !fila) return null;
+  const naFila = (n: number, cor: string) => (n ? cor : 'bg-stone-100 text-stone-400 dark:bg-stone-800');
   return (
-    <div className="shrink-0 max-h-48 overflow-y-auto border-t border-stone-200 dark:border-stone-800 px-3 py-2">
+    <div className="shrink-0 max-h-56 overflow-y-auto border-t border-stone-200 dark:border-stone-800 px-3 py-2">
+      {fila && (
+        <div className="flex items-center gap-2 mb-2 text-xs" title="Aguardando alguém atender: chamados na fila e conversas do WhatsApp (com o balão)">
+          <span className="min-w-0 flex-1 text-[10px] font-bold uppercase tracking-wider text-stone-400">Na fila agora:</span>
+          <span className={`shrink-0 min-w-6 text-center rounded-full px-1.5 text-[11px] font-bold ${naFila(fila.chamados, 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300')}`}>
+            {fila.chamados}
+          </span>
+          <span className={`shrink-0 inline-flex items-center gap-0.5 min-w-8 justify-center rounded-full px-1.5 text-[11px] font-bold ${naFila(fila.whatsapp, 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300')}`}>
+            <MessageCircle className="w-3 h-3" />
+            {fila.whatsapp}
+          </span>
+        </div>
+      )}
       <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Técnicos agora</div>
       {tecnicos.map((t) => (
         <div key={t.id} className="flex items-center gap-2 py-0.5 text-xs">

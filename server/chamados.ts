@@ -177,7 +177,16 @@ export function createChamadosRouter(): Router {
         ORDER BY u.nome`,
       [emp(res)],
     );
-    res.json(r.map((t) => ({ id: t.id, nome: t.nome, chamados: Number(t.chamados), whatsapp: Number(t.whatsapp) })));
+    // Na fila agora: chamados aguardando (ou pausados) sem atendente e conversas do WhatsApp aguardando atendente
+    const [[f]] = await pool.query<any>(
+      `SELECT (SELECT COUNT(*) FROM chamados c WHERE c.empresa_id = ? AND c.status IN ${NA_FILA} AND c.atendente_id IS NULL) AS chamados,
+              (SELECT COUNT(*) FROM whatsapp_conversas w WHERE w.empresa_id = ? AND w.atendimento = 'humano' AND w.atendente_id IS NULL) AS whatsapp`,
+      [emp(res), emp(res)],
+    );
+    res.json({
+      tecnicos: r.map((t) => ({ id: t.id, nome: t.nome, chamados: Number(t.chamados), whatsapp: Number(t.whatsapp) })),
+      fila: { chamados: Number(f.chamados), whatsapp: Number(f.whatsapp) },
+    });
   }));
 
   router.get('/chamados', rota(async (req, res) => {

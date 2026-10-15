@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.159 — 2026-10-15
+
+- Quadro "Técnicos agora" (Chamados Ativos e Conversas do WhatsApp): linha "Na fila agora:" no topo, com quantos chamados aguardam na fila (aguardando ou pausados, sem técnico) e quantas conversas do WhatsApp aguardam atendente.
+
 ## 0.0.158 — 2026-10-15
 
 - Chamados: no cabeçalho do chamado aberto, a descrição do problema (título) passa a ocupar a largura toda, numa linha abaixo do número/etiquetas e dos botões de ação (antes ficava espremida numa coluna estreita).
