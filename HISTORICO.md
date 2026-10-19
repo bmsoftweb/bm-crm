@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.162 — 2026-10-19
+
+- Visitas do Site: quem ainda está no site aparece com a tag "Visitando..." na coluna Tempo no site (e a Saída fica vazia). O widget avisa que a página segue à vista 3 s depois de abrir, a cada minuto e ao voltar para a aba (/visitas/presente); sem o aviso (navegador fechado sem avisar), em até 90 s volta a mostrar o tempo.
+
 ## 0.0.161 — 2026-10-15
 
 - CRM como PWA: dá para instalar no computador e no celular (manifesto com nome, cor e ícones PNG 192/512, ícone adaptável para Android e ícone do iPhone). O service worker (sw.js) não guarda cache: o CRM continua sempre com a versão nova e os dados ao vivo. Vale só no CRM em si; o link de aceite, o widget de suporte, a tela remota e o app do técnico (/tecnico, com o PWA dele) ficam de fora.

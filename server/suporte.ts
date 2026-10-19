@@ -147,6 +147,18 @@ export function createSuporteRouter(): Router {
   }));
 
   /**
+   * Ainda no site (widget, a cada minuto com a página à vista): a saída fica 90 s à frente. Enquanto chegar,
+   * a visita aparece como "Visitando..."; se parar (navegador fechado sem aviso), a saída fica perto da última vez
+   */
+  router.post('/api/publico/suporte/:empresa/visitas/presente', corpoTexto, rota(async (req, res) => {
+    const chave = chaveVisita(jsonDoTexto(req.body).chave);
+    if (chave) {
+      await pool.query('UPDATE site_visitas SET saida_em = NOW() + INTERVAL 90 SECOND WHERE empresa_id = ? AND chave = ?', [Number(req.params.empresa) || 0, chave]);
+    }
+    res.status(204).end();
+  }));
+
+  /**
    * Lead do site (formulário "Agendar Apresentação" da homepage): mesmo caminho do lead do chatbot
    * (pessoa, negócio no funil para o próximo vendedor do revezamento e atividade de contato).
    * Quem já está no CRM pelo WhatsApp ou e-mail ganha o negócio/atividade sem novo cadastro.

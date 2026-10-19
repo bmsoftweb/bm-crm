@@ -76,6 +76,16 @@ export const CellValue: React.FC<CellValueProps> = ({ field, row, refOptions }) 
     );
   }
 
+  // Visitas do Site: quem ainda está no site (server/schema.ts, tempo_site)
+  if (field.name === 'tempo_site' && value === 'Visitando...') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        Visitando...
+      </span>
+    );
+  }
+
   const isNumeric = field.type === 'decimal' || field.type === 'number' || field.type === 'cnpj';
   return <span className={isNumeric ? 'font-mono' : undefined}>{formatCellValue(field, value)}</span>;
 };

@@ -64,10 +64,17 @@
     if (navigator.sendBeacon) navigator.sendBeacon(urlVisitas + '/saida', new Blob([JSON.stringify({ chave: chaveVisita })], { type: 'text/plain' }));
     else enviarVisita('/saida', { chave: chaveVisita });
   }
+  // Ainda no site: a cada minuto com a página à vista (e ao voltar para ela), para o CRM mostrar "Visitando..."
+  function registrarPresenca() {
+    if (document.visibilityState === 'visible') enviarVisita('/presente', { chave: chaveVisita });
+  }
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') registrarSaida();
+    else registrarPresenca();
   });
   window.addEventListener('pagehide', registrarSaida);
+  setInterval(registrarPresenca, 60000);
+  setTimeout(registrarPresenca, 3000);
 
   var caixa = document.createElement('div');
   caixa.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:2147483000;font-family:system-ui,sans-serif;';

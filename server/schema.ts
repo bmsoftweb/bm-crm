@@ -1446,7 +1446,8 @@ export const RESOURCES: ResourceDef[] = [
       ID,
       { name: 'criado_em', label: 'Data/hora', type: 'datetime', listed: true, filterable: true, readOnly: true },
       // Última vez que a página saiu de vista (fechou, foi para outro site, trocou de aba); vazio = sem aviso do navegador
-      { name: 'saida_em', label: 'Saída', type: 'datetime', listed: true, filterable: true, readOnly: true },
+      // Enquanto a pessoa segue no site a saída fica no futuro (aviso de presença do widget): aí a coluna fica vazia
+      { name: 'saida_em', label: 'Saída', type: 'datetime', listed: true, filterable: true, readOnly: true, sql: 'IF(t.saida_em > NOW(), NULL, t.saida_em)' },
       {
         name: 'tempo_site',
         label: 'Tempo no site',
@@ -1454,9 +1455,10 @@ export const RESOURCES: ResourceDef[] = [
         listed: true,
         readOnly: true,
         width: 'xs',
+        // "Visitando...": a saída está no futuro (o widget avisa a cada minuto que a página segue à vista: /visitas/presente)
         sql: (() => {
           const s = 'TIMESTAMPDIFF(SECOND, t.criado_em, t.saida_em)';
-          return `CASE WHEN t.saida_em IS NULL THEN NULL WHEN ${s} < 60 THEN CONCAT(${s}, ' s') WHEN ${s} < 3600 THEN CONCAT(${s} DIV 60, ' min')
+          return `CASE WHEN t.saida_em > NOW() THEN 'Visitando...' WHEN t.saida_em IS NULL THEN NULL WHEN ${s} < 60 THEN CONCAT(${s}, ' s') WHEN ${s} < 3600 THEN CONCAT(${s} DIV 60, ' min')
                   ELSE CONCAT(${s} DIV 3600, ' h ', LPAD(${s} % 3600 DIV 60, 2, '0'), ' min') END`;
         })(),
       },
