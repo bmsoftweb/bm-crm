@@ -318,7 +318,7 @@ export function createChamadosRouter(): Router {
                                 OR (c.contato_documento IS NOT NULL AND c.contato_documento <> '' AND o.contato_documento = c.contato_documento))
                          ORDER BY m.id DESC LIMIT 1)) AS anydesk_id,
               COALESCE(NULLIF(p.whatsapp, ''), p.telefone, c.contato_telefone) AS pessoa_telefone,
-              c.contato_nome, c.contato_telefone, c.contato_documento
+              c.contato_nome, c.contato_telefone, c.contato_fixo, c.contato_documento
          FROM chamados c LEFT JOIN usuarios a ON a.id = c.aberto_por LEFT JOIN pessoas p ON p.id = c.pessoa_id WHERE c.id = ?`,
       [req.params.id],
     );

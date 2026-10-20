@@ -5,6 +5,7 @@ import { chamarBmdesk } from './bmdesk.js';
 import { fecharSecao, gravarMensagem, NR_FILA } from './chamados.js';
 import { registrarLead } from './chatbot.js';
 import { donoDoTelefone, telefoneWhatsApp } from './whatsapp.js';
+import { erroCelular } from '../src/utils/formatters.js';
 
 /**
  * Suporte pelo site (widget público, sem login): public/widget.js abre a página /suporte?e=<empresa>,
@@ -217,11 +218,12 @@ export function createSuporteRouter(): Router {
     const descricao = texto(b.descricao, 4000);
     if (documento.length !== 11 && documento.length !== 14) throw erro(400, 'Informe o CNPJ (ou CPF) da empresa.');
     if (nome.length < 2) throw erro(400, 'Informe o seu nome.');
-    // Fixo (opcional): com DDD; vai na mensagem de abertura do chamado
+    // Fixo (opcional): com DDD; vai em chamados.contato_fixo e na mensagem de abertura do chamado
     const fixo = digitos(b.fixo, 13);
     if (fixo && fixo.length < 10) throw erro(400, 'Informe o telefone fixo com DDD (ou deixe em branco).');
-    // Celular: DDD + 9 + 8 dígitos (com ou sem o 55 na frente)
-    if (!/^(55)?\d{2}9\d{8}$/.test(telefone)) throw erro(400, 'Informe o seu celular (WhatsApp) com DDD, ex.: 11999999999.');
+    // Celular: DDD que existe + 9 + 8 dígitos (com ou sem o 55), sem todos os dígitos iguais
+    const motivo = erroCelular(telefone);
+    if (motivo) throw erro(400, motivo);
     if (descricao.length < 5) throw erro(400, 'Conte o que está acontecendo.');
     const titulo = texto(b.titulo, 200) || descricao.split('\n')[0].slice(0, 80);
     let categoriaId: number | null = Number(b.categoria_id) || null;
@@ -244,9 +246,9 @@ export function createSuporteRouter(): Router {
       numero = Number(n);
       const [ins] = await conn.query<any>(
         `INSERT INTO chamados (empresa_id, numero, pessoa_id, categoria_id, titulo, descricao, status, prioridade, canal,
-                               contato_nome, contato_telefone, contato_documento, sla_prazo)
-         VALUES (?, ?, ?, ?, ?, ?, 'aguardando', 'normal', 'web', ?, ?, ?, IF(? IS NULL, NULL, NOW() + INTERVAL ? HOUR))`,
-        [empresaId, numero, pessoaId, categoriaId, titulo, descricao, nome, telefone, documento, slaHoras, slaHoras ?? 0],
+                               contato_nome, contato_telefone, contato_fixo, contato_documento, sla_prazo)
+         VALUES (?, ?, ?, ?, ?, ?, 'aguardando', 'normal', 'web', ?, ?, ?, ?, IF(? IS NULL, NULL, NOW() + INTERVAL ? HOUR))`,
+        [empresaId, numero, pessoaId, categoriaId, titulo, descricao, nome, telefone, fixo || null, documento, slaHoras, slaHoras ?? 0],
       );
       id = Number(ins.insertId);
       await conn.commit();

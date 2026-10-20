@@ -1188,6 +1188,8 @@ const ChamadoAberto: React.FC<{
         <div className="text-[11px] text-stone-500 dark:text-stone-400 flex flex-wrap gap-x-3">
           <span>{nomeChamado(c)}{c.canal === 'web' && ' • pelo site'}</span>
           <span>Atendente: {c.atendente_nome || '—'}{c.eu_atendo && ' (você)'}</span>
+          {c.contato_telefone && <span>Celular: {c.contato_telefone}</span>}
+          {c.contato_fixo && <span>Fixo: {c.contato_fixo}</span>}
           {c.tecnico_padrao_nome && c.tecnico_padrao_id !== c.atendente_id && <span>Técnico padrão: {c.tecnico_padrao_nome}</span>}
           {c.departamento_nome && <span>Departamento: {c.departamento_nome}</span>}
           {c.sla_prazo && <span>SLA até {formatDateTimeBR(c.sla_prazo)}</span>}

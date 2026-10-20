@@ -2,6 +2,12 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.164 — 2026-10-20
+
+- Chat do site (abrir chamado): o celular/WhatsApp precisa ter um DDD que existe no Brasil e não pode ter todos os dígitos iguais (ex.: 11999999999); a tela mostra o motivo e o servidor confere a mesma regra.
+- Chat do site: o telefone fixo passa a ser gravado em chamados.contato_fixo (coluna nova). O cabeçalho do chamado mostra o celular e o fixo de quem abriu.
+- Pesquisas de Satisfação: o "não sortear quem recebeu pesquisa nos últimos X dias" vem com 30 dias nas pesquisas novas (era 90).
+
 ## 0.0.163 — 2026-10-20
 
 - Pesquisas de Satisfação: ação "Concluir" na lista, com confirmação. A pesquisa fica concluída mesmo com gente sem responder e ninguém mais é contatado ("Executar" recusa pesquisa encerrada); quem já foi contatado e responder depois ainda tem a resposta gravada.

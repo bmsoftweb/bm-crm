@@ -81,7 +81,7 @@ const vazia = (): DadosPesquisa => ({
   objetivo: OBJETIVO_PADRAO,
   canal: 'whatsapp',
   conta: 'campanhas',
-  filtro: { data_de: diaUtilAnteriorIso(), data_ate: diaUtilAnteriorIso(), origens: [], notas: [], excluir_dias: 90 },
+  filtro: { data_de: diaUtilAnteriorIso(), data_ate: diaUtilAnteriorIso(), origens: [], notas: [], excluir_dias: 30 },
   quantidade: 20,
   responsavel_id: null,
 });

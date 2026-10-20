@@ -57,3 +57,10 @@ assert.strictEqual(imagemDaCampanha('data:application/pdf;base64,QUJD'), null);
 assert.strictEqual(imagemDaCampanha(null), null);
 
 console.log('whatsapp: ok');
+
+// Celular do widget (abrir chamado): DDD que existe, 9 na frente, dígitos não todos iguais
+{
+  const { erroCelular } = await import('../src/utils/formatters.js');
+  for (const ok of ['47999998888', '5547999998888', '47912345678']) assert.strictEqual(erroCelular(ok), null, ok);
+  for (const ruim of ['4733334444', '479999988', '00999999999', '20987654321', '11999999999', '47900000000']) assert.ok(erroCelular(ruim), ruim);
+}

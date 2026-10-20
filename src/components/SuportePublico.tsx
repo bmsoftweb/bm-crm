@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
 import { Bell, CheckCircle2, Download, Headset, Loader2, MonitorSmartphone, Send, Star } from 'lucide-react';
-import { formatDateTimeBR } from '../utils/formatters';
+import { erroCelular, formatDateTimeBR } from '../utils/formatters';
 import { ConfirmDialog } from './ConfirmDialog';
 import { destravarSom, tocarAviso } from '../utils/som';
 import { INPUT_CLASS } from '../utils/formStyles';
@@ -278,7 +278,18 @@ const Abrir: React.FC<{
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label htmlFor="sp-tel" className={rotulo}>Celular / WhatsApp</label>
-          <input id="sp-tel" autoFocus={primeiroVazio === 'sp-tel'} inputMode="tel" value={v.telefone} onChange={(e) => alterar({ telefone: soDigitos(e.target.value, 13) })} onFocus={(e) => e.target.select()} placeholder="Ex: 11999999999" required pattern="(55)?\d{2}9\d{8}" title="Celular com DDD (só os números), ex.: 11999999999" className={campo} />
+          <input id="sp-tel" autoFocus={primeiroVazio === 'sp-tel'} inputMode="tel" value={v.telefone} onChange={(e) => {
+              const telefone = soDigitos(e.target.value, 13);
+              // Mesma regra do servidor (DDD que existe, 9 na frente, dígitos não todos iguais): o navegador mostra o motivo
+              e.target.setCustomValidity(telefone ? (erroCelular(telefone) ?? '') : '');
+              alterar({ telefone });
+            }}
+            onFocus={(e) => e.target.select()}
+            placeholder="Ex: 11999999999"
+            required
+            title="Celular com DDD (só os números), ex.: 11999999999"
+            className={campo}
+          />
         </div>
         <div>
           <label htmlFor="sp-fixo" className={rotulo}>Telefone fixo (opcional)</label>

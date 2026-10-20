@@ -230,3 +230,21 @@ export function refProposta(p: { controle?: unknown; numero_proposta?: unknown; 
 /** Referência da proposta usável em nome de arquivo (sem barras) */
 export const refPropostaArquivo = (p: { controle?: unknown; numero_proposta?: unknown; versao?: unknown }) =>
   refProposta(p).replace(/^nº /, '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-');
+
+/** DDDs que existem no Brasil (Anatel) */
+const DDDS = new Set([
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 53, 54, 55,
+  61, 62, 63, 64, 65, 66, 67, 68, 69, 71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+]);
+
+/**
+ * Celular brasileiro (WhatsApp) digitado pelo cliente, só os dígitos: DDD que existe + 9 + 8 dígitos (com ou sem 55 na
+ * frente), e os 8 dígitos não todos iguais (11999999999). Devolve o motivo da recusa, ou null se está certo
+ */
+export function erroCelular(digitos: string): string | null {
+  const m = /^(?:55)?(\d{2})9(\d{8})$/.exec(digitos);
+  if (!m) return 'Informe o seu celular (WhatsApp) com DDD, ex.: 11999999999.';
+  if (!DDDS.has(Number(m[1]))) return `O DDD ${m[1]} não existe: confira o celular.`;
+  if (/^(\d)\1{7}$/.test(m[2])) return 'Informe um celular de verdade (o número não pode ter todos os dígitos iguais).';
+  return null;
+}

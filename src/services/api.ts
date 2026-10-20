@@ -866,6 +866,9 @@ export interface ChamadoDetalhe extends ChamadoResumo {
   conclusao: string | null;
   aberto_por_nome: string | null;
   pessoa_telefone: string | null;
+  /** Telefones informados por quem abriu pelo site: celular/WhatsApp e fixo (opcional) */
+  contato_telefone: string | null;
+  contato_fixo: string | null;
   /** Número do AnyDesk do cadastro da pessoa */
   anydesk_id: string | null;
   eu_atendo: boolean;
