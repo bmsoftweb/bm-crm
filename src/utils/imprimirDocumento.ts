@@ -108,7 +108,7 @@ export function htmlDocumento(p: RegistroCrud, tipo: 'propostas' | 'pedidos', re
     margin: 15mm 15mm 20mm;
     /* Rodapé em toda página impressa, na margem (fora do conteúdo) */
     @bottom-right {
-      content: "CRMweb by BMsoft Sistemas © ${new Date().getFullYear()}";
+      content: "BM-CRM by BMsoft Sistemas © ${new Date().getFullYear()}";
       font: 9px "Segoe UI", Roboto, Arial, sans-serif;
       color: #78716c;
       border-top: 1px solid #d6d3d1;

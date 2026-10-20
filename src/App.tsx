@@ -507,7 +507,7 @@ export default function App() {
   };
   const [headerTitle, headerSubtitle] = activeResource
     ? [activeResource.label, activeResource.description]
-    : TITULOS[activeTab] || ['CRM Web', ''];
+    : TITULOS[activeTab] || ['BM-CRM', ''];
 
   /** Conteúdo de uma tela; as telas abertas recentemente ficam montadas (escondidas) para voltar no ponto em que parou */
   const conteudoTela = (tela: string) => {

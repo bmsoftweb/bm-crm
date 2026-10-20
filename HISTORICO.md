@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.166 — 2026-10-20
+
+- Nome do sistema: "BM-CRM" no lugar de "CRM Web"/"CRMweb" em tudo o que aparece (aba do navegador, menu, login, app instalado/PWA, rodapé dos impressos, Política de Privacidade e Termos). Banco, chaves salvas no navegador e o código "CRMWEB-<id>" das pessoas continuam iguais.
+- Menu lateral: títulos das seções em azul claro.
+
 ## 0.0.165 — 2026-10-20
 
 - Marketing › Vendas (tabela vendas_produtos, uma linha por produto de cada NF): lista com o Cliente do CRM pelo CNPJ/CPF, cancelada, vendedor. "Importar BM" com aba "SQL do BM" (editar, Testar com todos os campos, Gravar, Restaurar padrão; marcadores :ultimo, :data_de, :data_ate) e "Campos importados" editáveis; reimportar o período substitui as vendas do BM. "Importar" de arquivo como o de Pessoas (código "ARQ-", reimportar substitui a mesma NF). Campos novos do vendedor (ven_cod_integracao, ven_nome; no BM, NFMESTRE.ID_Vendedor e VENDEDORES.Nome).

@@ -13,7 +13,7 @@ const tituloGrupo = (titulo: string, rec: boolean, primeiro = false) =>
   rec ? (
     primeiro ? null : <div className="mx-4 mb-2 border-t border-stone-200 dark:border-stone-800" />
   ) : (
-    <div className="px-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-400">{titulo}</div>
+    <div className="px-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">{titulo}</div>
   );
 
 interface SidebarProps {
@@ -154,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div className={rec ? 'hidden' : 'min-w-0'}>
             <h1 className="text-sm font-bold text-stone-900 dark:text-white leading-tight truncate">
-              CRM Web
+              BM-CRM
             </h1>
             <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
               Funil, Propostas e Pedidos

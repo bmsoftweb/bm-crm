@@ -1,5 +1,5 @@
 {
-  "name": "CRM Web • Ordens de Serviço",
+  "name": "BM-CRM • Ordens de Serviço",
   "short_name": "OS Técnico",
   "description": "Ordens de serviço do técnico, com assinatura do cliente; funciona sem sinal",
   "start_url": "/tecnico",

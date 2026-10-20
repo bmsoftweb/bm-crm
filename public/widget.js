@@ -1,5 +1,5 @@
 /*
- * Suporte pelo site (CRM Web). No site do cliente, antes de </body>:
+ * Suporte pelo site (BM-CRM). No site do cliente, antes de </body>:
  *   <script src="https://<endereço do CRM>/widget.js" data-empresa="1"></script>
  * Opcional: data-cnpj="12345678000199" (já vem preenchido), data-cor="#2563eb".
  * Mostra um botão flutuante que abre o chat de suporte (página /suporte do CRM) num painel.
