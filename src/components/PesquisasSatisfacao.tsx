@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { Dices, Eye, Loader2, Mail, MessageCircle, Phone, Play, Plus, Save, Trash2, X } from 'lucide-react';
+import { CircleCheck, Dices, Eye, Loader2, Mail, MessageCircle, Phone, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   buscarPessoasPesquisa,
   CanalPesquisa,
   criarPesquisa,
   DadosPesquisa,
-  excluirPesquisa,
+  concluirPesquisa, excluirPesquisa,
   executarPesquisa,
   fetchItemDaAtividade,
   fetchOptions,
@@ -321,6 +321,7 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [excluindo, setExcluindo] = useState<PesquisaResumo | null>(null);
+  const [concluindo, setConcluindo] = useState<PesquisaResumo | null>(null);
   const [executando, setExecutando] = useState(false);
   const [mais, setMais] = useState('10');
   const [retorno, setRetorno] = useState<number | null>(null);
@@ -467,6 +468,15 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
                       <td className="py-2 px-2 text-right" onClick={(e) => e.stopPropagation()}>
                         <button type="button" onClick={() => abrir(p.id)} title="Abrir o filtro" className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
                           <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConcluindo(p)}
+                          disabled={p.situacao === 'concluida' || p.situacao === 'cancelada'}
+                          title={p.situacao === 'concluida' || p.situacao === 'cancelada' ? 'A pesquisa já está encerrada' : 'Concluir: encerra a pesquisa mesmo com gente sem responder'}
+                          className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-transparent"
+                        >
+                          <CircleCheck className="w-4 h-4" />
                         </button>
                         <button type="button" onClick={() => setExcluindo(p)} title="Excluir a pesquisa" className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer">
                           <Trash2 className="w-4 h-4" />
@@ -732,6 +742,21 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
         )}
       </div>
 
+      {concluindo && (
+        <ConfirmDialog
+          titulo="Concluir a pesquisa?"
+          mensagem={`"${concluindo.descricao}" fica concluída e ninguém mais é contatado. Quem já foi contatado e responder depois ainda tem a resposta gravada.`}
+          confirmar="Concluir"
+          tom="normal"
+          onConfirmar={async () => {
+            await concluirPesquisa(concluindo.id);
+            setConcluindo(null);
+            onToast('Pesquisa concluída.');
+            carregarLista();
+          }}
+          onCancelar={() => setConcluindo(null)}
+        />
+      )}
       {excluindo && (
         <ConfirmDialog
           titulo="Excluir a pesquisa?"

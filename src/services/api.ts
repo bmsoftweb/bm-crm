@@ -1115,6 +1115,8 @@ export const fetchPesquisa = (id: number): Promise<Pesquisa> => get(`/api/pesqui
 export const criarPesquisa = (d: DadosPesquisa): Promise<{ id: number }> => enviar('POST', '/api/pesquisas-satisfacao', d);
 export const salvarPesquisa = (id: number, d: DadosPesquisa) => enviar('PUT', `/api/pesquisas-satisfacao/${id}`, d);
 export const excluirPesquisa = (id: number) => enviar('DELETE', `/api/pesquisas-satisfacao/${id}`);
+/** Concluir a pesquisa à força (pela lista), mesmo com gente sem responder */
+export const concluirPesquisa = (id: number) => enviar('POST', `/api/pesquisas-satisfacao/${id}/concluir`);
 export const previaPesquisa = (filtro: FiltroPesquisa, id?: number): Promise<{ filtrados: number }> => enviar('POST', '/api/pesquisas-satisfacao/previa', { filtro, id });
 export const sortearPesquisa = (id: number, quantidade?: number): Promise<{ sorteados: number; filtrados: number }> =>
   enviar('POST', `/api/pesquisas-satisfacao/${id}/sortear`, quantidade ? { quantidade } : {});

@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.163 — 2026-10-20
+
+- Pesquisas de Satisfação: ação "Concluir" na lista, com confirmação. A pesquisa fica concluída mesmo com gente sem responder e ninguém mais é contatado ("Executar" recusa pesquisa encerrada); quem já foi contatado e responder depois ainda tem a resposta gravada.
+- Chat do site (abrir chamado): campo "Telefone fixo (opcional)" ao lado do "Celular / WhatsApp" (obrigatório). O fixo, com DDD, vai na mensagem de abertura do chamado e fica salvo no navegador do cliente.
+
 ## 0.0.162 — 2026-10-19
 
 - Visitas do Site: quem ainda está no site aparece com a tag "Visitando..." na coluna Tempo no site (e a Saída fica vazia). O widget avisa que a página segue à vista 3 s depois de abrir, a cada minuto e ao voltar para a aba (/visitas/presente); sem o aviso (navegador fechado sem avisar), em até 90 s volta a mostrar o tempo.

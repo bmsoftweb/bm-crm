@@ -606,9 +606,21 @@ export function createPesquisasSatisfacaoRouter(): Router {
     res.json({ success: true });
   }));
 
+  /**
+   * Concluir (forçado, pela lista): a pesquisa fica concluída mesmo com gente sem responder. Não contata mais
+   * ninguém; quem já foi contatado e responder depois ainda tem a resposta gravada
+   */
+  router.post('/pesquisas-satisfacao/:id/concluir', rota(async (req, res) => {
+    const p = await pesquisaDaEmpresa(req.params.id, emp(res));
+    if (p.situacao === 'concluida' || p.situacao === 'cancelada') throw erro(400, `A pesquisa já está ${p.situacao === 'concluida' ? 'concluída' : 'cancelada'}.`);
+    await pool.query("UPDATE pesquisas_satisfacao SET situacao = 'concluida', concluida_em = NOW() WHERE id = ?", [p.id]);
+    res.json({ success: true });
+  }));
+
   /** Executar: contata os selecionados ainda não contatados */
   router.post('/pesquisas-satisfacao/:id/executar', rota(async (req, res) => {
     const p = await pesquisaDaEmpresa(req.params.id, emp(res));
+    if (p.situacao === 'concluida' || p.situacao === 'cancelada') throw erro(400, 'Pesquisa encerrada: não contata mais ninguém.');
     if (p.canal !== 'ligacao') {
       const cfg = await lerChatbot(emp(res));
       if (!temChave(cfg)) throw erro(400, 'Configure a IA em Configurações › Chatbot antes de executar a pesquisa.');

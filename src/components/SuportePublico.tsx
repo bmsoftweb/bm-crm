@@ -227,6 +227,7 @@ const Abrir: React.FC<{
     documento: soDigitos(cnpj || salvos.documento || '', 14),
     nome: salvos.nome || '',
     telefone: salvos.telefone || '',
+    fixo: salvos.fixo || '',
     categoria_id: '',
     descricao: '',
   });
@@ -240,7 +241,7 @@ const Abrir: React.FC<{
     setErro(null);
     try {
       const r = await api(`/api/publico/suporte/${encodeURIComponent(empresa)}/chamados`, { ...v, categoria_id: Number(v.categoria_id) || null });
-      gravar(chaveDados, JSON.stringify({ documento: v.documento, nome: v.nome, telefone: v.telefone }));
+      gravar(chaveDados, JSON.stringify({ documento: v.documento, nome: v.nome, telefone: v.telefone, fixo: v.fixo }));
       avisarCliente(v);
       onAberto(r.token);
     } catch (err: any) {
@@ -270,14 +271,18 @@ const Abrir: React.FC<{
         <label htmlFor="sp-doc" className={rotulo}>CNPJ da empresa (ou CPF)</label>
         <input id="sp-doc" autoFocus={primeiroVazio === 'sp-doc'} inputMode="numeric" value={v.documento} onChange={(e) => alterar({ documento: soDigitos(e.target.value, 14) })} onFocus={(e) => e.target.select()} placeholder="Ex: 12345678000199" required pattern="\d{11}|\d{14}" title="CNPJ com 14 dígitos ou CPF com 11" className={campo} />
       </div>
+      <div>
+        <label htmlFor="sp-nome" className={rotulo}>Seu nome</label>
+        <input id="sp-nome" autoFocus={primeiroVazio === 'sp-nome'} value={v.nome} onChange={(e) => alterar({ nome: e.target.value })} onFocus={(e) => e.target.select()} placeholder="Ex: Pedro" maxLength={120} autoComplete="name" required minLength={2} className={campo} />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="sp-nome" className={rotulo}>Seu nome</label>
-          <input id="sp-nome" autoFocus={primeiroVazio === 'sp-nome'} value={v.nome} onChange={(e) => alterar({ nome: e.target.value })} onFocus={(e) => e.target.select()} placeholder="Ex: Pedro" maxLength={120} autoComplete="name" required minLength={2} className={campo} />
+          <label htmlFor="sp-tel" className={rotulo}>Celular / WhatsApp</label>
+          <input id="sp-tel" autoFocus={primeiroVazio === 'sp-tel'} inputMode="tel" value={v.telefone} onChange={(e) => alterar({ telefone: soDigitos(e.target.value, 13) })} onFocus={(e) => e.target.select()} placeholder="Ex: 11999999999" required pattern="(55)?\d{2}9\d{8}" title="Celular com DDD (só os números), ex.: 11999999999" className={campo} />
         </div>
         <div>
-          <label htmlFor="sp-tel" className={rotulo}>Celular (WhatsApp)</label>
-          <input id="sp-tel" autoFocus={primeiroVazio === 'sp-tel'} inputMode="tel" value={v.telefone} onChange={(e) => alterar({ telefone: soDigitos(e.target.value, 13) })} onFocus={(e) => e.target.select()} placeholder="Ex: 11999999999" required pattern="(55)?\d{2}9\d{8}" title="Celular com DDD (só os números), ex.: 11999999999" className={campo} />
+          <label htmlFor="sp-fixo" className={rotulo}>Telefone fixo (opcional)</label>
+          <input id="sp-fixo" inputMode="tel" value={v.fixo} onChange={(e) => alterar({ fixo: soDigitos(e.target.value, 13) })} onFocus={(e) => e.target.select()} placeholder="Ex: 1133334444" pattern="\d{10,13}" title="Telefone com DDD (só os números)" className={campo} />
         </div>
       </div>
       {categorias.length > 0 && (
