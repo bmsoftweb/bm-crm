@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
+import { exigirImportador } from './permissoes.js';
 import { pool } from './db.js';
-import { texto, digitos } from './importbm.js';
+import { texto, digitos, DESTINOS_VENDA } from './importbm.js';
+import { lerData, lerNumero } from '../src/utils/formatters.js';
 
 /**
  * Importação de pessoas a partir de arquivo (CSV, Excel ou PDF). O navegador lê o
@@ -88,8 +90,97 @@ function converter(l: Record<string, any>) {
   };
 }
 
+/**
+ * Uma linha do arquivo (textos, campo de vendas_produtos → valor) já com o padrão aplicado no que veio vazio, no formato
+ * da tabela: data dd/mm/aaaa ou aaaa-mm-dd, números 1.234,56, CNPJ só com dígitos, UF, Cancelado S/Sim/1/X → 'S', e
+ * os códigos com "ARQ-" na frente (como nas pessoas). null = sem data válida (a linha fica de fora)
+ */
+export function converterVendaArquivo(bruta: Record<string, any>, padrao: Record<string, any> = {}) {
+  const valor = (c: string) => String(bruta?.[c] ?? '').trim() || String(padrao?.[c] ?? '').trim();
+  const out: Record<string, any> = {};
+  for (const d of DESTINOS_VENDA) {
+    const v = valor(d.campo);
+    switch (d.tipo) {
+      case 'codbm':
+        out[d.campo] = v ? `${PREFIXO}${v}`.slice(0, 50) : '';
+        break;
+      case 'cnpj':
+        out[d.campo] = digitos(v, 14) || '';
+        break;
+      case 'data':
+        out[d.campo] = v ? lerData(v) : null;
+        break;
+      case 'dec2':
+      case 'dec3': {
+        const n = v ? Number(lerNumero(v)) : 0;
+        const casas = d.tipo === 'dec3' ? 1000 : 100;
+        out[d.campo] = Number.isFinite(n) ? Math.round(n * casas) / casas : 0;
+        break;
+      }
+      case 'sn':
+        out[d.campo] = /^(s|sim|1|x|true|cancelad[oa])$/i.test(v) ? 'S' : 'N';
+        break;
+      case 'uf':
+        out[d.campo] = (lerUf(v) ?? '').slice(0, 2);
+        break;
+      default:
+        out[d.campo] = texto(v, d.max) ?? '';
+    }
+  }
+  if (!out.pro_descricao) out.pro_descricao = 'Produto';
+  return out.nf_data ? out : null;
+}
+
 export function createImportArquivoRouter(): Router {
   const router = Router();
+  router.use('/importar', exigirImportador);
+
+  /**
+   * Vendas de um arquivo (Marketing › Vendas › Importar), em lotes. Com o Cód.Integração da NF, as vendas de arquivo
+   * das mesmas NFs que já estavam gravadas saem antes (reimportar não duplica); "desde" (o maior id antes do 1º lote)
+   * protege o que os lotes anteriores desta mesma importação já gravaram
+   */
+  router.post('/importar/vendas', async (req: Request, res: Response) => {
+    try {
+      const empresaId = res.locals.empresaId;
+      const linhas: any[] = Array.isArray(req.body?.linhas) ? req.body.linhas : [];
+      if (!linhas.length) throw Object.assign(new Error('Nenhuma linha para importar.'), { status: 400 });
+      if (linhas.length > MAX_LINHAS) throw Object.assign(new Error(`No máximo ${MAX_LINHAS} linhas por vez.`), { status: 400 });
+      const padrao = req.body?.padrao && typeof req.body.padrao === 'object' ? req.body.padrao : {};
+      const vendas = linhas.map((l) => converterVendaArquivo(l, padrao));
+      const validas = vendas.filter(Boolean) as Record<string, any>[];
+      let desde = Number(req.body?.desde);
+      if (!Number.isInteger(desde) || desde < 0) {
+        const [[m]] = await pool.query<any>('SELECT COALESCE(MAX(id), 0) AS id FROM vendas_produtos');
+        desde = Number(m.id);
+      }
+      const colunas = DESTINOS_VENDA.map((d) => d.campo);
+      const notas = [...new Set(validas.map((v) => v.cod_integracao).filter(Boolean))];
+      const conn = await pool.getConnection();
+      let substituidas = 0;
+      try {
+        await conn.beginTransaction();
+        if (notas.length) {
+          const [d] = await conn.query<any>('DELETE FROM vendas_produtos WHERE empresa_id = ? AND cod_integracao IN (?) AND id <= ?', [empresaId, notas, desde]);
+          substituidas = Number(d.affectedRows);
+        }
+        for (let i = 0; i < validas.length; i += 500) {
+          await conn.query(`INSERT INTO vendas_produtos (empresa_id, ${colunas.join(', ')}) VALUES ?`, [
+            validas.slice(i, i + 500).map((v) => [empresaId, ...colunas.map((c) => v[c])]),
+          ]);
+        }
+        await conn.commit();
+      } catch (err) {
+        await conn.rollback();
+        throw err;
+      } finally {
+        conn.release();
+      }
+      res.json({ inseridos: validas.length, semData: vendas.length - validas.length, substituidas, desde });
+    } catch (err: any) {
+      res.status(err.status || 400).json({ error: err.message || 'Falha ao importar as vendas.' });
+    }
+  });
 
   router.post('/importar/pessoas', async (req: Request, res: Response) => {
     const empresaId = String(res.locals.empresaId);

@@ -283,7 +283,7 @@ export async function iniciarBotAtividade(atividadeId: number): Promise<void> {
   const a = await lerAtividade(atividadeId);
   const cfg = await lerChatbot(a.empresa_id);
   if (!temChave(cfg)) {
-    await pool.query('UPDATE atividades SET bot_resumo = ? WHERE id = ?', ['Bot não iniciou: configure a IA em Configurações › Chatbot.', atividadeId]);
+    await pool.query('UPDATE atividades SET bot_resumo = ? WHERE id = ?', ['Bot não iniciou: configure a IA em Configurações › IA.', atividadeId]);
     return;
   }
   const lista = await destinatarios(a);
@@ -318,7 +318,7 @@ export async function responderAtividade(nova: MensagemNova): Promise<boolean> {
   const a = await lerAtividade(conv.atividade_id);
   try {
     const cfg = await lerChatbot(nova.empresaId);
-    if (!temChave(cfg)) throw new Error('IA não configurada (Configurações › Chatbot).');
+    if (!temChave(cfg)) throw new Error('IA não configurada (Configurações › IA).');
     await mostrarDigitando(nova.empresaId, nova.telefone, 3000);
     await aplicar(a, conv, await conversarIa(cfg, instrucoes(cfg, a, conv), await falas(conv.id), FERRAMENTAS));
   } catch (err: any) {
@@ -360,7 +360,7 @@ async function cobrarSemResposta() {
       }
       await pool.query('UPDATE atividade_conversas SET insistiu_em = NOW() WHERE id = ?', [conv.id]);
       const cfg = await lerChatbot(a.empresa_id);
-      if (!temChave(cfg)) throw new Error('IA não configurada (Configurações › Chatbot).');
+      if (!temChave(cfg)) throw new Error('IA não configurada (Configurações › IA).');
       const pedido = `(A pessoa não respondeu há ${HORAS_SEM_RESPOSTA} horas. Escreva uma mensagem curta e gentil retomando o assunto.)`;
       const r = await conversarIa(cfg, instrucoes(cfg, a, conv), await falas(conv.id, pedido), []);
       if (r.texto) await enviarNaConversa(a, conv, r.texto);

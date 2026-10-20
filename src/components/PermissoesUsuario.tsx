@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, Save, ShieldCheck, X } from 'lucide-react';
-import { salvarPermissoes } from '../services/api';
+import { fetchNotificacoesDesligadas, salvarNotificacoesDesligadas, salvarPermissoes } from '../services/api';
 import { RegistroCrud, ResourceDef } from '../types';
 import { gruposDoMenu } from '../utils/menu';
 import { Toggle } from './Toggle';
@@ -14,6 +14,12 @@ interface Props {
   onGravado: () => void;
   onToast: (msg: string) => void;
 }
+
+/** Notificações da campainha que o usuário pode desligar (server/notificacoes.ts › NOTIFICACOES_OPCIONAIS) */
+const NOTIFICACOES = [
+  { tipo: 'visita_site', label: 'Alguém entrou no site', hint: 'Só para quem acessa Visitas do Site' },
+  { tipo: 'chamado', label: 'Chamado novo na fila', hint: 'Só para quem acessa a Fila de Chamados' },
+];
 
 /** Permissões gravadas (JSON do banco) → ids; null = acessa tudo */
 const lerLista = (v: unknown): string[] | null => {
@@ -40,6 +46,13 @@ export const PermissoesUsuario: React.FC<Props> = ({ usuario, resources, onFecha
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const admin = usuario.tipo === 'admin';
+  /** Tipos de notificação desligados; null = ainda carregando */
+  const [desligadas, setDesligadas] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    fetchNotificacoesDesligadas(usuario.id as number)
+      .then((r) => setDesligadas(new Set(r.desligadas)))
+      .catch((e) => setErro(e.message));
+  }, [usuario.id]);
 
   const marcar = (ids: string[], sim: boolean) =>
     setMarcados((m) => {
@@ -55,6 +68,7 @@ export const PermissoesUsuario: React.FC<Props> = ({ usuario, resources, onFecha
       // Tudo marcado grava "sem restrição": opções novas do menu já nascem liberadas para ele
       const lista = todos.every((id) => marcados.has(id)) ? null : todos.filter((id) => marcados.has(id));
       await salvarPermissoes(usuario.id as number, lista);
+      if (desligadas) await salvarNotificacoesDesligadas(usuario.id as number, [...desligadas]);
       onToast(`Permissões de ${usuario.nome} gravadas. Valem no próximo acesso dele (ou ao recarregar a página).`);
       onGravado();
     } catch (err: any) {
@@ -113,6 +127,40 @@ export const PermissoesUsuario: React.FC<Props> = ({ usuario, resources, onFecha
               </div>
             );
           })}
+          <div>
+            <div className="pb-1.5 mb-1 px-2 -mx-2 border-b border-stone-100 dark:border-stone-800">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Notificações</span>
+            </div>
+            {NOTIFICACOES.map((n) => (
+              <div
+                key={n.tipo}
+                title={n.hint}
+                className="flex items-center justify-between gap-3 py-1.5 px-2 -mx-2 rounded-lg transition-colors hover:bg-blue-50 focus-within:bg-blue-50 dark:hover:bg-blue-950/40 dark:focus-within:bg-blue-950/40"
+              >
+                <span className="text-xs text-stone-700 dark:text-stone-200">{n.label}</span>
+                {desligadas ? (
+                  <Toggle
+                    size="sm"
+                    checked={!desligadas.has(n.tipo)}
+                    onChange={(sim) =>
+                      setDesligadas((d) => {
+                        const nova = new Set(d);
+                        if (sim) nova.delete(n.tipo);
+                        else nova.add(n.tipo);
+                        return nova;
+                      })
+                    }
+                  />
+                ) : (
+                  <Loader2 className="w-4 h-4 animate-spin text-stone-400" />
+                )}
+              </div>
+            ))}
+            <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+              Sempre recebe (não dá para desligar): chamado ou conversa do WhatsApp transferido para ele, tarefa criada para ele e cliente que respondeu a pesquisa
+              com nota baixa.
+            </p>
+          </div>
           <p className="text-[11px] text-stone-500 dark:text-stone-400">
             Desmarcado: a opção some do menu e o servidor recusa abrir aqueles dados. As listas de escolha dos formulários (ex.: responsável do negócio) continuam
             funcionando.

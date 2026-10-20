@@ -24,6 +24,7 @@ import {
   type OpcaoMenu,
 } from './chatbot.js';
 import { TEXTO_ENCERRAMENTO as ENCERRADA_POR_INATIVIDADE } from './inatividade.js';
+import { notificar } from './notificacoes.js';
 
 /**
  * Jornada de atendimento do WhatsApp (Configurações › Jornada): um fluxo de nós ligados, desenhado
@@ -655,7 +656,7 @@ class Execucao {
     // Quem responde a uma campanha: a IA conhece a mensagem que a pessoa recebeu e as instruções da campanha
     const textoBase = semCampanha ? semCampanha + contextoDeCampanha(this.ctx.campanha) : '';
     if (!temChave(this.bot) || !textoBase) {
-      await this.falha(no, `sem a chave da IA (Configurações › Chatbot) ou sem texto-base (${ONDE}).`);
+      await this.falha(no, `sem a chave da IA (Configurações › IA) ou sem texto-base (${ONDE}).`);
       return this.destino(no, 'humano') ?? 'fim';
     }
     this.ctx.jornada = { transferencia: null };
@@ -689,7 +690,7 @@ class Execucao {
       return this.destino(no, 'nenhuma') ?? 'fim';
     };
     if (!temChave(this.bot)) {
-      await this.falha(no, 'sem a chave da IA (Configurações › Chatbot).');
+      await this.falha(no, 'sem a chave da IA (Configurações › IA).');
       return nenhuma();
     }
     if (!abertura) this.estado.vars._iaex = (Number(this.estado.vars._iaex) || 0) + 1;
@@ -801,7 +802,7 @@ class Execucao {
         case 'tarefa': {
           const v = await this.vars();
           // Sem executor: fica para o departamento (ou para a equipe); vence agora, aparece como pendente para quem abrir as atividades
-          await pool.query(
+          const [tarefa] = await pool.query<any>(
             `INSERT INTO atividades (empresa_id, pessoa_id, departamento_id, assunto, tipo, data_vencimento, hora_vencimento, observacao, lembrete_para, criada_por_bot)
              VALUES (?, ?, ?, ?, 'tarefa', CURDATE(), TIME_FORMAT(CURTIME(), '%H:%i:00'), ?, 'nenhum', 1)`,
             [
@@ -813,6 +814,14 @@ class Execucao {
 WhatsApp: ${v.telefone}`.trim(),
             ],
           );
+          // Avisa o departamento; sem departamento, quem acessa as Atividades
+          await notificar(this.ctx.empresaId, d.departamento_id ? { departamentoId: d.departamento_id } : { tela: 'atividades' }, {
+            tipo: 'tarefa',
+            titulo: 'Tarefa nova da Automação do WhatsApp',
+            texto: preencher(d.assunto, v).trim().slice(0, 255) || 'Retornar contato do WhatsApp',
+            link: 'atividades',
+            registroId: Number(tarefa.insertId),
+          });
           no = seguir();
           break;
         }

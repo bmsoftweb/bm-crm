@@ -10,12 +10,14 @@ import { fetchContagemChamados,
   fetchNaoVistas,
   fetchMinhasAtividades,
   atividadesGravadasAqui,
-  fetchUltimaVisita,
+  type Notificacao,
 } from './services/api';
 import { destravarSom, tocarAviso } from './utils/som';
 import { lerConfigLista, limparConfigListas, salvarConfigLista } from './utils/configListas';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import { NotificacoesSino } from './components/NotificacoesSino';
+import { ConsultasView } from './components/ConsultasView';
 import { LoginView } from './components/LoginView';
 import { Dashboard } from './components/Dashboard';
 import { CrudView } from './components/CrudView';
@@ -48,7 +50,7 @@ import { ConversasView, PedidoConversa } from './components/ConversasView';
 import { ChamadosAtivos, ChamadosFila, tempoEspera } from './components/Chamados';
 import { BotaoWhatsApp } from './components/BotaoWhatsApp';
 import { BotaoPermissoes } from './components/PermissoesUsuario';
-import { gruposDoMenu, podeAcessar, type ItemMenu } from './utils/menu';
+import { gruposDoMenu, podeAcessar, podeImportar, type ItemMenu } from './utils/menu';
 import { ThemeMode, getInitialTheme, applyTheme } from './utils/theme';
 import { Sessao, lerSessao, salvarSessao, limparSessao, atualizarSessao } from './utils/session';
 
@@ -254,49 +256,6 @@ export default function App() {
     return () => clearInterval(i);
   }, [sessao, atualizarMinhasAtividades]);
 
-  // Sino do topo: pisca quando alguém entrou no site depois da última visita vista. A vista fica no navegador,
-  // por usuário (sem ela, a primeira consulta só marca como vista, sem piscar pelas antigas)
-  const veVisitas = podeAcessar(sessao?.usuario ?? null, 'site_visitas');
-  const chaveVisita = `crmwebVisitaVista:${sessao?.usuario.id ?? ''}`;
-  const [ultimaVisita, setUltimaVisita] = useState(0);
-  const [visitaVista, setVisitaVista] = useState(0);
-  const marcarVisitaVista = useCallback(
-    (id: number) => {
-      setVisitaVista(id);
-      try {
-        localStorage.setItem(chaveVisita, String(id));
-      } catch {
-        // sem localStorage: vale só nesta aba
-      }
-    },
-    [chaveVisita],
-  );
-  useEffect(() => {
-    if (!sessao || !veVisitas) return;
-    let vista: number | null = null;
-    try {
-      vista = Number(localStorage.getItem(chaveVisita)) || null;
-    } catch {
-      // sem localStorage
-    }
-    if (vista) setVisitaVista(vista);
-    const atualizar = () =>
-      fetchUltimaVisita()
-        .then((v) => {
-          const id = v?.id ?? 0;
-          setUltimaVisita(id);
-          if (vista === null) marcarVisitaVista((vista = id));
-        })
-        .catch(() => {}); // sem a tabela ou sem conexão: sino parado
-    atualizar();
-    const i = setInterval(atualizar, 15_000);
-    return () => clearInterval(i);
-  }, [sessao, veVisitas, chaveVisita, marcarVisitaVista]);
-  // Abrir a tela (pelo sino ou pelo menu) dá as visitas como vistas
-  useEffect(() => {
-    if (activeTab === 'site_visitas' && ultimaVisita > visitaVista) marcarVisitaVista(ultimaVisita);
-  }, [activeTab, ultimaVisita, visitaVista, marcarVisitaVista]);
-
   // Tela sem permissão (ex.: o Funil, que abre primeiro): vai para a primeira opção do menu que o usuário acessa
   useEffect(() => {
     const u = sessao?.usuario ?? null;
@@ -352,6 +311,21 @@ export default function App() {
       navegar('conversas');
     },
     [navegar],
+  );
+
+  /** Clique numa notificação da campainha: abre a tela do link, no registro quando dá */
+  const abrirNotificacao = useCallback(
+    (n: Notificacao) => {
+      const [tela, param] = (n.link ?? '').split('|');
+      if (!tela) return;
+      if (tela === 'conversas' && param) pedirConversa({ telefone: param });
+      else if (tela === 'chamados_ativos' && n.registro_id) {
+        setChamadoAbrir(n.registro_id);
+        navegar('chamados_ativos');
+      } else if (['atividades', 'ordens_servico', 'avaliacoes'].includes(tela) && n.registro_id) navegarRegistro(tela, n.registro_id);
+      else navegar(tela);
+    },
+    [navegar, navegarRegistro, pedirConversa],
   );
 
   const handleLogout = useCallback(() => {
@@ -453,6 +427,20 @@ export default function App() {
   }, [favoritos, resources, sessao]);
 
   const activeResource = useMemo(() => resources.find((r) => r.name === activeTab) || null, [resources, activeTab]);
+
+  // Telas visitadas continuam montadas (escondidas): ao voltar, o formulário, os filtros e a rolagem estão como ficaram.
+  // ponytail: no máximo MAX_TELAS (a usada há mais tempo é desmontada); as escondidas seguem consultando o servidor
+  const MAX_TELAS = 8;
+  const [usoTelas, setUsoTelas] = useState<string[]>([]);
+  // Outro usuário (ou novo login): não remonta as telas de quem saiu
+  useEffect(() => setUsoTelas([]), [sessao?.usuario.id]);
+  useEffect(() => {
+    setUsoTelas((u) => [activeTab, ...u.filter((t) => t !== activeTab)].slice(0, MAX_TELAS));
+  }, [activeTab]);
+  const telasMontadas = useMemo(
+    () => (usoTelas.includes(activeTab) ? usoTelas : [activeTab, ...usoTelas]).slice(0, MAX_TELAS).sort(),
+    [usoTelas, activeTab],
+  );
   const resourceNegocios = useMemo(() => resources.find((r) => r.name === 'negocios'), [resources]);
 
   /** Telas cujo registro abre num editor próprio, no lugar do formulário genérico */
@@ -515,10 +503,292 @@ export default function App() {
     chamados_ativos: ['Chamados Ativos', 'Atendimento dos chamados de suporte'],
     pesquisas_satisfacao: ['Pesquisa de Satisfação', 'Sorteie atendimentos e pergunte aos clientes como foi'],
     prospeccao: ['Prospecção', 'Busque empresas no Google Maps por segmento e região e inclua as qualificadas como leads'],
+    consultas: ['Consultas', 'Pergunte sobre os seus dados em português: a IA consulta o banco e mostra o resultado em tabela'],
   };
   const [headerTitle, headerSubtitle] = activeResource
     ? [activeResource.label, activeResource.description]
     : TITULOS[activeTab] || ['CRM Web', ''];
+
+  /** Conteúdo de uma tela; as telas abertas recentemente ficam montadas (escondidas) para voltar no ponto em que parou */
+  const conteudoTela = (tela: string) => {
+    const activeTab = tela;
+    const activeResource = resources.find((r) => r.name === tela) || null;
+    return (
+      activeTab === 'kanban' ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <Kanban
+            resourceNegocios={resourceNegocios}
+            refreshToken={refreshToken}
+            onToast={showToast}
+            onConversar={pedirConversa}
+          />
+        </main>
+      ) : activeTab === 'conversas' ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <ConversasView refreshToken={refreshToken} onVisto={atualizarNaoVistas} pedido={pedidoConversa} onToast={showToast} onVoltarFila={() => navegar('chamados_fila')} />
+        </main>
+      ) : activeTab === 'chamados_fila' ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <ChamadosFila
+            refreshToken={refreshToken}
+            onMudou={atualizarFilaChamados}
+            onAbrir={(id) => {
+              setChamadoAbrir(id);
+              navegar('chamados_ativos');
+            }}
+            onToast={showToast}
+            onConversa={(telefone) => {
+              atualizarNaoVistas();
+              pedirConversa({ telefone });
+            }}
+          />
+        </main>
+      ) : activeTab === 'chamados_ativos' ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <ChamadosAtivos
+            refreshToken={refreshToken}
+            abrir={chamadoAbrir}
+            onMudou={atualizarFilaChamados}
+            onConversar={(pessoaId) => pedirConversa({ pessoaId })}
+            onToast={showToast}
+            onVoltarFila={() => {
+              setChamadoAbrir(null);
+              navegar('chamados_fila');
+            }}
+          />
+        </main>
+      ) : activeTab === 'painel_suporte' ? (
+        <main className="flex-1 overflow-y-auto min-h-0 w-full">
+          <div className="px-4 sm:px-6 lg:px-8 py-6">
+            <PainelSuporte refreshToken={refreshToken} onNavigate={navegar} onNavigateFiltrado={navegarFiltrado} />
+          </div>
+        </main>
+      ) : activeTab === 'pesquisas_satisfacao' ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <PesquisasSatisfacao refreshToken={refreshToken} onToast={showToast} />
+        </main>
+      ) : activeTab === 'consultas' ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <ConsultasView admin={usuario?.tipo === 'admin'} />
+        </main>
+      ) : activeTab === 'prospeccao' ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <Prospeccao onToast={showToast} onVerLeads={(id) => navegarFiltrado('pessoas', [{ field: 'prospeccao_busca_id', op: 'eq', value: id }])} />
+        </main>
+      ) : activeTab === 'configuracoes' ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <ConfiguracoesView usuario={usuario} onToast={showToast} />
+        </main>
+      ) : activeResource ? (
+        <main className="flex-1 flex flex-col min-h-0 w-full">
+          <CrudView
+            key={activeResource.name}
+            resource={activeResource}
+            allResources={resources}
+            refreshToken={refreshToken}
+            onToast={showToast}
+            onCountChange={handleCountChange}
+            onNavigate={navegar}
+            usuario={usuario}
+            filtrosIniciais={filtroInicial?.tela === activeResource.name ? filtroInicial : null}
+            registroInicial={registroInicial?.tela === activeResource.name ? registroInicial : null}
+            renderEditor={renderEditor(activeResource.name)}
+            acoesLista={
+              // Importar (do arquivo e do BM): só gerentes e administradores
+              !podeImportar(usuario)
+                ? undefined
+                : activeResource.name === 'pessoas'
+                ? (recarregar) => (
+                    <>
+                      <BotaoImportarArquivo onImportado={recarregar} />
+                      <BotaoImportarBM tipo="pessoas" onImportado={recarregar} />
+                    </>
+                  )
+                : activeResource.name === 'produtos'
+                  ? (recarregar) => <BotaoImportarBM tipo="produtos" onImportado={recarregar} />
+                  : activeResource.name === 'vendas_produtos'
+                    ? (recarregar) => (
+                        <>
+                          <BotaoImportarArquivo tipo="vendas" onImportado={recarregar} />
+                          <BotaoImportarBM tipo="vendas" onImportado={recarregar} />
+                        </>
+                      )
+                    : undefined
+            }
+            acoesEmMenu={['propostas', 'pedidos', 'campanhas', 'atividades', 'ordens_servico'].includes(activeResource.name)}
+            onGerarOS={activeResource.name === 'atividades' && podeAcessar(usuario, 'ordens_servico') ? setGerarOSDe : undefined}
+            aoDuploClique={
+              activeResource.name === 'atividades'
+                ? (row) => {
+                    // Abre a rotina que gerou a atividade: chamado, conversa do Bot, conversa do WhatsApp, contrato
+                    // ou negócio (Retorno Envio e as manuais); sem nenhum deles, abre a edição
+                    if (row.chamado_id && podeAcessar(usuario, 'chamados_ativos')) {
+                      setChamadoAbrir(Number(row.chamado_id));
+                      navegar('chamados_ativos');
+                      return true;
+                    }
+                    if (Number(row.executor_bot) === 1) {
+                      setConversaBotId(String(row.id));
+                      return true;
+                    }
+                    if ((row.tipo === 'whatsapp' || row.origem === 'pendencia') && podeAcessar(usuario, 'conversas')) {
+                      pedirConversa({ atividadeId: row.id as string });
+                      return true;
+                    }
+                    if (row.contrato_id && podeAcessar(usuario, 'contratos')) {
+                      navegarRegistro('contratos', row.contrato_id as string);
+                      return true;
+                    }
+                    if (row.negocio_id && podeAcessar(usuario, 'negocios')) {
+                      navegarRegistro('negocios', row.negocio_id as string);
+                      return true;
+                    }
+                    return false;
+                  }
+                : undefined
+            }
+            colunaInicial={
+              activeResource.name === 'atividades'
+                ? {
+                    titulo: 'Concluir',
+                    render: (row, { recarregar }) => (
+                      <BotaoConcluirRapido registro={row} onFeito={() => (showToast('Atividade concluída.'), recarregar())} />
+                    ),
+                  }
+                : undefined
+            }
+            acoesLinha={
+              activeResource.name === 'propostas' || activeResource.name === 'pedidos'
+                ? (row, { abrir, recarregar }) => (
+                    <>
+                      <BotaoImprimir
+                        tipo={activeResource.name as 'propostas' | 'pedidos'}
+                        registro={row}
+                        onToast={showToast}
+                      />
+                      <BotaoEnviar
+                        tipo={activeResource.name as 'propostas' | 'pedidos'}
+                        registro={row}
+                        onRecarregar={recarregar}
+                        onToast={showToast}
+                      />
+                      {activeResource.name === 'propostas' && <BotaoLinkAceite registro={row} onToast={showToast} />}
+                      {activeResource.name === 'propostas' && (
+                        <BotaoNovaVersao registro={row} onAbrir={abrir} onRecarregar={recarregar} onToast={showToast} />
+                      )}
+                      {activeResource.name === 'propostas' && row.status === 'aceita' && (
+                        <BotaoGerarContrato registro={row} onAbrirContratos={() => navegar('contratos')} onToast={showToast} />
+                      )}
+                      {/* TEMPORÁRIO (testes): Reverter, só para o administrador */}
+                      {activeResource.name === 'propostas' && usuario?.tipo === 'admin' && (row.status === 'aceita' || row.status === 'recusada') && (
+                        <BotaoReverter registro={row} onRecarregar={recarregar} onToast={showToast} />
+                      )}
+                      <BotaoClonar
+                        tipo={activeResource.name as 'propostas' | 'pedidos'}
+                        registro={row}
+                        onAbrir={abrir}
+                        onRecarregar={recarregar}
+                        onToast={showToast}
+                      />
+                    </>
+                  )
+                : activeResource.name === 'produtos'
+                  ? (row, { abrir, recarregar }) => <BotaoClonar tipo="produtos" registro={row} onAbrir={abrir} onRecarregar={recarregar} onToast={showToast} />
+                : activeResource.name === 'contratos'
+                  ? (row, { recarregar }) => <ContratoDocumentos registro={row} onRecarregar={recarregar} onToast={showToast} />
+                : activeResource.name === 'campanhas'
+                  ? (row, { recarregar }) => <AcaoCampanha registro={row} onRecarregar={recarregar} onToast={showToast} />
+                  : activeResource.name === 'pessoas'
+                    ? (row) => <BotaoWhatsApp temNumero={Boolean(row.whatsapp || row.telefone)} onAbrir={() => pedirConversa({ pessoaId: row.id as string })} />
+                    : activeResource.name === 'usuarios'
+                      ? (row, { recarregar }) => <BotaoPermissoes usuario={row} resources={resources} onRecarregar={recarregar} onToast={showToast} />
+                      : activeResource.name === 'chamados'
+                        ? (row) => (
+                            // Consulta de Chamados: abre o chamado em Chamados Ativos (onde ele é atendido)
+                            <BotaoAcao
+                              icone={Headset}
+                              titulo="Abrir"
+                              descricao="Abre o chamado em Chamados Ativos"
+                              onClick={() => {
+                                setChamadoAbrir(Number(row.id));
+                                navegar('chamados_ativos');
+                              }}
+                            />
+                          )
+                      : activeResource.name === 'atividades'
+                        ? (row, { recarregar }) => {
+                            const pendente = !Number(row.concluida);
+                            // Menu "...": Concluir (pendente), Conversa do Bot, Registrar retorno (ligação da pesquisa), Gerar OS; Editar e Excluir vêm depois
+                            return (
+                              <>
+                                {pendente && <AcaoConcluir registro={row} onFeito={() => (showToast('Atividade concluída.'), recarregar())} />}
+                                {Number(row.executor_bot) === 1 && <AcaoConversaBot atividadeId={row.id as string} />}
+                                {pendente && row.origem === 'pesquisa' && row.tipo === 'ligacao' && (
+                                  <AcaoRetornoLigacao atividadeId={row.id as string} onGravado={() => (showToast('Retorno registrado.'), recarregar())} />
+                                )}
+                                {podeAcessar(usuario, 'ordens_servico') && (
+                                  <AcaoGerarOS
+                                    registro={row}
+                                    onGerada={(os) => {
+                                      showToast(`OS nº ${os.numero} gerada.`);
+                                      navegarRegistro('ordens_servico', os.id);
+                                    }}
+                                  />
+                                )}
+                              </>
+                            );
+                          }
+                        : activeResource.name === 'ordens_servico'
+                          ? (row, { recarregar }) => (
+                              <>
+                                <BotaoAcao
+                                  icone={Printer}
+                                  titulo="Imprimir"
+                                  descricao="Abre a OS numa aba para imprimir: o técnico leva, anota o que fez e o cliente assina"
+                                  onClick={() => imprimirOS(row.id as string, showToast)}
+                                />
+                                <AcaoEncerrarOS registro={row} onFeito={() => (showToast('OS encerrada.'), recarregar())} />
+                              </>
+                            )
+                        : undefined
+            }
+            acoesDetalhe={(recurso, row, { recarregar }) =>
+              recurso === 'pessoas_contatos' ? (
+                <BotaoWhatsApp temNumero={Boolean(row.whatsapp || row.celular || row.telefone)} onAbrir={() => pedirConversa({ contatoId: row.id as string })} />
+              ) : recurso === 'campanha_disparos' ? (
+                <>
+                  <BotaoEnviarDisparo registro={row} onEnviado={recarregar} onToast={showToast} />
+                  {row.canal === 'whatsapp' && (
+                    <BotaoWhatsApp temNumero={Boolean(row.destino)} titulo="Ver conversa" onAbrir={() => pedirConversa({ telefone: row.destino as string })} />
+                  )}
+                </>
+              ) : null
+            }
+          />
+          {gerarOSDe && (
+            <ConfirmarGerarOS
+              registro={gerarOSDe}
+              onFechar={() => setGerarOSDe(null)}
+              onGerada={(os) => {
+                showToast(`OS nº ${os.numero} gerada.`);
+                navegarRegistro('ordens_servico', os.id);
+              }}
+            />
+          )}
+        </main>
+      ) : (
+        <main className="flex-1 overflow-y-auto min-h-0 w-full">
+          <div className="px-4 sm:px-6 lg:px-8 py-6">
+            {activeTab === 'dashboard' ? (
+              <Dashboard data={dashboard} isLoading={isDashboardLoading} error={dashboardError} onNavigate={navegar} />
+            ) : (
+              <div className="py-24 text-center text-sm text-stone-500 dark:text-stone-400">Carregando a estrutura da tela…</div>
+            )}
+          </div>
+        </main>
+      )
+    );
+  };
 
   // Chamados Ativos tem o "Novo" ao lado da pesquisa, não no cabeçalho
 
@@ -554,272 +824,17 @@ export default function App() {
           subtitle={headerSubtitle}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           onRefresh={() => setRefreshToken((t) => t + 1)}
-          onAbrirVisitas={veVisitas ? () => navegar('site_visitas') : undefined}
-          visitaNova={ultimaVisita > visitaVista}
+          sino={<NotificacoesSino onAbrir={abrirNotificacao} />}
           favoritos={itensFavoritos}
           onAbrirFavorito={navegar}
           activeTab={activeTab}
         />
 
-        {activeTab === 'kanban' ? (
-          <main className="flex-1 flex flex-col min-h-0 w-full">
-            <Kanban
-              resourceNegocios={resourceNegocios}
-              refreshToken={refreshToken}
-              onToast={showToast}
-              onConversar={pedirConversa}
-            />
-          </main>
-        ) : activeTab === 'conversas' ? (
-          <main className="flex-1 flex flex-col min-h-0 w-full">
-            <ConversasView refreshToken={refreshToken} onVisto={atualizarNaoVistas} pedido={pedidoConversa} onToast={showToast} onVoltarFila={() => navegar('chamados_fila')} />
-          </main>
-        ) : activeTab === 'chamados_fila' ? (
-          <main className="flex-1 flex flex-col min-h-0 w-full">
-            <ChamadosFila
-              refreshToken={refreshToken}
-              onMudou={atualizarFilaChamados}
-              onAbrir={(id) => {
-                setChamadoAbrir(id);
-                navegar('chamados_ativos');
-              }}
-              onToast={showToast}
-              onConversa={(telefone) => {
-                atualizarNaoVistas();
-                pedirConversa({ telefone });
-              }}
-            />
-          </main>
-        ) : activeTab === 'chamados_ativos' ? (
-          <main className="flex-1 flex flex-col min-h-0 w-full">
-            <ChamadosAtivos
-              refreshToken={refreshToken}
-              abrir={chamadoAbrir}
-              onMudou={atualizarFilaChamados}
-              onConversar={(pessoaId) => pedirConversa({ pessoaId })}
-              onToast={showToast}
-              onVoltarFila={() => {
-                setChamadoAbrir(null);
-                navegar('chamados_fila');
-              }}
-            />
-          </main>
-        ) : activeTab === 'painel_suporte' ? (
-          <main className="flex-1 overflow-y-auto min-h-0 w-full">
-            <div className="px-4 sm:px-6 lg:px-8 py-6">
-              <PainelSuporte refreshToken={refreshToken} onNavigate={navegar} onNavigateFiltrado={navegarFiltrado} />
-            </div>
-          </main>
-        ) : activeTab === 'pesquisas_satisfacao' ? (
-          <main className="flex-1 flex flex-col min-h-0 w-full">
-            <PesquisasSatisfacao refreshToken={refreshToken} onToast={showToast} />
-          </main>
-        ) : activeTab === 'prospeccao' ? (
-          <main className="flex-1 flex flex-col min-h-0 w-full">
-            <Prospeccao onToast={showToast} onVerLeads={(id) => navegarFiltrado('pessoas', [{ field: 'prospeccao_busca_id', op: 'eq', value: id }])} />
-          </main>
-        ) : activeTab === 'configuracoes' ? (
-          <main className="flex-1 flex flex-col min-h-0 w-full">
-            <ConfiguracoesView usuario={usuario} onToast={showToast} />
-          </main>
-        ) : activeResource ? (
-          <main className="flex-1 flex flex-col min-h-0 w-full">
-            <CrudView
-              key={activeResource.name}
-              resource={activeResource}
-              allResources={resources}
-              refreshToken={refreshToken}
-              onToast={showToast}
-              onCountChange={handleCountChange}
-              onNavigate={navegar}
-              usuario={usuario}
-              filtrosIniciais={filtroInicial?.tela === activeResource.name ? filtroInicial : null}
-              registroInicial={registroInicial?.tela === activeResource.name ? registroInicial : null}
-              renderEditor={renderEditor(activeResource.name)}
-              acoesLista={
-                activeResource.name === 'pessoas'
-                  ? (recarregar) => (
-                      <>
-                        <BotaoImportarArquivo onImportado={recarregar} />
-                        <BotaoImportarBM tipo="pessoas" onImportado={recarregar} />
-                      </>
-                    )
-                  : activeResource.name === 'produtos'
-                    ? (recarregar) => <BotaoImportarBM tipo="produtos" onImportado={recarregar} />
-                    : undefined
-              }
-              acoesEmMenu={['propostas', 'pedidos', 'campanhas', 'atividades', 'ordens_servico'].includes(activeResource.name)}
-              onGerarOS={activeResource.name === 'atividades' && podeAcessar(usuario, 'ordens_servico') ? setGerarOSDe : undefined}
-              aoDuploClique={
-                activeResource.name === 'atividades'
-                  ? (row) => {
-                      // Abre a rotina que gerou a atividade: chamado, conversa do Bot, conversa do WhatsApp, contrato
-                      // ou negócio (Retorno Envio e as manuais); sem nenhum deles, abre a edição
-                      if (row.chamado_id && podeAcessar(usuario, 'chamados_ativos')) {
-                        setChamadoAbrir(Number(row.chamado_id));
-                        navegar('chamados_ativos');
-                        return true;
-                      }
-                      if (Number(row.executor_bot) === 1) {
-                        setConversaBotId(String(row.id));
-                        return true;
-                      }
-                      if ((row.tipo === 'whatsapp' || row.origem === 'pendencia') && podeAcessar(usuario, 'conversas')) {
-                        pedirConversa({ atividadeId: row.id as string });
-                        return true;
-                      }
-                      if (row.contrato_id && podeAcessar(usuario, 'contratos')) {
-                        navegarRegistro('contratos', row.contrato_id as string);
-                        return true;
-                      }
-                      if (row.negocio_id && podeAcessar(usuario, 'negocios')) {
-                        navegarRegistro('negocios', row.negocio_id as string);
-                        return true;
-                      }
-                      return false;
-                    }
-                  : undefined
-              }
-              colunaInicial={
-                activeResource.name === 'atividades'
-                  ? {
-                      titulo: 'Concluir',
-                      render: (row, { recarregar }) => (
-                        <BotaoConcluirRapido registro={row} onFeito={() => (showToast('Atividade concluída.'), recarregar())} />
-                      ),
-                    }
-                  : undefined
-              }
-              acoesLinha={
-                activeResource.name === 'propostas' || activeResource.name === 'pedidos'
-                  ? (row, { abrir, recarregar }) => (
-                      <>
-                        <BotaoImprimir
-                          tipo={activeResource.name as 'propostas' | 'pedidos'}
-                          registro={row}
-                          onToast={showToast}
-                        />
-                        <BotaoEnviar
-                          tipo={activeResource.name as 'propostas' | 'pedidos'}
-                          registro={row}
-                          onRecarregar={recarregar}
-                          onToast={showToast}
-                        />
-                        {activeResource.name === 'propostas' && <BotaoLinkAceite registro={row} onToast={showToast} />}
-                        {activeResource.name === 'propostas' && (
-                          <BotaoNovaVersao registro={row} onAbrir={abrir} onRecarregar={recarregar} onToast={showToast} />
-                        )}
-                        {activeResource.name === 'propostas' && row.status === 'aceita' && (
-                          <BotaoGerarContrato registro={row} onAbrirContratos={() => navegar('contratos')} onToast={showToast} />
-                        )}
-                        {/* TEMPORÁRIO (testes): Reverter, só para o administrador */}
-                        {activeResource.name === 'propostas' && usuario?.tipo === 'admin' && (row.status === 'aceita' || row.status === 'recusada') && (
-                          <BotaoReverter registro={row} onRecarregar={recarregar} onToast={showToast} />
-                        )}
-                        <BotaoClonar
-                          tipo={activeResource.name as 'propostas' | 'pedidos'}
-                          registro={row}
-                          onAbrir={abrir}
-                          onRecarregar={recarregar}
-                          onToast={showToast}
-                        />
-                      </>
-                    )
-                  : activeResource.name === 'produtos'
-                    ? (row, { abrir, recarregar }) => <BotaoClonar tipo="produtos" registro={row} onAbrir={abrir} onRecarregar={recarregar} onToast={showToast} />
-                  : activeResource.name === 'contratos'
-                    ? (row, { recarregar }) => <ContratoDocumentos registro={row} onRecarregar={recarregar} onToast={showToast} />
-                  : activeResource.name === 'campanhas'
-                    ? (row, { recarregar }) => <AcaoCampanha registro={row} onRecarregar={recarregar} onToast={showToast} />
-                    : activeResource.name === 'pessoas'
-                      ? (row) => <BotaoWhatsApp temNumero={Boolean(row.whatsapp || row.telefone)} onAbrir={() => pedirConversa({ pessoaId: row.id as string })} />
-                      : activeResource.name === 'usuarios'
-                        ? (row, { recarregar }) => <BotaoPermissoes usuario={row} resources={resources} onRecarregar={recarregar} onToast={showToast} />
-                        : activeResource.name === 'chamados'
-                          ? (row) => (
-                              // Consulta de Chamados: abre o chamado em Chamados Ativos (onde ele é atendido)
-                              <BotaoAcao
-                                icone={Headset}
-                                titulo="Abrir"
-                                descricao="Abre o chamado em Chamados Ativos"
-                                onClick={() => {
-                                  setChamadoAbrir(Number(row.id));
-                                  navegar('chamados_ativos');
-                                }}
-                              />
-                            )
-                        : activeResource.name === 'atividades'
-                          ? (row, { recarregar }) => {
-                              const pendente = !Number(row.concluida);
-                              // Menu "...": Concluir (pendente), Conversa do Bot, Registrar retorno (ligação da pesquisa), Gerar OS; Editar e Excluir vêm depois
-                              return (
-                                <>
-                                  {pendente && <AcaoConcluir registro={row} onFeito={() => (showToast('Atividade concluída.'), recarregar())} />}
-                                  {Number(row.executor_bot) === 1 && <AcaoConversaBot atividadeId={row.id as string} />}
-                                  {pendente && row.origem === 'pesquisa' && row.tipo === 'ligacao' && (
-                                    <AcaoRetornoLigacao atividadeId={row.id as string} onGravado={() => (showToast('Retorno registrado.'), recarregar())} />
-                                  )}
-                                  {podeAcessar(usuario, 'ordens_servico') && (
-                                    <AcaoGerarOS
-                                      registro={row}
-                                      onGerada={(os) => {
-                                        showToast(`OS nº ${os.numero} gerada.`);
-                                        navegarRegistro('ordens_servico', os.id);
-                                      }}
-                                    />
-                                  )}
-                                </>
-                              );
-                            }
-                          : activeResource.name === 'ordens_servico'
-                            ? (row, { recarregar }) => (
-                                <>
-                                  <BotaoAcao
-                                    icone={Printer}
-                                    titulo="Imprimir"
-                                    descricao="Abre a OS numa aba para imprimir: o técnico leva, anota o que fez e o cliente assina"
-                                    onClick={() => imprimirOS(row.id as string, showToast)}
-                                  />
-                                  <AcaoEncerrarOS registro={row} onFeito={() => (showToast('OS encerrada.'), recarregar())} />
-                                </>
-                              )
-                          : undefined
-              }
-              acoesDetalhe={(recurso, row, { recarregar }) =>
-                recurso === 'pessoas_contatos' ? (
-                  <BotaoWhatsApp temNumero={Boolean(row.whatsapp || row.celular || row.telefone)} onAbrir={() => pedirConversa({ contatoId: row.id as string })} />
-                ) : recurso === 'campanha_disparos' ? (
-                  <>
-                    <BotaoEnviarDisparo registro={row} onEnviado={recarregar} onToast={showToast} />
-                    {row.canal === 'whatsapp' && (
-                      <BotaoWhatsApp temNumero={Boolean(row.destino)} titulo="Ver conversa" onAbrir={() => pedirConversa({ telefone: row.destino as string })} />
-                    )}
-                  </>
-                ) : null
-              }
-            />
-            {gerarOSDe && (
-              <ConfirmarGerarOS
-                registro={gerarOSDe}
-                onFechar={() => setGerarOSDe(null)}
-                onGerada={(os) => {
-                  showToast(`OS nº ${os.numero} gerada.`);
-                  navegarRegistro('ordens_servico', os.id);
-                }}
-              />
-            )}
-          </main>
-        ) : (
-          <main className="flex-1 overflow-y-auto min-h-0 w-full">
-            <div className="px-4 sm:px-6 lg:px-8 py-6">
-              {activeTab === 'dashboard' ? (
-                <Dashboard data={dashboard} isLoading={isDashboardLoading} error={dashboardError} onNavigate={navegar} />
-              ) : (
-                <div className="py-24 text-center text-sm text-stone-500 dark:text-stone-400">Carregando a estrutura da tela…</div>
-              )}
-            </div>
-          </main>
-        )}
+        {telasMontadas.map((t) => (
+          <div key={t} className={t === activeTab ? 'flex-1 flex flex-col min-h-0 min-w-0' : 'hidden'}>
+            {conteudoTela(t)}
+          </div>
+        ))}
       </div>
     </div>
   );

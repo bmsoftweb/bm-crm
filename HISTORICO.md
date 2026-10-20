@@ -2,6 +2,17 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.165 — 2026-10-20
+
+- Marketing › Vendas (tabela vendas_produtos, uma linha por produto de cada NF): lista com o Cliente do CRM pelo CNPJ/CPF, cancelada, vendedor. "Importar BM" com aba "SQL do BM" (editar, Testar com todos os campos, Gravar, Restaurar padrão; marcadores :ultimo, :data_de, :data_ate) e "Campos importados" editáveis; reimportar o período substitui as vendas do BM. "Importar" de arquivo como o de Pessoas (código "ARQ-", reimportar substitui a mesma NF). Campos novos do vendedor (ven_cod_integracao, ven_nome; no BM, NFMESTRE.ID_Vendedor e VENDEDORES.Nome).
+- Importação de dados (BM e arquivo, em Pessoas, Produtos e Vendas): só gerente e administrador; os botões somem para os outros perfis e o servidor recusa.
+- Listas: rodapé "Página X de Y (N registros)".
+- Configurações › IA: aba própria para a IA (provedor, modelo, chave, Testar), usada pelo chatbot, pela automação, pelas campanhas e pelas Consultas.
+- Campanhas: público "Selecionar com IA" (o pedido em português vira SQL, conferido e rodado só leitura); o SQL pode ser editado, vem formatado (botão Formatar) e o botão "Raw" mostra o comando executado no último Testar. Critérios por campos personalizados de Pessoas (texto, lista, número, data como "dias desde", sim/não).
+- Notificações: a campainha do cabeçalho mostra as notificações do usuário (não lidas em número; lida/não lida, todas lidas, só não lidas), e o clique abre a tela certa. Avisos: visita no site, chamado novo na fila, chamado ou conversa transferido para o usuário, tarefa criada pelas automações e avaliação com nota baixa. Em Usuários › Permissões dá para desligar visita no site e chamado na fila; os demais são obrigatórios.
+- Telas: sair e voltar mantém a tela como estava (formulário em edição, filtros, rolagem); até 8 telas abertas.
+- Marketing › Consultas: chat com os dados. A IA monta a consulta (isolada na empresa, só leitura) e responde com a frase e a tabela; gráfico de barras, linha ou pizza só quando pedido; botão Imprimir; perguntas de volta com opções (uma ou várias) quando falta informação; "Ver o SQL" só para o administrador.
+
 ## 0.0.164 — 2026-10-20
 
 - Chat do site (abrir chamado): o celular/WhatsApp precisa ter um DDD que existe no Brasil e não pode ter todos os dígitos iguais (ex.: 11999999999); a tela mostra o motivo e o servidor confere a mesma regra.

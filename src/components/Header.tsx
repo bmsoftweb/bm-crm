@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, RefreshCw, Bell } from 'lucide-react';
+import { Menu, RefreshCw } from 'lucide-react';
 import type { ItemMenu } from '../utils/menu';
 
 interface HeaderProps {
@@ -9,9 +9,8 @@ interface HeaderProps {
   subtitle: string;
   onOpenMobileSidebar: () => void;
   onRefresh?: () => void;
-  /** Sino das visitas ao site: abre Visitas do Site; pisca com visita nova ainda não vista */
-  onAbrirVisitas?: () => void;
-  visitaNova?: boolean;
+  /** Campainha das notificações (NotificacoesSino): sempre o 1º botão */
+  sino?: React.ReactNode;
   /** Opções favoritas do menu: só o ícone, depois do sino */
   favoritos?: ItemMenu[];
   onAbrirFavorito?: (id: string) => void;
@@ -24,8 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   subtitle,
   onOpenMobileSidebar,
   onRefresh,
-  onAbrirVisitas,
-  visitaNova,
+  sino,
   favoritos = [],
   onAbrirFavorito,
   activeTab,
@@ -59,22 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Ações à direita */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-          {/* Campainha (visitas do site): sempre o 1º botão */}
-          {onAbrirVisitas && (
-            <button
-              id="btn-visitas-site"
-              onClick={onAbrirVisitas}
-              title={visitaNova ? 'Alguém entrou no site: ver em Visitas do Site' : 'Visitas do Site'}
-              className={`relative p-2 rounded-xl border transition-colors cursor-pointer ${
-                visitaNova
-                  ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 animate-pulse'
-                  : 'border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800'
-              }`}
-            >
-              <Bell className="w-4 h-4" />
-              {visitaNova && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500" />}
-            </button>
-          )}
+          {sino}
 
           {favoritos.map(({ id, label, icone: Icone }) => (
             <button

@@ -232,31 +232,9 @@ export function sugerirDePara(cabecalho: string[], campos: { campo: string; rotu
   return out;
 }
 
-/** "1.234,56", "1,234.56", "1234.56" ou "1.500" (milhar) → "1234.56" / "1500"; null se não for número */
-export function lerNumero(texto: string): string | null {
-  let s = texto.replace(/[\sR$%]/g, '');
-  if (!s) return null;
-  const virgula = s.lastIndexOf(',');
-  const ponto = s.lastIndexOf('.');
-  if (virgula >= 0 && ponto >= 0) s = virgula > ponto ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
-  else if (virgula >= 0) s = s.replace(/\./g, '').replace(',', '.');
-  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
-  return /^-?\d+(\.\d+)?$/.test(s) ? String(Number(s)) : null;
-}
-
-/** dd/mm/aaaa, dd/mm/aa, dd-mm-aaaa ou aaaa-mm-dd → aaaa-mm-dd; null se inválida */
-export function lerData(texto: string): string | null {
-  const s = texto.trim().split(/[ T]/)[0];
-  let d: number, m: number, a: number;
-  let r = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
-  if (r) [d, m, a] = [Number(r[1]), Number(r[2]), Number(r[3])];
-  else if ((r = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [a, m, d] = [Number(r[1]), Number(r[2]), Number(r[3])];
-  else return null;
-  if (a < 100) a += a < 50 ? 2000 : 1900;
-  const dt = new Date(a, m - 1, d);
-  if (dt.getFullYear() !== a || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
-  return `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
+// lerNumero e lerData ficam em formatters.ts (o servidor também usa: este arquivo carrega Excel/PDF)
+import { lerData, lerNumero } from './formatters';
+export { lerData, lerNumero };
 
 /**
  * Texto do arquivo no formato que o cadastro grava para o campo personalizado.

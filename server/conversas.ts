@@ -6,6 +6,7 @@ import { lerConfig } from './config.js';
 import { atendimentoAtual, encerrarAtendimento, marcarEncerramento, marcarEvento, minutosDevolver, minutosInatividade, mudarAtendimento } from './chatbot.js';
 import { jornadaAtende, lerJornadaConfig } from './jornada.js';
 import { podeAcessar } from './permissoes.js';
+import { notificar } from './notificacoes.js';
 
 /** Mensagem privada: vê quem é do departamento dela ou o administrador; sem departamento, todos */
 function podeVerPrivada(res: Response, departamentoId: unknown): boolean {
@@ -398,6 +399,12 @@ export function createConversasRouter(): Router {
           [u[0].id, emp, telefone],
         );
         await marcarEvento(emp, telefone, `${TRANSFERIDO_PARA}${u[0].nome} por ${eu}`, res.locals.usuarioId);
+        await notificar(emp, { usuarios: [u[0].id], exceto: res.locals.usuarioId }, {
+          tipo: 'transferencia',
+          titulo: 'Conversa do WhatsApp transferida para você',
+          texto: `${telefone} — por ${eu}`,
+          link: `conversas|${telefone}`,
+        });
       } else if (departamentoId) {
         const [d] = await pool.query<any[]>('SELECT id, nome FROM departamentos WHERE id = ? AND empresa_id = ?', [departamentoId, emp]);
         if (!d[0]) return res.status(400).json({ error: 'Departamento não encontrado.' });
@@ -407,6 +414,12 @@ export function createConversasRouter(): Router {
           [d[0].id, emp, telefone],
         );
         await marcarEvento(emp, telefone, `${TRANSFERIDO_PARA}${d[0].nome} por ${eu}`, res.locals.usuarioId);
+        await notificar(emp, { departamentoId: d[0].id, exceto: res.locals.usuarioId }, {
+          tipo: 'transferencia',
+          titulo: `Conversa do WhatsApp transferida para o ${d[0].nome}`,
+          texto: `${telefone} — por ${eu}`,
+          link: `conversas|${telefone}`,
+        });
       } else {
         return res.status(400).json({ error: 'Escolha um atendente ou um departamento.' });
       }

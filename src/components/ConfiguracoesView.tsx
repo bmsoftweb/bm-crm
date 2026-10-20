@@ -5,6 +5,7 @@ import { ConfigEmail } from './ConfigEmail';
 import { ConfigWhatsApp } from './ConfigWhatsApp';
 import { ConfigAutomaticas } from './ConfigAutomaticas';
 import { ConfigChatbot } from './ConfigChatbot';
+import { ConfigIA } from './ConfigIA';
 import { ConfigPesquisa } from './ConfigPesquisa';
 import { ConfigJornada } from './ConfigJornada';
 import { ConfigVendas } from './ConfigVendas';
@@ -35,9 +36,14 @@ const ABAS = [
     descricao: 'Provedor usado para enviar propostas e as mensagens das campanhas.',
   },
   {
+    id: 'ia',
+    titulo: 'IA',
+    descricao: 'A IA usada no app (Gemini, Claude ou DeepSeek, com chave e modelo): Automação do WhatsApp, análise das conversas, Bot das atividades e pesquisas.',
+  },
+  {
     id: 'chatbot',
     titulo: 'Chatbot',
-    descricao: 'Nome do assistente e IA usada pela Automação (Gemini, Claude ou DeepSeek, com chave e modelo), tempo para liberar o atendente, revezamento de leads e pesquisa de satisfação.',
+    descricao: 'Nome do assistente, tempo para liberar o atendente, revezamento de leads, análise das conversas e pesquisa de satisfação.',
   },
   {
     id: 'jornada',
@@ -150,6 +156,7 @@ export const ConfiguracoesView: React.FC<Props> = ({ usuario, onToast }) => {
               </section>
             </div>
           )}
+          {aba === 'ia' && <ConfigIA somenteLeitura={somenteLeitura} onToast={onToast} />}
           {aba === 'chatbot' && (
             <>
               <ConfigChatbot somenteLeitura={somenteLeitura} onToast={onToast} />

@@ -4,6 +4,7 @@ import { pool } from './db.js';
 import { exigirAcesso } from './permissoes.js';
 import { antesDeGravar, aposGravar } from './regras.js';
 import { assuntoComIcone } from './schema.js';
+import { notificar } from './notificacoes.js';
 
 /**
  * Ordens de Serviço: o cadastro é o CRUD genérico (schema.ts); aqui fica o que a tela genérica não faz.
@@ -174,6 +175,14 @@ export async function criarOSDaAtividade(atividadeId: string | number, empresaId
     [empresaId, n.n, a.pessoa_id, a.chamado_id, a.executor_id || usuarioId, a.data, a.hora, horaFim, solicitado || 'Atendimento', usuarioId],
   );
   await aposGravar('ordens_servico', String(ins.insertId));
+  // O técnico fica sabendo (quem gerou a OS não precisa de aviso)
+  await notificar(empresaId, { usuarios: [a.executor_id], exceto: usuarioId }, {
+    tipo: 'tarefa',
+    titulo: `OS nº ${n.n} para você`,
+    texto: solicitado || 'Atendimento',
+    link: 'ordens_servico',
+    registroId: Number(ins.insertId),
+  });
   return { id: ins.insertId, numero: n.n };
 }
 

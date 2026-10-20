@@ -327,9 +327,9 @@ export function explicarErro(msg: string): string {
   if (/credit balance/i.test(msg)) return 'os créditos da conta Anthropic (Claude) acabaram. Recarregue em console.anthropic.com › Billing.';
   if (codigo === 402 || /insufficient balance/i.test(msg)) return 'o saldo da conta da IA acabou (DeepSeek: platform.deepseek.com › Top up).';
   if (codigo === 429) return 'limite de uso da IA excedido (cota/tokens da chave). Aguarde ou aumente o plano.';
-  if (codigo === 503 || codigo === 529) return `IA sobrecarregada agora (${codigo}). Se continuar, troque o modelo ou a IA em Configurações › Chatbot.`;
-  if (codigo === 401 || codigo === 403) return 'chave da IA inválida ou sem permissão (Configurações › Chatbot).';
-  if (codigo === 404) return 'modelo da IA não encontrado (Configurações › Chatbot).';
+  if (codigo === 503 || codigo === 529) return `IA sobrecarregada agora (${codigo}). Se continuar, troque o modelo ou a IA em Configurações › IA.`;
+  if (codigo === 401 || codigo === 403) return 'chave da IA inválida ou sem permissão (Configurações › IA).';
+  if (codigo === 404) return 'modelo da IA não encontrado (Configurações › IA).';
   return msg;
 }
 
@@ -570,7 +570,7 @@ export async function registrarLead(ctx: Contexto, a: Record<string, unknown>, o
     vendedorId = v?.id ?? null;
     await aposGravar('negocios', String(negocioId));
   }
-  await pool.query(
+  const [atividadeLead] = await pool.query<any>(
     `INSERT INTO atividades (empresa_id, negocio_id, pessoa_id, executor_id, assunto, tipo, data_vencimento, hora_vencimento, observacao, lembrete_para, criada_por_bot)
      VALUES (?, ?, ?, ?, ?, 'whatsapp', CURDATE(), CURTIME(), ?, 'nenhum', 1)`,
     [
@@ -584,6 +584,16 @@ ${opcoes.observacao}` : ''}`,
     ],
   );
   await sincronizarNegocio(String(negocioId));
+  if (vendedorId) {
+    const { notificar } = await import('./notificacoes.js');
+    await notificar(emp, { usuarios: [vendedorId] }, {
+      tipo: 'tarefa',
+      titulo: `${opcoes?.assunto ?? 'Lead do WhatsApp'}: ${nome}`,
+      texto: `${empresa ? `${empresa} — ` : ''}procura: ${interesse}`,
+      link: 'atividades',
+      registroId: Number(atividadeLead.insertId),
+    });
+  }
   return { ok: true, vendedor_responsavel: vendedor ?? 'a equipe' };
 }
 

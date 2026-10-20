@@ -248,3 +248,76 @@ export function erroCelular(digitos: string): string | null {
   if (/^(\d)\1{7}$/.test(m[2])) return 'Informe um celular de verdade (o número não pode ter todos os dígitos iguais).';
   return null;
 }
+
+/** "1.234,56", "1,234.56", "1234.56" ou "1.500" (milhar) → "1234.56" / "1500"; null se não for número */
+export function lerNumero(texto: string): string | null {
+  let s = texto.replace(/[\sR$%]/g, '');
+  if (!s) return null;
+  const virgula = s.lastIndexOf(',');
+  const ponto = s.lastIndexOf('.');
+  if (virgula >= 0 && ponto >= 0) s = virgula > ponto ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  else if (virgula >= 0) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  return /^-?\d+(\.\d+)?$/.test(s) ? String(Number(s)) : null;
+}
+
+/** dd/mm/aaaa, dd/mm/aa, dd-mm-aaaa ou aaaa-mm-dd → aaaa-mm-dd; null se inválida */
+export function lerData(texto: string): string | null {
+  const s = texto.trim().split(/[ T]/)[0];
+  let d: number, m: number, a: number;
+  let r = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
+  if (r) [d, m, a] = [Number(r[1]), Number(r[2]), Number(r[3])];
+  else if ((r = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [a, m, d] = [Number(r[1]), Number(r[2]), Number(r[3])];
+  else return null;
+  if (a < 100) a += a < 50 ? 2000 : 1900;
+  const dt = new Date(a, m - 1, d);
+  if (dt.getFullYear() !== a || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+  return `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+const SQL_QUEBRA = /^(select|from|where|group\s+by|order\s+by|having|limit|union(\s+all)?|(left|right|inner|cross)(\s+outer)?\s+join|join)\b/i;
+const SQL_RECUO = /^(and|or|on)\b/i;
+
+/**
+ * Formata um SELECT para leitura (Campanhas › Selecionar com IA): uma cláusula por linha, AND/OR/ON recuados e as
+ * subconsultas mais recuadas. Textos entre aspas ficam como estão.
+ */
+export function formatarSql(sql: string): string {
+  let out = '';
+  let nivel = 0;
+  const pular = (texto: string, recuo: number) => {
+    out = out.trimEnd();
+    if (out) out += '\n' + '  '.repeat(recuo);
+    out += texto.toUpperCase().replace(/\s+/g, ' ');
+  };
+  for (let i = 0; i < sql.length; ) {
+    const ch = sql[i];
+    if (ch === "'") {
+      let j = i + 1;
+      while (j < sql.length && !(sql[j] === "'" && sql[j + 1] !== "'")) j += sql[j] === "'" ? 2 : 1;
+      out += sql.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      if (out && !/\s$/.test(out)) out += ' ';
+      i++;
+      continue;
+    }
+    const inicioPalavra = i === 0 || !/[\w.]/.test(sql[i - 1]);
+    const resto = sql.slice(i, i + 30);
+    const q = inicioPalavra && SQL_QUEBRA.exec(resto);
+    const r = !q && inicioPalavra && SQL_RECUO.exec(resto);
+    if (q || r) {
+      const m = (q || r) as RegExpExecArray;
+      pular(m[0], nivel * 2 + (r ? 1 : 0));
+      i += m[0].length;
+      continue;
+    }
+    if (ch === '(') nivel++;
+    if (ch === ')') nivel = Math.max(0, nivel - 1);
+    out += ch;
+    i++;
+  }
+  return out.trim();
+}

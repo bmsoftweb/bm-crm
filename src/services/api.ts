@@ -288,7 +288,8 @@ export function invalidateOptions(resource?: string) {
 // Importação do bmsoft (bmAPI)
 // ------------------------------------------------------------
 /** Importa do bmsoft para o CRM (PESSOAS ou PRODUTOSPRINCIPAL), casando o ID com cod_integracao */
-export function importarBM(tipo: 'pessoas' | 'produtos'): Promise<{
+/** Vendas: o período das notas (aaaa-mm-dd) vai no corpo */
+export function importarBM(tipo: 'pessoas' | 'produtos' | 'vendas', periodo?: { de: string; ate: string }): Promise<{
   servidor: string;
   lidos: number;
   inseridos: number;
@@ -300,11 +301,21 @@ export function importarBM(tipo: 'pessoas' | 'produtos'): Promise<{
   inativas?: number;
   /** Pessoas: endereços do bmsoft incluídos e atualizados */
   enderecos?: { incluidos: number; atualizados: number };
+  /** Vendas: notas lidas e linhas do período que foram substituídas */
+  notas?: number;
+  substituidas?: number;
 }> {
-  return enviar('POST', `/api/import-bm/${tipo}`);
+  return enviar('POST', `/api/import-bm/${tipo}`, periodo);
 }
 
 /** Importação de pessoas de arquivo: linhas já no formato dos campos do CRM, em lotes */
+/** Vendas de um arquivo (lote); "desde" vem da resposta do 1º lote e vai nos seguintes */
+export const importarVendasArquivo = (
+  linhas: Record<string, any>[],
+  padrao: Record<string, any>,
+  desde?: number,
+): Promise<{ inseridos: number; semData: number; substituidas: number; desde: number }> => enviar('POST', '/api/importar/vendas', { linhas, padrao, desde });
+
 export function importarPessoasArquivo(
   linhas: Record<string, any>[],
   opcoes: { atualizar: boolean; criarSegmentos: boolean; padrao: Record<string, any> },
@@ -348,6 +359,35 @@ export interface CredencialBM {
   erro?: string;
 }
 export const credencialBM = (): Promise<CredencialBM> => get('/api/import-bm/credencial');
+
+/** SQL das vendas no BM (config integracoes/sql-vendas): o gravado ou o padrão, e as colunas esperadas */
+export interface ConfigVendasBM {
+  sql: string;
+  padrao: boolean;
+  /** Campo de vendas_produtos → coluna(s) do SQL (várias separadas por vírgula: a primeira preenchida) */
+  mapa: Record<string, string>;
+  mapaPadrao: boolean;
+}
+export const fetchSqlVendasBM = (): Promise<
+  ConfigVendasBM & { colunas: string[]; destinos: { campo: string; rotulo: string }[]; mapaOriginal: Record<string, string> }
+> => get('/api/import-bm/vendas/sql');
+/** Grava de onde vem cada campo das vendas (administrador); null volta ao padrão */
+export const gravarMapaVendasBM = (mapa: Record<string, string> | null): Promise<ConfigVendasBM> => enviar('PUT', '/api/import-bm/vendas/mapa', { mapa });
+/** Grava o SQL das vendas (administrador); em branco volta ao padrão */
+export const gravarSqlVendasBM = (sql: string): Promise<ConfigVendasBM> => enviar('PUT', '/api/import-bm/vendas/sql', { sql });
+export interface TesteSqlVendas {
+  servidor: string;
+  segundos: number;
+  quantidade: number;
+  pagina: number;
+  colunas: string[];
+  faltando: string[];
+  obrigatoriasFaltando: string[];
+  exemplos: Record<string, any>[];
+}
+/** Testa o SQL da tela (sem gravar): primeira página no BM, nada entra no CRM */
+export const testarSqlVendasBM = (sql: string, de: string, ate: string, mapa?: Record<string, string>): Promise<TesteSqlVendas> =>
+  enviar('POST', '/api/import-bm/vendas/testar', { sql, de, ate, mapa });
 /** Servidor da bmAPI dono do token digitado (sem gravar) */
 export const conferirTokenBM = (token: string): Promise<{ servidor: string }> => enviar('POST', '/api/import-bm/credencial/conferir', { token });
 /** Grava o token da bmAPI (o servidor confere de qual servidor ele é) */
@@ -396,6 +436,7 @@ export function fetchCamposPersonalizados(): Promise<CampoPersonalizado[]> {
 /** Chamado ao gravar a configuração, para o formulário já abrir com os campos novos */
 export function invalidarCamposPersonalizados() {
   camposPessoaCache = null;
+  regrasCache = null; // os campos personalizados também são regras dos critérios das campanhas
 }
 
 // ------------------------------------------------------------
@@ -404,15 +445,30 @@ export function invalidarCamposPersonalizados() {
 export interface RegraCriterio {
   regra: string;
   rotulo: string;
-  valor: 'numero' | 'texto' | 'sim_nao' | 'tipo_pessoa' | 'segmento';
+  valor: 'numero' | 'texto' | 'sim_nao' | 'tipo_pessoa' | 'segmento' | 'lista';
+  /** Campo personalizado decimal: casas do valor */
+  casas?: number;
+  /** Campo personalizado de lista: as opções */
+  opcoes?: string[];
 }
 let regrasCache: Promise<RegraCriterio[]> | null = null;
 /** Botão "Testar" dos critérios da campanha: total do público e as 50 primeiras pessoas */
 export interface TesteCriterios {
   total: number;
   pessoas: { id: number; nome: string; tipo: string; cod_integracao: string | null; telefone: string | null; email: string | null; cidade: string | null }[];
+  /** Seleção com IA: o comando que rodou no banco */
+  sqlExecutado?: string;
 }
 export const testarCriterios = (criterios: unknown): Promise<TesteCriterios> => enviar('POST', '/api/campanhas/criterios/testar', { criterios });
+
+/** Campanhas › "Selecionar com IA": a IA monta o SQL do público a partir do pedido (server/selecaoIa.ts) */
+export interface SelecaoIa {
+  modo: 'ia';
+  pedido: string;
+  sql: string;
+  explicacao: string;
+}
+export const gerarSelecaoIa = (pedido: string): Promise<SelecaoIa & { total: number }> => enviar('POST', '/api/campanhas/ia/gerar', { pedido });
 
 export const fetchRegrasCriterio = (): Promise<RegraCriterio[]> =>
   (regrasCache ??= get('/api/campanhas/regras').catch((err: Error) => {
@@ -792,7 +848,7 @@ export const pausarConversa = (telefone: string): Promise<{ success: boolean }> 
 /** Transferir para um atendente ou um departamento */
 export const transferirConversa = (telefone: string, destino: { usuario_id?: number; departamento_id?: number }): Promise<{ success: boolean }> =>
   enviar('POST', `/api/whatsapp/conversas/${encodeURIComponent(telefone)}/transferir`, destino);
-/** Pergunta curta à IA (Gemini, Claude ou DeepSeek) com a chave e o modelo gravados em Configurações › Chatbot */
+/** Pergunta curta à IA (Gemini, Claude ou DeepSeek) com a chave e o modelo gravados em Configurações › IA */
 export const testarChatbot = (): Promise<{ mensagem: string }> => enviar('POST', '/api/config/whatsapp/chatbot/testar');
 
 /** Para quem dá para abrir uma conversa: pessoa, contato ou o número digitado */
@@ -956,6 +1012,51 @@ export type FiltroChamados = 'meus' | 'todos' | 'aguardando' | 'andamento' | 'en
 export const fetchFilaChamados = (): Promise<ChamadoResumo[]> => get('/api/chamados/fila');
 /** Última visita ao site (widget), para o sino do topo */
 export const fetchUltimaVisita = (): Promise<{ id: number; pagina: string; criado_em: string } | null> => get('/api/visitas/ultima');
+
+/** Notificações do usuário logado (campainha do cabeçalho; server/notificacoes.ts) */
+export interface Notificacao {
+  id: number;
+  tipo: string;
+  titulo: string;
+  texto: string | null;
+  /** Tela que abre (id do menu), com o que ela precisa depois de "|" (ex.: "conversas|5547999998888") */
+  link: string | null;
+  registro_id: number | null;
+  lida_em: string | null;
+  criada_em: string;
+}
+export const fetchNotificacoes = (soNaoLidas = false): Promise<{ itens: Notificacao[]; naoLidas: number }> =>
+  get(`/api/notificacoes${soNaoLidas ? '?naoLidas=1' : ''}`);
+export const marcarNotificacaoLida = (id: number, lida = true) => enviar('POST', `/api/notificacoes/${id}/lida`, { lida });
+export const marcarTodasLidas = () => enviar('POST', '/api/notificacoes/lidas');
+
+/** Marketing › Consultas: pergunta em português, a IA responde com SQL e o resultado volta em grade (server/consultas.ts) */
+export interface ResultadoConsulta {
+  colunas: { nome: string; tipo: 'numero' | 'data' | 'datahora' | 'texto' }[];
+  linhas: unknown[][];
+  truncado: boolean;
+  sqlExecutado: string;
+}
+export interface GraficoConsulta {
+  tipo: 'barras' | 'linha' | 'pizza';
+  /** Coluna dos rótulos */
+  x: string;
+  /** Colunas numéricas (séries) */
+  y: string[];
+}
+export interface RespostaConsulta {
+  resposta: string;
+  sql: string;
+  resultado: ResultadoConsulta | null;
+  grafico: GraficoConsulta | null;
+  /** A IA ficou com dúvida: a pergunta vai em "resposta" e as opções aqui */
+  opcoes: { lista: string[]; multipla: boolean } | null;
+}
+export const perguntarConsulta = (pergunta: string, historico: { de: 'pessoa' | 'ia'; texto: string }[]): Promise<RespostaConsulta> =>
+  enviar('POST', '/api/consultas/perguntar', { pergunta, historico });
+/** Tipos de notificação desligados para o usuário (Usuários › Permissões › Notificações) */
+export const fetchNotificacoesDesligadas = (usuarioId: number): Promise<{ desligadas: string[] }> => get(`/api/usuarios/${usuarioId}/notificacoes`);
+export const salvarNotificacoesDesligadas = (usuarioId: number, desligadas: string[]) => enviar('PUT', `/api/usuarios/${usuarioId}/notificacoes`, { desligadas });
 export const fetchContagemChamados = (): Promise<{
   fila: number;
   /** Chamado da fila esperando há mais de 10 minutos (o mais antigo): buzina */

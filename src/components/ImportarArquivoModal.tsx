@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
 import { ArrowLeft, ArrowRight, CheckCircle2, FileSpreadsheet, FileText, FileUp, Loader2, Upload, X } from 'lucide-react';
-import { fetchCamposPersonalizados, importarPessoasArquivo } from '../services/api';
+import { fetchCamposPersonalizados, importarPessoasArquivo, importarVendasArquivo } from '../services/api';
 import { CampoPersonalizado } from '../types';
 import { INPUT_CLASS, LABEL_CLASS, FIELD_CLASS, HINT_CLASS } from '../utils/formStyles';
 import {
@@ -34,6 +34,8 @@ interface CampoImportacao {
   personalizado?: CampoPersonalizado;
   /** Título do bloco no de → para (aparece antes do primeiro campo do grupo) */
   grupo?: string;
+  /** Tipo do valor (vendas): define a entrada do valor padrão */
+  tipo?: 'data' | 'decimal' | 'boolean';
 }
 
 const END = 'Endereço principal';
@@ -54,6 +56,37 @@ const CAMPOS: CampoImportacao[] = [
   { campo: 'end_bairro', rotulo: 'Bairro', grupo: END },
   { campo: 'end_cidade', rotulo: 'Cidade', grupo: END },
   { campo: 'end_uf', rotulo: 'UF', grupo: END, dica: 'Sigla ou nome do estado' },
+];
+
+/** Campos de vendas_produtos que podem vir do arquivo (Marketing › Vendas › Importar) */
+const NF = 'Nota fiscal';
+const CLI = 'Cliente';
+const PRO = 'Produto';
+const VEN = 'Vendedor';
+const CAMPOS_VENDAS: CampoImportacao[] = [
+  { campo: 'nf_data', rotulo: 'Data', obrigatorio: true, grupo: NF, tipo: 'data', dica: 'dd/mm/aaaa' },
+  { campo: 'nf_numero', rotulo: 'Nº da NF', grupo: NF },
+  { campo: 'cod_integracao', rotulo: 'Cód.Integração da NF', grupo: NF, dica: 'Grava "ARQ-<código>"; reimportar substitui as vendas da mesma NF' },
+  { campo: 'nf_cfop', rotulo: 'CFOP', grupo: NF },
+  { campo: 'nf_valor_total', rotulo: 'Total da NF', grupo: NF, tipo: 'decimal' },
+  { campo: 'cancelado', rotulo: 'Cancelado', grupo: NF, tipo: 'boolean', dica: 'S/N, Sim/Não, 1/0 ou X' },
+  { campo: 'cli_cnpj', rotulo: 'CNPJ/CPF', grupo: CLI },
+  { campo: 'cli_nome', rotulo: 'Cliente (NF)', grupo: CLI },
+  { campo: 'cli_cidade', rotulo: 'Cidade', grupo: CLI },
+  { campo: 'cli_bairro', rotulo: 'Bairro', grupo: CLI },
+  { campo: 'cli_uf', rotulo: 'UF', grupo: CLI, dica: 'Sigla ou nome do estado' },
+  { campo: 'ven_nome', rotulo: 'Vendedor', grupo: VEN },
+  { campo: 'ven_cod_integracao', rotulo: 'Cód.Integração do vendedor', grupo: VEN, dica: 'Grava "ARQ-<código>"' },
+  { campo: 'pro_descricao', rotulo: 'Produto', obrigatorio: true, grupo: PRO },
+  { campo: 'pro_cod_integracao', rotulo: 'Cód.Integração do produto', grupo: PRO, dica: 'Grava "ARQ-<código>"' },
+  { campo: 'pro_marca', rotulo: 'Marca', grupo: PRO },
+  { campo: 'pro_classe', rotulo: 'Classe', grupo: PRO },
+  { campo: 'pro_classe_descricao', rotulo: 'Descrição da classe', grupo: PRO },
+  { campo: 'pro_qtdade', rotulo: 'Quantidade', grupo: PRO, tipo: 'decimal' },
+  { campo: 'pro_un', rotulo: 'Un.', grupo: PRO },
+  { campo: 'pro_preco_venda', rotulo: 'Preço de venda', grupo: PRO, tipo: 'decimal' },
+  { campo: 'pro_valor_total', rotulo: 'Total do produto', grupo: PRO, tipo: 'decimal' },
+  { campo: 'pro_custo_unit', rotulo: 'Custo unitário', grupo: PRO, tipo: 'decimal' },
 ];
 
 /** Como o arquivo deve trazer cada tipo de campo personalizado */
@@ -100,6 +133,9 @@ type Etapa = (typeof ETAPAS)[number]['id'];
 
 const LOTE = 1000;
 
+/** Resultado zerado (o das vendas usa: inseridos, atualizados = substituídas, semNome = sem data) */
+const VAZIO = { lidas: 0, inseridos: 0, atualizados: 0, ignorados: 0, semNome: 0, enderecos: 0, segmentosCriados: 0, segmentosNaoEncontrados: [] as string[] };
+
 interface Resultado {
   lidas: number;
   inseridos: number;
@@ -117,7 +153,7 @@ const CampoPadrao: React.FC<{ campo: CampoImportacao; value: string; onChange: (
   value,
   onChange,
 }) => {
-  const tipo = campo.personalizado?.tipo;
+  const tipo = campo.personalizado?.tipo ?? campo.tipo;
   if (tipo === 'lista' || tipo === 'boolean') {
     const opcoes = tipo === 'boolean' ? ['Sim', 'Não'] : campo.personalizado?.opcoes || [];
     return (
@@ -176,6 +212,8 @@ const Previa: React.FC<{ cabecalho: string[]; linhas: string[][]; destaque?: Set
 );
 
 interface Props {
+  /** O que importar: pessoas (Cadastros) ou vendas (Marketing › Vendas, tabela vendas_produtos) */
+  tipo?: 'pessoas' | 'vendas';
   onFechar: () => void;
   onImportado: () => void;
 }
@@ -185,7 +223,8 @@ interface Props {
  * formato conforme o tipo (CSV, Excel ou relatório PDF), ligar as colunas aos campos
  * do CRM e importar.
  */
-export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado }) => {
+export const ImportarArquivoModal: React.FC<Props> = ({ tipo: oQue = 'pessoas', onFechar, onImportado }) => {
+  const vendas = oQue === 'vendas';
   const [etapa, setEtapa] = useState<Etapa>('arquivo');
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -214,6 +253,7 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
   const [personalizados, setPersonalizados] = useState<CampoPersonalizado[]>([]);
 
   useEffect(() => {
+    if (vendas) return;
     fetchCamposPersonalizados()
       .then(setPersonalizados)
       .catch(() => setPersonalizados([]));
@@ -221,7 +261,7 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
 
   /** Campos fixos + os personalizados definidos em Configurações */
   const campos = useMemo<CampoImportacao[]>(
-    () => [
+    () => vendas ? CAMPOS_VENDAS : [
       ...CAMPOS,
       ...personalizados.map((c) => ({
         campo: `p:${c.nome}`,
@@ -231,7 +271,7 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
         grupo: 'Campos personalizados',
       })),
     ],
-    [personalizados],
+    [personalizados, vendas],
   );
   const ligados = useMemo(
     () => campos.filter((c) => dePara[c.campo] >= 0 || padrao[c.campo]?.trim()),
@@ -340,9 +380,11 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
     // Inválidos contados uma vez, como fica a pessoa nova (arquivo + padrão)
     invalidos = 0;
     const previa = dados.map((l) => montar((c) => valorDe(c, l)).exibicao).slice(0, 10);
-    const semNome = padraoEnvio.nome ? 0 : mapeadas.filter((l) => !l.nome).length;
+    // Vendas: a "linha sem nome" é a sem data (fica de fora)
+    const chave = vendas ? 'nf_data' : 'nome';
+    const semNome = padraoEnvio[chave] ? 0 : mapeadas.filter((l) => !l[chave]).length;
     return { mapeadas, previa, invalidos, padraoEnvio, semNome };
-  }, [dados, dePara, padrao, ligados]);
+  }, [dados, dePara, padrao, ligados, vendas]);
 
   const avancar = () => {
     setErro(null);
@@ -361,6 +403,12 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
       return setEtapa('depara');
     }
     if (etapa === 'depara') {
+      if (vendas) {
+        for (const c of CAMPOS_VENDAS.filter((x) => x.obrigatorio)) {
+          if (!(dePara[c.campo] >= 0) && !padrao[c.campo]?.trim()) return setErro(`Escolha a coluna de "${c.rotulo}" ou informe um padrão.`);
+        }
+        return setEtapa('revisao');
+      }
       if (!(dePara.nome >= 0) && !padrao.nome?.trim()) return setErro('Escolha a coluna do Nome ou informe um padrão.');
       return setEtapa('revisao');
     }
@@ -375,6 +423,29 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
   const importar = async () => {
     setImportando(true);
     setErro(null);
+    if (vendas) {
+      const total: Resultado = { ...VAZIO, lidas: mapeadas.length };
+      let desde: number | undefined;
+      try {
+        for (let i = 0; i < mapeadas.length; i += LOTE) {
+          setProgresso(`${Math.min(i + LOTE, mapeadas.length)} de ${mapeadas.length}`);
+          const r = await importarVendasArquivo(mapeadas.slice(i, i + LOTE), padraoEnvio, desde);
+          desde = r.desde;
+          total.inseridos += r.inseridos;
+          total.semNome += r.semData;
+          total.atualizados += r.substituidas;
+        }
+        setResultado(total);
+        onImportado();
+      } catch (err: any) {
+        if (total.inseridos) setResultado(total);
+        setErro(err.message || 'Não foi possível importar as vendas.');
+      } finally {
+        setImportando(false);
+        setProgresso('');
+      }
+      return;
+    }
     const total: Resultado = {
       lidas: mapeadas.length,
       inseridos: 0,
@@ -421,7 +492,7 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
       >
         <div className="px-5 py-4 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">Importar pessoas de arquivo</h3>
+            <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">{vendas ? 'Importar vendas de arquivo' : 'Importar pessoas de arquivo'}</h3>
             <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
               {arquivo ? arquivo.nome : 'Planilha Excel, arquivo CSV/TXT ou relatório em PDF'}
             </p>
@@ -631,8 +702,9 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
                 ))}
               </div>
               <p className={HINT_CLASS}>
-                O padrão completa as pessoas novas quando o campo não tem coluna ou a célula do arquivo está vazia; quem
-                já existe não é alterado pelo padrão. As pessoas importadas entram como "Cliente".
+                {vendas
+                  ? 'O padrão vale para todas as linhas quando o campo não tem coluna ou a célula do arquivo está vazia. A conversão segue o campo: data dd/mm/aaaa, números 1.234,56, CNPJ só com dígitos.'
+                  : 'O padrão completa as pessoas novas quando o campo não tem coluna ou a célula do arquivo está vazia; quem já existe não é alterado pelo padrão. As pessoas importadas entram como "Cliente".'}
               </p>
             </>
           )}
@@ -642,8 +714,8 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
               <div className="grid grid-cols-3 gap-3">
                 {[
                   ['Linhas no arquivo', dados.length],
-                  ['Com nome', dados.length - semNome],
-                  ['Sem nome', semNome],
+                  [vendas ? 'Com data' : 'Com nome', dados.length - semNome],
+                  [vendas ? 'Sem data (ficam de fora)' : 'Sem nome', semNome],
                 ].map(([r, v]) => (
                   <div key={r} className="p-3 bg-stone-50 dark:bg-stone-800/60">
                     <p className={LABEL_CLASS}>{r}</p>
@@ -651,6 +723,15 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
                   </div>
                 ))}
               </div>
+              {vendas ? (
+                <p className={HINT_CLASS}>
+                  {dePara.cod_integracao >= 0 || padrao.cod_integracao?.trim()
+                    ? 'Com o Cód.Integração da NF: as vendas de arquivo das mesmas NFs que já estavam gravadas são substituídas (reimportar não duplica).'
+                    : 'Sem o Cód.Integração da NF: todas as linhas entram como vendas novas (reimportar o mesmo arquivo duplica).'}{' '}
+                  Linhas sem data válida ficam de fora.
+                </p>
+              ) : (
+              <>
               <Toggle
                 checked={atualizar}
                 onChange={setAtualizar}
@@ -667,6 +748,8 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
                     : 'Sem Cód.Integração nem CPF/CNPJ: todas as linhas serão incluídas como pessoas novas.'}{' '}
                 Linhas sem nome só servem para atualizar quem já existe.
               </p>
+              </>
+              )}
               {ligados.some((c) => c.campo === 'segmento') && (
                 <Toggle
                   checked={criarSegmentos}
@@ -695,11 +778,19 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
                   <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
                   <div>
                     <p className="font-semibold">Importação concluída</p>
+                    {vendas ? (
+                      <p className="mt-0.5">
+                        {resultado.lidas} linha(s): {resultado.inseridos} venda(s) gravada(s)
+                        {resultado.atualizados ? `; ${resultado.atualizados} venda(s) das mesmas NFs substituída(s)` : ''}
+                        {resultado.semNome ? `; ${resultado.semNome} sem data ficaram de fora` : ''}.
+                      </p>
+                    ) : (
                     <p className="mt-0.5">
                       {resultado.lidas} linha(s): {resultado.inseridos} incluída(s), {resultado.atualizados} atualizada(s)
                       {resultado.ignorados ? `, ${resultado.ignorados} já existia(m) e não foi(ram) alterada(s)` : ''}
                       {resultado.semNome ? `, ${resultado.semNome} sem nome ignorada(s)` : ''}.
                     </p>
+                    )}
                     {resultado.enderecos > 0 && <p className="mt-0.5">{resultado.enderecos} endereço(s) gravado(s).</p>}
                     {resultado.segmentosCriados > 0 && <p className="mt-0.5">{resultado.segmentosCriados} segmento(s) criado(s).</p>}
                     {resultado.segmentosNaoEncontrados.length > 0 && (
@@ -767,19 +858,19 @@ export const ImportarArquivoModal: React.FC<Props> = ({ onFechar, onImportado })
 };
 
 /** Botão da barra de ferramentas da lista de pessoas */
-export const BotaoImportarArquivo: React.FC<{ onImportado: () => void }> = ({ onImportado }) => {
+export const BotaoImportarArquivo: React.FC<{ onImportado: () => void; tipo?: 'pessoas' | 'vendas' }> = ({ onImportado, tipo = 'pessoas' }) => {
   const [aberto, setAberto] = useState(false);
   return (
     <>
       <button
         onClick={() => setAberto(true)}
-        title="Importar pessoas de planilha Excel, CSV ou relatório PDF"
+        title={`Importar ${tipo === 'vendas' ? 'vendas' : 'pessoas'} de planilha Excel, CSV ou relatório PDF`}
         className="flex items-center gap-1.5 border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shrink-0 whitespace-nowrap"
       >
         <FileUp className="w-3.5 h-3.5" />
         <span>Importar</span>
       </button>
-      {aberto && <ImportarArquivoModal onFechar={() => setAberto(false)} onImportado={onImportado} />}
+      {aberto && <ImportarArquivoModal tipo={tipo} onFechar={() => setAberto(false)} onImportado={onImportado} />}
     </>
   );
 };

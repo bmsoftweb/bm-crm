@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { RESOURCES } from './schema.js';
 
 /**
@@ -40,6 +40,15 @@ export function podeAcessar(usuario: any, id: string): boolean {
   if (usuario.tipo === 'admin') return true;
   const lista = lerPermissoes(usuario.permissoes);
   return !lista || lista.includes(id);
+}
+
+/** Importação de dados (do BM e de arquivo): só gerente e administrador (mesma regra em src/utils/menu.ts) */
+export const podeImportar = (usuario: any): boolean => usuario?.tipo === 'admin' || usuario?.tipo === 'gerente';
+
+/** Middleware das rotas de importação: recusa (403) quem não é gerente nem administrador */
+export function exigirImportador(_req: Request, res: Response, next: NextFunction) {
+  if (podeImportar(res.locals.usuario)) return next();
+  res.status(403).json({ error: 'Somente gerentes importam dados.' });
 }
 
 /** Recusa (403) quem não tem acesso à opção */

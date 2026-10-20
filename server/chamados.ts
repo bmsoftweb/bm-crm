@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from './db.js';
 import { chamarBmdesk } from './bmdesk.js';
 import { podeAcessar } from './permissoes.js';
+import { notificar } from './notificacoes.js';
 import { enviarWhatsApp, telefoneWhatsApp } from './whatsapp.js';
 import { LEMBRETE_PARA, TIPOS_ATIVIDADE } from './schema.js';
 import { gravarEnvolvidosAtividade, normalizarParticipantes } from './participantes.js';
@@ -411,6 +412,15 @@ export function createChamadosRouter(): Router {
     const nome = res.locals.usuario.nome;
     if (atender) await abrirSecao(id, eu(res));
     await evento(id, eu(res), atender ? `Chamado aberto e assumido por ${nome}.` : `Chamado aberto por ${nome}. Aguardando na fila.`);
+    if (!atender) {
+      await notificar(emp(res), { tela: 'chamados_fila', exceto: eu(res) }, {
+        tipo: 'chamado',
+        titulo: `Chamado nº ${numero} na fila`,
+        texto: `${titulo} (aberto por ${nome})`,
+        link: 'chamados_ativos',
+        registroId: id,
+      });
+    }
     res.json({ id, numero });
   }));
 
@@ -450,6 +460,13 @@ export function createChamadosRouter(): Router {
     } else throw erro(400, 'Escolha o usuário ou o departamento de destino.');
     // O aviso fica na seção de quem transferiu; depois ela fecha (e abre a do destino, se for um usuário)
     await evento(c.id, eu(res), obs ? `${texto} Obs.: ${obs}` : texto);
+    await notificar(emp(res), usuarioId ? { usuarios: [usuarioId], exceto: eu(res) } : { departamentoId, exceto: eu(res) }, {
+      tipo: 'transferencia',
+      titulo: usuarioId ? `Chamado nº ${c.numero} transferido para você` : `Chamado nº ${c.numero} transferido para o seu departamento`,
+      texto: `${c.titulo} — por ${res.locals.usuario.nome}${obs ? `. Obs.: ${obs}` : ''}`,
+      link: 'chamados_ativos',
+      registroId: c.id,
+    });
     if (usuarioId) await abrirSecao(c.id, usuarioId);
     else await fecharSecao(c.id, 'transferencia');
     res.json({ success: true });

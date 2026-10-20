@@ -4,6 +4,7 @@ import { aposGravar } from './regras.js';
 import { conversarIa, lerChatbot, marcarEvento, temChave } from './chatbot.js';
 import { gravarMensagem as mensagemChamado } from './chamados.js';
 import { verificarFim } from './atividadeBot.js';
+import { notificar } from './notificacoes.js';
 
 /**
  * Pendências de conversa: quando uma conversa com o cliente termina (atendimento do WhatsApp encerrado, chamado
@@ -148,6 +149,13 @@ Responda só com JSON, sem texto em volta:
       ],
     );
     await aposGravar('atividades', String(ins.insertId));
+    await notificar(f.empresaId, executor ? { usuarios: [executor.id] } : { departamentoId: departamento?.id }, {
+      tipo: 'tarefa',
+      titulo: `Tarefa para você: ${rotulo.toLowerCase()}`,
+      texto: `${descricao} (${f.origem})`,
+      link: 'atividades',
+      registroId: Number(ins.insertId),
+    });
     feitas.push(`${rotulo.toLowerCase()} → tarefa para ${para}`);
   }
   if (feitas.length) await f.anotar(`${MARCA}: ${feitas.join('; ')}`);

@@ -1522,7 +1522,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
       {totalPages > 1 && (
         <div className="px-4 py-2.5 border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950/40 flex items-center justify-between gap-3 shrink-0">
           <span className="text-[11px] text-stone-500 dark:text-stone-400">
-            Página {page} de {totalPages}
+            Página {page} de {totalPages} ({total.toLocaleString('pt-BR')} {total === 1 ? 'registro' : 'registros'})
           </span>
           <div className="flex items-center gap-1.5">
             {/* Primeira, anterior, próxima e última página */}

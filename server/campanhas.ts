@@ -3,6 +3,8 @@ import { pool } from './db.js';
 import { friendlyDbError } from './crud.js';
 import { enviarEmail } from './email.js';
 import { chaveTelefone, enviarWhatsAppCampanha, imagemDaCampanha, telefoneWhatsApp } from './whatsapp.js';
+import { lerConfig } from './config.js';
+import { ehSelecaoIa, gerarSelecaoIa, idsDaSelecaoIa, normalizarSelecaoIa, sqlExecutadoIa, type SelecaoIa } from './selecaoIa.js';
 
 /**
  * Campanhas (tudo numa tabela só): o público vem dos critérios da campanha, a mensagem (com variáveis
@@ -90,6 +92,45 @@ export const REGRAS: Record<string, { rotulo: string; valor: 'numero' | 'texto' 
   },
 };
 
+type Regra = (typeof REGRAS)[string];
+
+/**
+ * Campos personalizados de Pessoas (Configurações › Pessoas) como regra: "pers:<tipo>:<chave>". O tipo vai no nome
+ * da regra, então dá para montar o SQL sem ler a configuração; a chave passa por whitelist de caracteres e o valor
+ * continua indo como parâmetro. Data vira "dias desde" (como as outras regras de data).
+ */
+const RE_PERSONALIZADO = /^pers:(texto|numero|decimal|data|boolean|lista):([a-z0-9_]{1,60})$/;
+
+export function regraDe(nome: string): Regra | undefined {
+  if (Object.prototype.hasOwnProperty.call(REGRAS, nome)) return REGRAS[nome];
+  const m = RE_PERSONALIZADO.exec(nome);
+  if (!m) return undefined;
+  const [, tipo, chave] = m;
+  // JSON null vira o texto 'null' no JSON_UNQUOTE: conta como vazio
+  const v = `NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(NULLIF(p.personalizados, ''), '$."${chave}"')), ''), 'null')`;
+  if (tipo === 'numero' || tipo === 'decimal') return { rotulo: chave, valor: 'numero', sql: `CAST(${v} AS DECIMAL(18,4))` };
+  if (tipo === 'data') return { rotulo: chave, valor: 'numero', sql: `DATEDIFF(CURDATE(), STR_TO_DATE(LEFT(${v}, 10), '%Y-%m-%d'))` };
+  if (tipo === 'boolean') return { rotulo: chave, valor: 'sim_nao', sql: `(COALESCE(${v}, 'false') = 'true')` };
+  return { rotulo: chave, valor: 'texto', sql: v };
+}
+
+/** Regras dos campos personalizados de Pessoas da empresa, para o editor de critérios */
+export async function regrasPersonalizadas(empresaId: string | number) {
+  const campos: any[] = (await lerConfig(String(empresaId), 'pessoas', 'campos_personalizados')) ?? [];
+  return campos
+    .filter((c) => /^[a-z0-9_]{1,60}$/.test(String(c?.nome ?? '')))
+    .map((c) => {
+      const tipo = c.tipo === 'textarea' || !RE_PERSONALIZADO.test(`pers:${c.tipo}:x`) ? 'texto' : c.tipo;
+      return {
+        regra: `pers:${tipo}:${c.nome}`,
+        rotulo: tipo === 'data' ? `Dias desde ${c.rotulo} (personalizado)` : `${c.rotulo} (personalizado)`,
+        valor: tipo === 'numero' || tipo === 'decimal' || tipo === 'data' ? 'numero' : tipo === 'boolean' ? 'sim_nao' : tipo === 'lista' ? 'lista' : 'texto',
+        ...(tipo === 'decimal' ? { casas: 2 } : {}),
+        ...(tipo === 'lista' ? { opcoes: Array.isArray(c.opcoes) ? c.opcoes.map(String) : [] } : {}),
+      };
+    });
+}
+
 export interface Criterio {
   regra: string;
   operador: Operador;
@@ -114,7 +155,7 @@ export function normalizarCriterios(bruto: unknown): Criterio[] {
   if (v.length > 20) throw new Error('São aceitos no máximo 20 critérios por campanha.');
 
   return v.map((c: any, i) => {
-    const regra = REGRAS[String(c?.regra)];
+    const regra = regraDe(String(c?.regra));
     if (!regra) throw new Error(`Critério ${i + 1}: regra "${c?.regra}" não existe.`);
     const operador = String(c?.operador) as Operador;
     if (!OPERADORES.includes(operador)) throw new Error(`Critério ${i + 1}: operador "${c?.operador}" inválido.`);
@@ -139,12 +180,29 @@ export function normalizarCriterios(bruto: unknown): Criterio[] {
   });
 }
 
+/** Critérios gravados na campanha: a lista de critérios ou a seleção com IA (server/selecaoIa.ts) */
+export function normalizarSelecao(bruto: unknown): Criterio[] | SelecaoIa {
+  if (ehSelecaoIa(bruto)) return normalizarSelecaoIa(typeof bruto === 'string' ? JSON.parse(bruto) : bruto);
+  return normalizarCriterios(bruto);
+}
+
+/**
+ * WHERE (sobre a pessoa "p") do público: pelos critérios, ou, na seleção com IA, pela lista de ids que o SQL da IA
+ * devolve (rodado à parte, só leitura: o SQL da IA nunca entra nas outras consultas)
+ */
+export async function filtroPublico(bruto: unknown, empresaId: string | number): Promise<{ where: string; params: any[] }> {
+  const sel = normalizarSelecao(bruto);
+  if (Array.isArray(sel)) return sqlCriterios(sel, empresaId);
+  const ids = await idsDaSelecaoIa(sel.sql, empresaId);
+  return { where: ids.length ? 'p.empresa_id = ? AND p.id IN (?)' : '0 = 1', params: ids.length ? [empresaId, ids] : [] };
+}
+
 /** WHERE (sobre a pessoa "p") que seleciona as pessoas da empresa atendidas pelos critérios */
 export function sqlCriterios(criterios: Criterio[], empresaId: string | number): { where: string; params: any[] } {
   const partes = ['p.empresa_id = ?'];
   const params: any[] = [empresaId];
   for (const c of criterios) {
-    const regra = REGRAS[c.regra];
+    const regra = regraDe(c.regra)!;
     // Texto vazio conta como '': "diferente de X" pega também quem não tem o campo preenchido
     const expr = regra.valor === 'texto' ? `COALESCE(${regra.sql}, '')` : regra.sql;
     if (c.operador === 'contem' || c.operador === 'comeca') {
@@ -215,21 +273,24 @@ const SEM_DESCADASTRADOS = 'AND p.nao_receber_campanhas = 0';
 
 /** Quantas pessoas atendem aos critérios (o "público estimado" da campanha) */
 export async function contarPublico(criterios: unknown, empresaId: string | number, db: Executor = pool): Promise<number> {
-  const { where, params } = sqlCriterios(normalizarCriterios(criterios), empresaId);
+  const { where, params } = await filtroPublico(criterios, empresaId);
   const [r] = await db.query<any[]>(`SELECT COUNT(*) AS n FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS}`, params);
   return Number(r[0].n);
 }
 
 /** Botão "Testar" dos critérios: o total do público e as 50 primeiras pessoas (por nome), sem gravar nada */
 export async function testarCriterios(criterios: unknown, empresaId: string | number) {
-  const { where, params } = sqlCriterios(normalizarCriterios(criterios), empresaId);
+  const { where, params } = await filtroPublico(criterios, empresaId);
   const [r] = await pool.query<any[]>(
     `SELECT p.id, p.nome, p.tipo, p.cod_integracao, COALESCE(NULLIF(p.whatsapp, ''), p.telefone) AS telefone, p.email,
             (SELECT CONCAT_WS(' / ', e.cidade, e.uf) FROM pessoas_enderecos e WHERE e.pessoa_id = p.id ORDER BY e.principal DESC, e.id LIMIT 1) AS cidade
        FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS} ORDER BY p.nome LIMIT 50`,
     params,
   );
-  return { total: await contarPublico(criterios, empresaId), pessoas: r };
+  const [[{ n }]] = await pool.query<any>(`SELECT COUNT(*) AS n FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS}`, params);
+  // Seleção com IA: o comando que rodou (botão "Raw" da tela)
+  const sel = normalizarSelecao(criterios);
+  return { total: Number(n), pessoas: r, ...(Array.isArray(sel) ? {} : { sqlExecutado: sqlExecutadoIa(sel.sql, empresaId) }) };
 }
 
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -266,7 +327,7 @@ async function campanhaDa(id: string | number, empresaId: string | number, db: E
 
 /** Pessoas do público com as variáveis da mensagem (nome, email, whatsapp...) */
 async function publicoDa(c: any, empresaId: string | number, db: Executor, limite?: number) {
-  const { where, params } = sqlCriterios(normalizarCriterios(c.criterios), empresaId);
+  const { where, params } = await filtroPublico(c.criterios, empresaId);
   const colunas = Object.entries(VARIAVEIS).map(([k, sql]) => `${sql} AS ${k}`).join(', ');
   const [r] = await db.query<any[]>(
     `SELECT p.id, ${colunas} FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS} ORDER BY p.nome${limite ? ` LIMIT ${Number(limite)}` : ''}`,
@@ -564,7 +625,15 @@ export function iniciarEmailsCampanha() {
 export function createCampanhasRouter() {
   const router = Router();
 
-  /** Regras disponíveis para o editor de critérios */
+  /** Selecionar com IA: a IA monta o SQL do público a partir do pedido; devolve o SQL, a explicação e o total */
+  router.post('/campanhas/ia/gerar', async (req: Request, res: Response) => {
+    try {
+      res.json(await gerarSelecaoIa(req.body?.pedido, res.locals.empresaId));
+    } catch (err: any) {
+      res.status(err.status || 400).json({ error: err.message });
+    }
+  });
+
   /** Testar os critérios da tela (ainda sem gravar): total e as 50 primeiras pessoas */
   router.post('/campanhas/criterios/testar', async (req: Request, res: Response) => {
     try {
@@ -574,8 +643,16 @@ export function createCampanhasRouter() {
     }
   });
 
-  router.get('/campanhas/regras', (_req: Request, res: Response) => {
-    res.json(Object.entries(REGRAS).map(([regra, r]) => ({ regra, rotulo: r.rotulo, valor: r.valor })));
+  /** Regras do editor de critérios: as fixas e os campos personalizados de Pessoas da empresa */
+  router.get('/campanhas/regras', async (_req: Request, res: Response) => {
+    try {
+      res.json([
+        ...Object.entries(REGRAS).map(([regra, r]) => ({ regra, rotulo: r.rotulo, valor: r.valor })),
+        ...(await regrasPersonalizadas(res.locals.empresaId)),
+      ]);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
   });
 
   /** Mensagem personalizada para as primeiras pessoas do público (sem gravar nada) */

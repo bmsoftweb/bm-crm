@@ -803,7 +803,7 @@ const PainelNo: React.FC<PainelProps> = ({ no, somenteLeitura, departamentos, va
             'O que a empresa faz, produtos e serviços, preços que podem ser informados, horário de atendimento, endereço, formas de pagamento, prazos, políticas, perguntas frequentes...',
           )}
           <span className={HINT_CLASS}>
-            Usa a chave e o modelo de Configurações › Chatbot. A IA responde só com o texto-base e os dados do cliente no CRM; a conversa fica com ela até passar para
+            Usa a chave e o modelo de Configurações › IA. A IA responde só com o texto-base e os dados do cliente no CRM; a conversa fica com ela até passar para
             humano: aí segue a saída "passou p/ humano" (sem ligação, a conversa fica com a equipe).
           </span>
         </>
@@ -826,7 +826,7 @@ const PainelNo: React.FC<PainelProps> = ({ no, somenteLeitura, departamentos, va
             <NumberField id={id('tent')} value={String(d.tentativas ?? 3)} onChange={(t) => set({ tentativas: Number(t) || 0 })} scale={0} className={campo} />
           </div>
           <span className={HINT_CLASS}>
-            Usa a chave e o modelo de Configurações › Chatbot. A IA faz a pergunta, entende a resposta (número ou palavras) e segue pela saída certa; a escolha fica em {'{{ia_opcao}}'}.
+            Usa a chave e o modelo de Configurações › IA. A IA faz a pergunta, entende a resposta (número ou palavras) e segue pela saída certa; a escolha fica em {'{{ia_opcao}}'}.
             Se o cliente já disser o que quer na primeira mensagem, vai direto.
           </span>
         </>

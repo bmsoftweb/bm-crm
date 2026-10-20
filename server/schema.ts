@@ -68,6 +68,8 @@ export interface FieldDef {
   filterable?: boolean;
   /** Opções para type === 'enum' */
   options?: { value: string; label: string }[];
+  /** type === 'boolean' numa coluna char(1) 'S'/'N': grava 'S'/'N' (a leitura vem do sql, como 1/0) */
+  simNao?: boolean;
   /** Chave estrangeira: carrega o combo a partir de outro recurso */
   ref?: { resource: string; labelField: string };
   /** Casas decimais para type === 'decimal' */
@@ -1886,6 +1888,62 @@ export const RESOURCES: ResourceDef[] = [
       { name: 'criada_por', label: 'Criada por', type: 'text', readOnly: true, ref: { resource: 'usuarios', labelField: 'nome' } },
       { name: 'criada_em', label: 'Criada em', type: 'datetime', readOnly: true },
       { name: 'atualizada_em', label: 'Atualizada em', type: 'datetime', readOnly: true },
+    ],
+  },
+  {
+    // Vendas de produtos vindas do ERP (uma linha por produto de cada NF): base para campanhas e análises
+    name: 'vendas_produtos',
+    table: 'vendas_produtos',
+    tenantColumn: 'empresa_id',
+    scopeSql: 't.empresa_id = ?',
+    label: 'Vendas',
+    labelSingular: 'Venda',
+    description: 'Produtos vendidos (do ERP): nota, cliente, produto, quantidade, preço e custo',
+    icon: 'Receipt',
+    group: 'marketing',
+    pk: ['id'],
+    autoIncrement: true,
+    labelField: 'pro_descricao',
+    defaultSort: { field: 'nf_data', dir: 'desc' },
+    canCreate: true,
+    canUpdate: true,
+    canDelete: true,
+    fields: [
+      ID,
+      { name: 'nf_data', label: 'Data', type: 'date', required: true, listed: true, filterable: true },
+      { name: 'nf_numero', label: 'Nº da NF', type: 'text', listed: true, searchable: true, filterable: true, maxLength: 20, hint: 'Número da NF ou de outro documento de venda' },
+      { name: 'cod_integracao', label: 'Cód. integração (NF)', type: 'text', searchable: true, filterable: true, maxLength: 50, hint: 'ID da NF no ERP' },
+      { name: 'nf_cfop', label: 'CFOP', type: 'text', listed: true, filterable: true, maxLength: 5, width: 'xs' },
+      { name: 'cli_cnpj', label: 'CNPJ/CPF', type: 'cnpj', listed: true, searchable: true, filterable: true },
+      { name: 'cli_nome', label: 'Cliente (NF)', type: 'text', listed: true, searchable: true, filterable: true, maxLength: 50, hint: 'Nome do cliente na nota' },
+      {
+        name: 'cliente',
+        label: 'Cliente',
+        type: 'text',
+        listed: true,
+        readOnly: true,
+        // A Pessoa do CRM com o mesmo CNPJ/CPF (vazio se o cliente não está cadastrado)
+        // COLLATE: a vendas_produtos foi criada com utf8mb4_0900_ai_ci e pessoas é utf8mb4_unicode_ci
+        sql: "(SELECT p.nome FROM pessoas p WHERE p.empresa_id = t.empresa_id AND p.cpf = t.cli_cnpj COLLATE utf8mb4_unicode_ci AND t.cli_cnpj <> '' ORDER BY p.id LIMIT 1)",
+      },
+      { name: 'cli_cidade', label: 'Cidade', type: 'text', listed: true, searchable: true, filterable: true, maxLength: 50 },
+      { name: 'cli_uf', label: 'UF', type: 'text', listed: true, filterable: true, maxLength: 2, width: 'xs', default: 'SC' },
+      { name: 'cli_bairro', label: 'Bairro', type: 'text', searchable: true, filterable: true, maxLength: 50 },
+      { name: 'nf_valor_total', label: 'Total da NF', type: 'decimal', scale: 2 },
+      { name: 'ven_nome', label: 'Vendedor', type: 'text', listed: true, searchable: true, filterable: true, maxLength: 50 },
+      { name: 'ven_cod_integracao', label: 'Cód. integração (vendedor)', type: 'text', searchable: true, filterable: true, maxLength: 50, hint: 'ID do vendedor no ERP' },
+      { name: 'pro_cod_integracao', label: 'Cód. integração (produto)', type: 'text', searchable: true, filterable: true, maxLength: 50, hint: 'ID do produto no ERP' },
+      { name: 'pro_descricao', label: 'Produto', type: 'text', required: true, listed: true, searchable: true, filterable: true, maxLength: 255, span: 2 },
+      { name: 'pro_marca', label: 'Marca', type: 'text', listed: true, searchable: true, filterable: true, maxLength: 50 },
+      { name: 'pro_classe', label: 'Classe', type: 'text', listed: true, searchable: true, filterable: true, maxLength: 50 },
+      { name: 'pro_classe_descricao', label: 'Descrição da classe', type: 'text', listed: true, searchable: true, filterable: true, maxLength: 50 },
+      { name: 'pro_qtdade', label: 'Quantidade', type: 'decimal', scale: 3, listed: true },
+      { name: 'pro_un', label: 'Un.', type: 'text', listed: true, maxLength: 3, width: 'xs' },
+      { name: 'pro_preco_venda', label: 'Preço de venda', type: 'decimal', scale: 2, listed: true },
+      { name: 'pro_valor_total', label: 'Total do produto', type: 'decimal', scale: 2, listed: true },
+      { name: 'pro_custo_unit', label: 'Custo unitário', type: 'decimal', scale: 2 },
+      // char(1) 'S'/'N' no banco (como no bmsoft)
+      { name: 'cancelado', label: 'Cancelado', type: 'boolean', listed: true, filterable: true, width: 'xs', simNao: true, sql: "IF(t.cancelado = 'S', 1, 0)" },
     ],
   },
   {

@@ -31,9 +31,11 @@ import {
   Database,
   ClipboardCheck,
   Radar,
+  MessagesSquare,
   Globe,
   Wrench,
   Hammer,
+  Receipt,
   type LucideIcon,
 } from 'lucide-react';
 import { ResourceDef, ResourceGroup, Usuario } from '../types';
@@ -66,6 +68,7 @@ const ICONS: Record<string, LucideIcon> = {
   Globe,
   Wrench,
   Hammer,
+  Receipt,
 };
 
 const GROUP_ORDER: ResourceGroup[] = ['vendas', 'marketing', 'cadastros', 'acesso'];
@@ -121,7 +124,12 @@ export function gruposDoMenu(resources: ResourceDef[]): { titulo: string; itens:
       titulo: GROUP_LABELS[group] || group,
       itens: [
         // Prospecção abre o grupo Marketing, antes dos cadastros dele
-        ...(group === 'marketing' ? [{ id: 'prospeccao', label: 'Prospecção', descricao: 'Busca de leads no Google Maps', icone: Radar }] : []),
+        ...(group === 'marketing'
+          ? [
+              { id: 'prospeccao', label: 'Prospecção', descricao: 'Busca de leads no Google Maps', icone: Radar },
+              { id: 'consultas', label: 'Consultas', descricao: 'Pergunte sobre os seus dados e veja o resultado em tabela', icone: MessagesSquare },
+            ]
+          : []),
         ...resources
           .filter((r) => r.group === group && !r.oculto && r.name !== 'usuarios' && !NA_VISAO_GERAL.includes(r.name))
           .map((r) => ({ id: r.name, label: r.label, descricao: r.description, icone: ICONS[r.icon] || Database })),
@@ -131,6 +139,9 @@ export function gruposDoMenu(resources: ResourceDef[]): { titulo: string; itens:
   ];
   return grupos.filter((g) => g.itens.length);
 }
+
+/** Importação de dados (do BM e de arquivo): só gerente e administrador (mesma regra em server/permissoes.ts) */
+export const podeImportar = (usuario: Usuario | null): boolean => usuario?.tipo === 'admin' || usuario?.tipo === 'gerente';
 
 /** O usuário acessa a opção: administrador acessa tudo; sem permissões gravadas, também */
 export function podeAcessar(usuario: Usuario | null, id: string): boolean {

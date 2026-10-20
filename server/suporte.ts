@@ -5,6 +5,7 @@ import { chamarBmdesk } from './bmdesk.js';
 import { fecharSecao, gravarMensagem, NR_FILA } from './chamados.js';
 import { registrarLead } from './chatbot.js';
 import { donoDoTelefone, telefoneWhatsApp } from './whatsapp.js';
+import { notificar } from './notificacoes.js';
 import { erroCelular } from '../src/utils/formatters.js';
 
 /**
@@ -112,12 +113,22 @@ export function createSuporteRouter(): Router {
     const documento = digitos(b.cnpj, 14);
     const ip = String(req.get('x-forwarded-for')?.split(',')[0] || req.socket.remoteAddress || '').trim().slice(0, 45);
     // Empresa inexistente não grava (o SELECT não devolve linha)
-    await pool.query(
+    const [visita] = await pool.query<any>(
       `INSERT INTO site_visitas (empresa_id, chave, pagina, titulo, origem, documento, pessoa_id, cliente_nome, navegador, ip)
        SELECT id, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM empresas WHERE id = ?`,
       [chaveVisita(b.chave), texto(b.pagina, 500), texto(b.titulo, 200), texto(b.origem, 500) || null, documento || null,
         await pessoaDoDocumento(empresaId, documento), texto(b.nome, 120) || null, texto(req.get('user-agent'), 300) || null, ip || null, empresaId],
     );
+    // Quem acessa Visitas do Site fica sabendo (a campainha do cabeçalho)
+    if (visita.insertId) {
+      await notificar(empresaId, { tela: 'site_visitas' }, {
+        tipo: 'visita_site',
+        titulo: texto(b.nome, 120) ? `${texto(b.nome, 120)} entrou no site` : 'Alguém entrou no site',
+        texto: texto(b.titulo, 200) || texto(b.pagina, 500),
+        link: 'site_visitas',
+        registroId: Number(visita.insertId),
+      });
+    }
     res.status(204).end();
   }));
 
@@ -262,6 +273,13 @@ export function createSuporteRouter(): Router {
       chamado_id: id,
       autor: 'sistema',
       texto: `Chamado aberto pelo cliente no site: ${nome}, WhatsApp ${telefone}${fixo ? `, telefone fixo ${fixo}` : ''}${pessoaId ? '' : ` (CNPJ/CPF ${documento} não está no CRM)`}.`,
+    });
+    await notificar(empresaId, { tela: 'chamados_fila' }, {
+      tipo: 'chamado',
+      titulo: `Chamado nº ${numero} na fila`,
+      texto: `${nome}: ${titulo}`,
+      link: 'chamados_ativos',
+      registroId: id,
     });
     res.json({ token: tokenSuporte(id), numero });
   }));

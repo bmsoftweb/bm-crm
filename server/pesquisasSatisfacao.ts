@@ -219,7 +219,7 @@ async function executarItem(it: any): Promise<void> {
   // E-mail: a IA escreve a mensagem; o código no assunto liga a resposta ao item
   if (!it.pessoa_email) throw new Error('Cliente sem e-mail no cadastro.');
   const cfg = await lerChatbot(it.empresa_id);
-  if (!temChave(cfg)) throw erro(400, 'Configure a IA em Configurações › Chatbot antes de executar a pesquisa por e-mail.');
+  if (!temChave(cfg)) throw erro(400, 'Configure a IA em Configurações › IA antes de executar a pesquisa por e-mail.');
   const r = await conversarIa(
     cfg,
     `Você é ${cfg.nome}, da empresa ${it.empresa_nome}. Escreva um e-mail curto para ${it.pessoa_nome ?? 'o cliente'} (saudação, o pedido e a despedida em nome da empresa, sem linha de assunto), em português do Brasil, cordial.
@@ -623,7 +623,7 @@ export function createPesquisasSatisfacaoRouter(): Router {
     if (p.situacao === 'concluida' || p.situacao === 'cancelada') throw erro(400, 'Pesquisa encerrada: não contata mais ninguém.');
     if (p.canal !== 'ligacao') {
       const cfg = await lerChatbot(emp(res));
-      if (!temChave(cfg)) throw erro(400, 'Configure a IA em Configurações › Chatbot antes de executar a pesquisa.');
+      if (!temChave(cfg)) throw erro(400, 'Configure a IA em Configurações › IA antes de executar a pesquisa.');
     }
     const [itens] = await pool.query<any[]>("SELECT id FROM pesquisas_satisfacao_itens WHERE pesquisa_id = ? AND selecionado = 1 AND situacao = 'sorteado'", [p.id]);
     if (!itens.length) throw erro(400, 'Nenhum atendimento selecionado aguardando contato.');

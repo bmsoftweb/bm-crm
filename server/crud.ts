@@ -46,8 +46,11 @@ function coerceValue(field: FieldDef, raw: any): any {
       const n = typeof raw === 'string' ? Number(raw.replace(',', '.')) : Number(raw);
       return Number.isFinite(n) ? n : null;
     }
-    case 'boolean':
-      return raw === true || raw === 1 || raw === '1' || raw === 'true' ? 1 : 0;
+    case 'boolean': {
+      const sim = raw === true || raw === 1 || raw === '1' || raw === 'true';
+      if (field.simNao) return sim ? 'S' : 'N';
+      return sim ? 1 : 0;
+    }
     case 'cnpj':
       return String(raw).replace(/\D/g, '').slice(0, 14);
     case 'date':

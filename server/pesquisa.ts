@@ -3,6 +3,7 @@ import { lerConfig } from './config.js';
 import { textoConfig } from './segredo.js';
 import { contaDaConversa, enviarReservada, PESSOA_RECENTE, reservarEnvio, type MensagemNova } from './whatsapp.js';
 import { marcarEvento } from './chatbot.js';
+import { notificar } from './notificacoes.js';
 
 /**
  * Pesquisa de satisfação do WhatsApp (Configurações › Chatbot › Pesquisa de satisfação; tabela
@@ -194,6 +195,29 @@ async function tratarCortesia(nova: MensagemNova): Promise<boolean> {
  * Mensagem recebida: se o número tem pesquisa esperando resposta, trata aqui (nota ou comentário) e
  * devolve true (o bot/jornada não respondem). O que não for nota descarta a pesquisa (false: segue).
  */
+/**
+ * Nota baixa (1 a 3): avisa quem atendeu e o responsável pelas pendências (Configurações › Chatbot; sem ele, os
+ * administradores), para alguém procurar o cliente
+ */
+async function avisarNotaBaixa(empresaId: number, avaliacaoId: number, nota: number) {
+  const [[a]] = await pool.query<any>(
+    `SELECT av.atendente_id, COALESCE(p.nome, av.telefone) AS cliente, u.nome AS atendente FROM avaliacoes av
+       LEFT JOIN pessoas p ON p.id = av.pessoa_id LEFT JOIN usuarios u ON u.id = av.atendente_id WHERE av.id = ?`,
+    [avaliacaoId],
+  );
+  const cfg: any = await lerConfig(String(empresaId), 'whatsapp', 'chatbot');
+  const [admins] = cfg?.responsavel_pendencias_id
+    ? [[{ id: cfg.responsavel_pendencias_id }]]
+    : await pool.query<any[]>("SELECT id FROM usuarios WHERE empresa_id = ? AND ativo = 1 AND tipo = 'admin'", [empresaId]);
+  await notificar(empresaId, { usuarios: [a?.atendente_id, ...admins.map((x: any) => x.id)] }, {
+    tipo: 'avaliacao',
+    titulo: `Avaliação baixa: ${'★'.repeat(nota)} (${nota})`,
+    texto: `${a?.cliente ?? 'Cliente'}${a?.atendente ? ` — atendido por ${a.atendente}` : ''}`,
+    link: 'avaliacoes',
+    registroId: avaliacaoId,
+  });
+}
+
 export async function tratarRespostaPesquisa(nova: MensagemNova): Promise<boolean> {
   const cfg = await lerPesquisa(nova.empresaId);
   const [pend] = await pool.query<any[]>(
@@ -224,6 +248,7 @@ export async function tratarRespostaPesquisa(nova: MensagemNova): Promise<boolea
     await pool.query('UPDATE avaliacoes SET nota = ?, situacao = ?, respondida_em = NOW() WHERE id = ?', [nota, pedeComentario ? 'aguardando_comentario' : 'respondida', av.id]);
     await marcarResposta();
     await marcarEvento(nova.empresaId, nova.telefone, `Cliente avaliou ${estrelas(nota)} (${nota})`, null);
+    if (nota <= 3) await avisarNotaBaixa(nova.empresaId, av.id, nota);
     await pausa();
     await mandar(nova.empresaId, nova.telefone, `pesquisa-${pedeComentario ? 'comentario' : 'obrigado'}:${av.id}`, pedeComentario ? cfg.comentario : cfg.agradecimento);
     return true;

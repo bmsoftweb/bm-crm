@@ -1,6 +1,6 @@
 import { pool } from './db.js';
 import { tirarProprietarioDosEnvolvidos } from './participantes.js';
-import { contarPublico, normalizarCriterios, variaveisDoTexto } from './campanhas.js';
+import { contarPublico, normalizarSelecao, variaveisDoTexto } from './campanhas.js';
 import { recalcularContrato } from './contratos.js';
 import { gravarMensagem } from './chamados.js';
 import { assuntoComIcone } from './schema.js';
@@ -64,7 +64,8 @@ export async function antesDeGravar(recurso: string, payload: Record<string, any
   }
   if (recurso === 'campanhas') {
     // Critérios do público validados; variável inexistente na mensagem barra a gravação
-    if ('criterios' in payload) payload.criterios = JSON.stringify(normalizarCriterios(payload.criterios));
+    // Lista de critérios ou seleção com IA ({ modo: 'ia', pedido, sql, explicacao })
+    if ('criterios' in payload) payload.criterios = JSON.stringify(normalizarSelecao(payload.criterios));
     if ('mensagem' in payload || 'assunto' in payload) variaveisDoTexto(payload.assunto, payload.mensagem);
   }
   if (recurso === 'contratos') {
