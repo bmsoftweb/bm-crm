@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { AlertTriangle, ArrowRightLeft, Bell, CheckCircle2, Circle, Clock, ClipboardList, Hand, History, X, Inbox, Loader2, Lock, MessageCircle, Monitor, MonitorSmartphone, Pause, Pencil, Plus, Search, Send, StickyNote, UserRound, Headset } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Bell, CheckCircle2, ChevronDown, ChevronUp, Circle, Clock, ClipboardList, Hand, History, X, Inbox, Loader2, Lock, MessageCircle, Monitor, MonitorSmartphone, Pause, Pencil, Plus, Search, Send, StickyNote, UserRound, Headset } from 'lucide-react';
 import {
   acessarComputador,
   apelidarComputador,
@@ -418,9 +418,28 @@ export const ChamadosFila: React.FC<FilaProps> = ({ refreshToken, onAbrir, onMud
  * Pé da lista (Chamados Ativos e Conversas do WhatsApp): cada técnico e quantos atendimentos faz agora,
  * chamados (azul) e conversas do WhatsApp (verde). Relê a cada 15 s
  */
+const CHAVE_TECNICOS_RECOLHIDO = 'crmweb_tecnicos_recolhido';
+
 export const TecnicosAgora: React.FC = () => {
+  // Recolhido (chevron na borda de cima, como o do menu lateral): vale para as duas telas e fica salvo no navegador
+  const [recolhido, setRecolhido] = useState(() => {
+    try {
+      return localStorage.getItem(CHAVE_TECNICOS_RECOLHIDO) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const alternar = () => {
+    setRecolhido(!recolhido);
+    try {
+      localStorage.setItem(CHAVE_TECNICOS_RECOLHIDO, recolhido ? '0' : '1');
+    } catch {
+      // sem localStorage: vale só até recarregar
+    }
+  };
   const [tecnicos, setTecnicos] = useState<{ id: number; nome: string; chamados: number; whatsapp: number }[]>([]);
   const [fila, setFila] = useState<{ chamados: number; whatsapp: number } | null>(null);
+  const [hoje, setHoje] = useState<{ chamados: number; whatsapp: number } | null>(null);
   useEffect(() => {
     const ler = () =>
       !document.hidden &&
@@ -428,6 +447,7 @@ export const TecnicosAgora: React.FC = () => {
         .then((r) => {
           setTecnicos(r.tecnicos);
           setFila(r.fila);
+          setHoje(r.hoje);
         })
         .catch(() => {});
     ler();
@@ -437,8 +457,30 @@ export const TecnicosAgora: React.FC = () => {
   if (!tecnicos.length && !fila) return null;
   const naFila = (n: number, cor: string) => (n ? cor : 'bg-stone-100 text-stone-400 dark:bg-stone-800');
   return (
-    <div className="shrink-0 max-h-56 overflow-y-auto border-t border-stone-200 dark:border-stone-800 px-3 py-2">
-      {fila && (
+    <div className="relative shrink-0 border-t border-stone-200 dark:border-stone-800">
+      <button
+        type="button"
+        onClick={alternar}
+        title={recolhido ? 'Mostrar a fila e os técnicos' : 'Esconder a fila e os técnicos'}
+        aria-expanded={!recolhido}
+        className="absolute z-10 left-1/2 -top-1 -translate-x-1/2 h-2 w-14 rounded-full flex items-center justify-center bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-blue-600 dark:text-stone-400 dark:hover:text-blue-400 shadow-sm cursor-pointer"
+      >
+        {recolhido ? <ChevronUp className="w-2.5 h-2.5 shrink-0" strokeWidth={3} /> : <ChevronDown className="w-2.5 h-2.5 shrink-0" strokeWidth={3} />}
+      </button>
+      <div className={recolhido ? 'h-2' : 'max-h-56 overflow-y-auto px-3 py-2'}>
+      {!recolhido && hoje && (
+        <div className="flex items-center gap-2 mb-1.5 text-xs" title="Chamados abertos e atendimentos do WhatsApp iniciados hoje (com o balão)">
+          <span className="min-w-0 flex-1 text-[10px] font-bold uppercase tracking-wider text-stone-400">Atendimentos hoje:</span>
+          <span className={`shrink-0 min-w-6 text-center rounded-full px-1.5 text-[11px] font-bold ${naFila(hoje.chamados, 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300')}`}>
+            {hoje.chamados}
+          </span>
+          <span className={`shrink-0 inline-flex items-center gap-0.5 min-w-8 justify-center rounded-full px-1.5 text-[11px] font-bold ${naFila(hoje.whatsapp, 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300')}`}>
+            <MessageCircle className="w-3 h-3" />
+            {hoje.whatsapp}
+          </span>
+        </div>
+      )}
+      {!recolhido && fila && (
         <div className="flex items-center gap-2 mb-2 text-xs" title="Aguardando alguém atender: chamados na fila e conversas do WhatsApp (com o balão)">
           <span className="min-w-0 flex-1 text-[10px] font-bold uppercase tracking-wider text-stone-400">Na fila agora:</span>
           <span className={`shrink-0 min-w-6 text-center rounded-full px-1.5 text-[11px] font-bold ${naFila(fila.chamados, 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300')}`}>
@@ -450,8 +492,8 @@ export const TecnicosAgora: React.FC = () => {
           </span>
         </div>
       )}
-      <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Técnicos agora</div>
-      {tecnicos.map((t) => (
+      {!recolhido && <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Técnicos agora</div>}
+      {!recolhido && tecnicos.map((t) => (
         <div key={t.id} className="flex items-center gap-2 py-0.5 text-xs">
           <UserRound className="w-3 h-3 shrink-0 text-stone-400" />
           <span className={`min-w-0 flex-1 truncate ${t.chamados || t.whatsapp ? 'font-semibold text-stone-800 dark:text-stone-100' : 'text-stone-400'}`}>{t.nome}</span>
@@ -470,6 +512,7 @@ export const TecnicosAgora: React.FC = () => {
           </span>
         </div>
       ))}
+      </div>
     </div>
   );
 };

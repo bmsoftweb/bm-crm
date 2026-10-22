@@ -304,7 +304,11 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
   useEffect(() => {
     if (!pedido) return;
     if (pedido.telefone) {
-      setAberta(pedido.telefone);
+      // O número pode vir numa forma diferente da conversa gravada (ex.: disparo com o 9, conversa sem): o servidor acha a dela
+      const telefone = pedido.telefone;
+      fetchNumeroConversa({ telefone })
+        .then((r) => setAberta(r.telefone))
+        .catch(() => setAberta(telefone));
       return;
     }
     if (!pedido.atividadeId) {

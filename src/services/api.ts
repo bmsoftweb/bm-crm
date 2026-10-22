@@ -866,8 +866,16 @@ export interface DestinoConversa {
   aviso: string | null;
 }
 /** Número da conversa de uma pessoa ou de um contato (ícone do WhatsApp nas listas) */
-export const fetchNumeroConversa = (de: { pessoaId?: Id; contatoId?: Id }): Promise<{ telefone: string; nome: string }> =>
-  get(`/api/whatsapp/numero?${de.contatoId ? `contato_id=${encodeURIComponent(String(de.contatoId))}` : `pessoa_id=${encodeURIComponent(String(de.pessoaId))}`}`);
+export const fetchNumeroConversa = (de: { pessoaId?: Id; contatoId?: Id; telefone?: string }): Promise<{ telefone: string; nome: string }> =>
+  get(
+    `/api/whatsapp/numero?${
+      de.telefone
+        ? `telefone=${encodeURIComponent(de.telefone)}`
+        : de.contatoId
+          ? `contato_id=${encodeURIComponent(String(de.contatoId))}`
+          : `pessoa_id=${encodeURIComponent(String(de.pessoaId))}`
+    }`,
+  );
 export const fetchDestinosConversa = (busca: string): Promise<DestinoConversa[]> =>
   get(`/api/whatsapp/destinos?busca=${encodeURIComponent(busca)}`);
 
@@ -1079,6 +1087,8 @@ export const fetchTecnicosChamados = (): Promise<{
   tecnicos: { id: number; nome: string; chamados: number; whatsapp: number }[];
   /** Na fila agora: chamados e conversas do WhatsApp aguardando atendente */
   fila: { chamados: number; whatsapp: number };
+  /** Atendimentos hoje: chamados abertos e atendimentos do WhatsApp iniciados hoje */
+  hoje: { chamados: number; whatsapp: number };
 }> => get('/api/chamados/tecnicos');
 export const fetchChamado = (id: number): Promise<ChamadoDetalhe> => get(`/api/chamados/${id}`);
 export const buscarPessoasChamado = (q: string): Promise<{ id: number; nome: string; telefone: string | null }[]> =>

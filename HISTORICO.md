@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.167 — 2026-10-21
+
+- Quadro "Na fila agora / Técnicos agora" (Chamados Ativos e WhatsApp): chevron na borda de cima para recolher e mostrar (fica salvo no navegador), e linha nova "Atendimentos hoje:" com os chamados abertos hoje e os atendimentos do WhatsApp iniciados hoje.
+- Conversas: abrir pelo número (ícone do WhatsApp no disparo da campanha, fila, notificação) acha a conversa gravada, com ou sem o 9 (antes o disparo abria a conversa vazia).
+
 ## 0.0.166 — 2026-10-20
 
 - Nome do sistema: "BM-CRM" no lugar de "CRM Web"/"CRMweb" em tudo o que aparece (aba do navegador, menu, login, app instalado/PWA, rodapé dos impressos, Política de Privacidade e Termos). Banco, chaves salvas no navegador e o código "CRMWEB-<id>" das pessoas continuam iguais.

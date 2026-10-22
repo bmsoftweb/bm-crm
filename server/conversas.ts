@@ -152,6 +152,16 @@ export function createConversasRouter(): Router {
   router.get('/whatsapp/numero', async (req: Request, res: Response) => {
     try {
       const emp = String(res.locals.empresaId);
+      // Um número (ex.: destino do disparo de campanha, com o 9): a conversa gravada dele, que pode estar sem o 9
+      if (req.query.telefone) {
+        let numero: string;
+        try {
+          numero = telefoneWhatsApp(String(req.query.telefone));
+        } catch {
+          return res.status(400).json({ error: 'Telefone inválido.' });
+        }
+        return res.json({ telefone: await numeroDaConversa(emp, numero), nome: '' });
+      }
       const contatoId = Number(req.query.contato_id) || null;
       const pessoaId = Number(req.query.pessoa_id) || null;
       const [rows] = contatoId
