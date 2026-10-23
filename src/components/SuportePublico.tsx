@@ -178,6 +178,12 @@ export const SuportePublico: React.FC<{ empresa: string; cnpj: string }> = ({ em
     setToken(t);
     setAviso(msg);
   };
+  // O aviso fica 3 s e some: o formulário volta ao estado inicial (com ele, o botão de enviar saía da janela)
+  useEffect(() => {
+    if (!aviso) return;
+    const t = setTimeout(() => setAviso(null), 3000);
+    return () => clearTimeout(t);
+  }, [aviso]);
 
   // Link direto (fora do iframe do widget): o mesmo painel do widget, centralizado; no celular, a tela toda
   const caixa = avulso

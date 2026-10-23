@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.170 — 2026-10-22
+
+- Chat de suporte: o aviso que aparece depois de encerrar um chamado some sozinho em 3 segundos e o formulário volta ao normal (antes o aviso empurrava o botão de enviar para fora da janela).
+
 ## 0.0.169 — 2026-10-22
 
 - BM-ClientChat: botão "X" no topo do chat esconde a janela no ícone perto do relógio (as mensagens continuam chegando).
