@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.169 — 2026-10-22
+
+- BM-ClientChat: botão "X" no topo do chat esconde a janela no ícone perto do relógio (as mensagens continuam chegando).
+
 ## 0.0.168 — 2026-10-22
 
 - Suporte pelo BM-ClientChat (programa na máquina do cliente): o chamado aberto por ele registra o nome do computador, que já vem preenchido no pedido de tela remota; arrastar o topo do chat move a janela; mensagem ou cutucão da equipe trazem a janela para a frente e mostram notificação do Windows; quando o cliente abre a janela depois do cutucão, isso fica registrado no chamado.

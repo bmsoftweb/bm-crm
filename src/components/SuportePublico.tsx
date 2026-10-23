@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { Bell, CheckCircle2, Download, Headset, Loader2, MonitorSmartphone, Send, Star } from 'lucide-react';
+import { Bell, CheckCircle2, Download, Headset, Loader2, MonitorSmartphone, Send, Star, X } from 'lucide-react';
 import { erroCelular, formatDateTimeBR } from '../utils/formatters';
 import { ConfirmDialog } from './ConfirmDialog';
 import { destravarSom, tocarAviso } from '../utils/som';
@@ -210,6 +210,18 @@ export const SuportePublico: React.FC<{ empresa: string; cnpj: string }> = ({ em
           <div className="text-sm font-bold truncate">Suporte {info.empresa.nome}</div>
           <div className="text-[11px] text-blue-100">Fale com a nossa equipe</div>
         </div>
+        {/* BM-ClientChat: esconde a janela na bandeja (as mensagens continuam chegando) */}
+        {webviewApp && (
+          <button
+            type="button"
+            title="Esconder o chat (continua no ícone perto do relógio)"
+            className="ml-auto p-1.5 rounded hover:bg-blue-500 cursor-pointer"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => avisarApp({ crmweb: 'esconder' })}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </header>
       {token ? (
         <Conversa token={token} onNovo={(msg) => trocarToken(null, msg ?? null)} />
