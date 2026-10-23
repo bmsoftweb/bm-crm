@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.168 — 2026-10-22
+
+- Suporte pelo BM-ClientChat (programa na máquina do cliente): o chamado aberto por ele registra o nome do computador, que já vem preenchido no pedido de tela remota; arrastar o topo do chat move a janela; mensagem ou cutucão da equipe trazem a janela para a frente e mostram notificação do Windows; quando o cliente abre a janela depois do cutucão, isso fica registrado no chamado.
+
 ## 0.0.167 — 2026-10-21
 
 - Quadro "Na fila agora / Técnicos agora" (Chamados Ativos e WhatsApp): chevron na borda de cima para recolher e mostrar (fica salvo no navegador), e linha nova "Atendimentos hoje:" com os chamados abertos hoje e os atendimentos do WhatsApp iniciados hoje.

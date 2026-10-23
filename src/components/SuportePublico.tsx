@@ -48,6 +48,20 @@ const gravar = (k: string, v: string | null) => {
 
 const soDigitos = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max);
 
+/**
+ * BM-ClientChat (programa na máquina do cliente, D:\bmsoftx\crmWeb\bmClientChat): a página roda num WebView2 e
+ * conversa com o programa por window.chrome.webview. O programa manda o nome do computador em ?pc=
+ */
+const webviewApp: { postMessage: (m: string) => void } | undefined = (window as any).chrome?.webview;
+const PC_APP = new URLSearchParams(window.location.search).get('pc')?.slice(0, 60) || '';
+const avisarApp = (msg: Record<string, string>) => {
+  try {
+    webviewApp?.postMessage(JSON.stringify(msg));
+  } catch {
+    // fora do programa
+  }
+};
+
 /** Avisa o widget (site em volta) quem é o cliente, para dar nome à visita (Suporte › Visitas do Site) */
 const avisarCliente = (dados: { nome?: string; documento?: string }) => {
   if (window.parent !== window && (dados.nome || dados.documento)) {
@@ -69,7 +83,7 @@ const formatarAnydesk = (id: string) => id.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
 const CartaoTelaRemota: React.FC<{ tecnico: string; quando: string; ultimo: boolean; url: string }> = ({ tecnico, quando, ultimo, url }) => {
   const [baixando, setBaixando] = useState(false);
   /** Nome que o cliente dá ao computador antes de baixar: o técnico acha o computador no chamado e vira o apelido dele */
-  const [nomePc, setNomePc] = useState('');
+  const [nomePc, setNomePc] = useState(PC_APP);
   const campoNomePc = useRef<HTMLInputElement>(null);
   const [erro, setErro] = useState<string | null>(null);
   /**
@@ -178,7 +192,15 @@ export const SuportePublico: React.FC<{ empresa: string; cnpj: string }> = ({ em
 
   return moldura(
     <div className={`${caixa} flex flex-col bg-stone-50 text-stone-800`}>
-      <header className="px-4 py-3 bg-blue-600 text-white flex items-center gap-3 shrink-0">
+      {/* BM-ClientChat: a janela não tem barra de título; arrastar o topo do chat move a janela */}
+      <header
+        className={`px-4 py-3 bg-blue-600 text-white flex items-center gap-3 shrink-0${webviewApp ? ' select-none cursor-move' : ''}`}
+        onMouseDown={(e) => {
+          if (!webviewApp || e.button !== 0) return;
+          e.preventDefault();
+          avisarApp({ crmweb: 'mover' });
+        }}
+      >
         {info.empresa.logo ? (
           <img src={info.empresa.logo} alt="" className="h-8 w-8 rounded-full bg-white object-contain p-0.5" />
         ) : (
@@ -240,7 +262,7 @@ const Abrir: React.FC<{
     setEnviando(true);
     setErro(null);
     try {
-      const r = await api(`/api/publico/suporte/${encodeURIComponent(empresa)}/chamados`, { ...v, categoria_id: Number(v.categoria_id) || null });
+      const r = await api(`/api/publico/suporte/${encodeURIComponent(empresa)}/chamados`, { ...v, categoria_id: Number(v.categoria_id) || null, pc: PC_APP || undefined });
       gravar(chaveDados, JSON.stringify({ documento: v.documento, nome: v.nome, telefone: v.telefone, fixo: v.fixo }));
       avisarCliente(v);
       onAberto(r.token);
@@ -353,6 +375,15 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
         else setErro(e.message);
       });
   }, [url]);
+  // BM-ClientChat chama quando o cliente abre a janela depois do cutucão (registra no chamado que ele viu)
+  useEffect(() => {
+    if (!webviewApp) return;
+    (window as any).bmVisto = () => api(`${url}/visto`, {}).catch(() => {});
+    return () => {
+      delete (window as any).bmVisto;
+    };
+  }, [url]);
+
   // Atualiza a cada 4 s (resposta da equipe, posição na fila)
   useEffect(() => {
     carregar();
@@ -393,6 +424,8 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
       } catch {
         // página aberta fora do widget
       }
+      // BM-ClientChat: põe a janela por cima, pisca o ícone na barra de tarefas e mostra notificação do Windows
+      avisarApp({ crmweb: cutucou ? 'cutucar' : 'mensagem', de, texto: texto.slice(0, 200) });
     }
     vistoAte.current = maior;
   }, [c]);

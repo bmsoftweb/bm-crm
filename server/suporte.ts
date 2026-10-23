@@ -272,7 +272,8 @@ export function createSuporteRouter(): Router {
     await gravarMensagem({
       chamado_id: id,
       autor: 'sistema',
-      texto: `Chamado aberto pelo cliente no site: ${nome}, WhatsApp ${telefone}${fixo ? `, telefone fixo ${fixo}` : ''}${pessoaId ? '' : ` (CNPJ/CPF ${documento} não está no CRM)`}.`,
+      // Aberto pelo BM-ClientChat (programa na máquina do cliente): vem o nome do computador
+      texto: `Chamado aberto pelo cliente ${texto(b.pc, 60) ? `no BM-ClientChat, computador "${texto(b.pc, 60)}"` : 'no site'}: ${nome}, WhatsApp ${telefone}${fixo ? `, telefone fixo ${fixo}` : ''}${pessoaId ? '' : ` (CNPJ/CPF ${documento} não está no CRM)`}.`,
     });
     await notificar(empresaId, { tela: 'chamados_fila' }, {
       tipo: 'chamado',
@@ -353,6 +354,16 @@ export function createSuporteRouter(): Router {
       texto: `Cliente abriu o instalador do BMSoft Suporte para o computador "${nome}": depois de instalado, use "Acessar computador" e "Vincular e acessar" no computador em destaque.`,
     });
     res.json({ url });
+  }));
+
+  /**
+   * BM-ClientChat: o cliente abriu a janela do chat depois do cutucão. Fica na linha do tempo
+   * do chamado (o técnico sabe que a pessoa está na frente do computador)
+   */
+  router.post('/api/publico/suporte/chamado/:token/visto', rota(async (req, res) => {
+    const c = await doToken(req.params.token);
+    await gravarMensagem({ chamado_id: c.id, autor: 'sistema', texto: 'Cliente abriu o BM-ClientChat depois do cutucão.' });
+    res.json({ success: true });
   }));
 
   /** Avaliação de 1 a 5 do atendimento encerrado (entra em Avaliações, como a do WhatsApp) */
