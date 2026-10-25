@@ -81,7 +81,7 @@
 
   var painel = document.createElement('div');
   painel.style.cssText =
-    'display:none;width:380px;height:600px;max-width:calc(100vw - 40px);max-height:calc(100vh - 110px);margin-bottom:14px;' +
+    'display:none;width:380px;height:650px;max-width:calc(100vw - 40px);max-height:calc(100vh - 110px);margin-bottom:14px;' +
     'border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);background:#fff;';
   var quadro = null; // o chat só carrega na primeira abertura
 

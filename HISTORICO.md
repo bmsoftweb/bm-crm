@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.176 — 2026-10-25
+
+- Chat de suporte 50px mais alto: o painel do widget no site passou de 600 para 650px, e a janela do BM-ClientChat também (instalador Setup-BMClientChat.exe atualizado).
+
 ## 0.0.175 — 2026-10-25
 
 - Instalador Setup-BMClientChat.exe atualizado: o BM-ClientChat não tem mais a opção "Sair" na bandeja (fica sempre ativo; fecha só ao desligar o Windows, ao atualizar ou ao desinstalar).
