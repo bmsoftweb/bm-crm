@@ -49,7 +49,7 @@ const gravar = (k: string, v: string | null) => {
 };
 
 /** Campos do chat no mesmo visual do formulário de abertura: caixa arredondada com borda (classe campo-site, index.css) */
-const CAMPO = 'campo-site bg-white px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 outline-none transition-colors';
+const CAMPO = 'campo-site bg-white px-3 py-2 text-[13px] text-stone-800 placeholder:text-stone-400 outline-none transition-colors';
 
 const soDigitos = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max);
 
@@ -122,7 +122,7 @@ const CartaoTelaRemota: React.FC<{ tecnico: string; quando: string; ultimo: bool
   // Dentro do BM-ClientChat o acesso remoto veio junto na instalação: não há o que baixar
   if (webviewApp) {
     return (
-      <div className={`self-start max-w-[90%] rounded-2xl rounded-bl-md border px-3 py-2.5 text-sm ${ultimo ? 'bg-rose-50 border-rose-200' : 'bg-white border-stone-200'}`}>
+      <div className={`self-start max-w-[90%] rounded-2xl rounded-bl-md border px-3 py-2.5 text-[13px] ${ultimo ? 'bg-rose-50 border-rose-200' : 'bg-white border-stone-200'}`}>
         <div className="flex items-center gap-2 font-semibold text-rose-700">
           <MonitorSmartphone className="w-4 h-4" /> Acesso remoto
         </div>
@@ -134,7 +134,7 @@ const CartaoTelaRemota: React.FC<{ tecnico: string; quando: string; ultimo: bool
     );
   }
   return (
-    <div className={`self-start max-w-[90%] rounded-2xl rounded-bl-md border px-3 py-2.5 text-sm ${ultimo ? 'bg-rose-50 border-rose-200' : 'bg-white border-stone-200'}`}>
+    <div className={`self-start max-w-[90%] rounded-2xl rounded-bl-md border px-3 py-2.5 text-[13px] ${ultimo ? 'bg-rose-50 border-rose-200' : 'bg-white border-stone-200'}`}>
       <div className="flex items-center gap-2 font-semibold text-rose-700">
         <MonitorSmartphone className="w-4 h-4" /> Acesso remoto
       </div>
@@ -405,7 +405,7 @@ const OfertaAssistente: React.FC<{ url: string; onEscolhido: () => void; onRecus
   // Assistente fora do ar: não oferece (o cliente segue esperando o técnico)
   if (erro && !sistemas) return null;
   return (
-    <div className="self-start max-w-[90%] rounded-2xl rounded-bl-md border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm">
+    <div className="self-start max-w-[90%] rounded-2xl rounded-bl-md border border-violet-200 bg-violet-50 px-3 py-2.5 text-[13px]">
       <div className="flex items-center gap-2 font-semibold text-violet-700">
         <Bot className="w-4 h-4" /> Assistente virtual
       </div>
@@ -624,7 +624,7 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
           ) : (
           <div
             key={m.id}
-            className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
+            className={`max-w-[85%] rounded-2xl px-3 py-2 text-[13px] whitespace-pre-wrap ${
               m.autor === 'cliente'
                 ? 'self-end bg-blue-600 text-white rounded-br-md'
                 : m.autor === 'assistente'

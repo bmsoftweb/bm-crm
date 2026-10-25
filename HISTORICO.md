@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.174 — 2026-10-25
+
+- Chat de suporte: letra das mensagens, dos campos e dos cartões passou de 14px para 13px.
+
 ## 0.0.173 — 2026-10-25
 
 - Chat de suporte: o campo da mensagem e os demais campos do chat ganharam o visual do formulário de abertura (caixa arredondada com borda); no cartão do assistente, a escolha do sistema ocupa a linha toda e o "Não, obrigado" não sai mais do cartão.
