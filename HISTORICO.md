@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.175 — 2026-10-25
+
+- Instalador Setup-BMClientChat.exe atualizado: o BM-ClientChat não tem mais a opção "Sair" na bandeja (fica sempre ativo; fecha só ao desligar o Windows, ao atualizar ou ao desinstalar).
+
 ## 0.0.174 — 2026-10-25
 
 - Chat de suporte: letra das mensagens, dos campos e dos cartões passou de 14px para 13px.
