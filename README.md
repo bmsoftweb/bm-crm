@@ -2,7 +2,7 @@
 
 CRM no estilo Pipedrive com ciclo comercial completo: **funil em Kanban → follow-ups →
 proposta versionada → pedido de venda**. Mesma stack, layout, tema e padrões de tela do
-b2b-admin (`d:\bmsoftx\b2bweb\admin\code`): Express + Vite + React 19 + Tailwind 4 + mysql2.
+b2b-admin (`d:\projetos\b2bweb\admin\code`): Express + Vite + React 19 + Tailwind 4 + mysql2.
 
 ## Como rodar
 

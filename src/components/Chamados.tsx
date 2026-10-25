@@ -1316,13 +1316,16 @@ const ChamadoAberto: React.FC<{
                   ? 'self-start bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-800 dark:text-stone-100'
                   : m.interna
                     ? 'self-end bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-100'
-                    : 'self-end bg-blue-600 text-white'
+                    : m.autor === 'assistente'
+                      ? 'self-end bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900 text-stone-800 dark:text-stone-100'
+                      : 'self-end bg-blue-600 text-white'
               }`}
             >
-              <div className={`text-[10px] font-semibold mb-0.5 ${m.interna ? 'text-amber-700 dark:text-amber-300' : m.autor === 'cliente' ? 'text-stone-400' : 'text-blue-100'}`}>
+              <div className={`text-[10px] font-semibold mb-0.5 ${m.interna ? 'text-amber-700 dark:text-amber-300' : m.autor === 'cliente' ? 'text-stone-400' : m.autor === 'assistente' ? 'text-violet-700 dark:text-violet-300' : 'text-blue-100'}`}>
                 {m.interna && <Lock className="w-3 h-3 inline mr-1 -mt-0.5" />}
                 {m.interna ? 'Nota interna • ' : ''}
-                {m.usuario_nome || (m.autor === 'cliente' ? nomeChamado(c, 'Cliente') : 'Equipe')}
+                {/* Assistente (bm-help): respondeu o cliente enquanto ele esperava na fila (server/suporte.ts) */}
+                {m.autor === 'assistente' ? 'Assistente virtual (bm-help)' : m.usuario_nome || (m.autor === 'cliente' ? nomeChamado(c, 'Cliente') : 'Equipe')}
               </div>
               {m.texto}
               <div className={`text-[10px] mt-1 text-right ${m.autor === 'equipe' && !m.interna ? 'text-blue-100' : 'text-stone-400'}`}>{formatDateTimeBR(m.criado_em)}</div>

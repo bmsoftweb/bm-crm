@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { Bell, CheckCircle2, Download, Headset, Loader2, MonitorSmartphone, Send, Star, X } from 'lucide-react';
+import { Bell, Bot, CheckCircle2, Download, Headset, Loader2, MonitorSmartphone, Send, Star, X } from 'lucide-react';
 import { erroCelular, formatDateTimeBR } from '../utils/formatters';
 import { ConfirmDialog } from './ConfirmDialog';
 import { destravarSom, tocarAviso } from '../utils/som';
@@ -19,7 +19,9 @@ interface Chamado {
   atendente: string | null;
   posicao: number | null;
   avaliado: boolean;
-  mensagens: { id: number; autor: 'cliente' | 'equipe'; texto: string; criado_em: string; usuario_nome: string | null }[];
+  /** Assistente (bm-help) enquanto ninguém assumiu; sistema null = o cliente ainda não escolheu */
+  assistente: { sistema: string | null } | null;
+  mensagens: { id: number; autor: 'cliente' | 'equipe' | 'assistente'; texto: string; criado_em: string; usuario_nome: string | null }[];
 }
 
 const api = async (url: string, corpo?: unknown) => {
@@ -49,7 +51,7 @@ const gravar = (k: string, v: string | null) => {
 const soDigitos = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max);
 
 /**
- * BM-ClientChat (programa na máquina do cliente, D:\bmsoftx\crmWeb\bmClientChat): a página roda num WebView2 e
+ * BM-ClientChat (programa na máquina do cliente, D:\projetos\crmWeb\bmClientChat): a página roda num WebView2 e
  * conversa com o programa por window.chrome.webview. O programa manda o nome do computador em ?pc=
  */
 const webviewApp: { postMessage: (m: string) => void } | undefined = (window as any).chrome?.webview;
@@ -87,7 +89,8 @@ const CartaoTelaRemota: React.FC<{ tecnico: string; quando: string; ultimo: bool
   const campoNomePc = useRef<HTMLInputElement>(null);
   const [erro, setErro] = useState<string | null>(null);
   /**
-   * BMSoft Suporte (BMDesk): a página do instalador abre numa aba nova. A aba abre já no clique
+   * BMSoft Suporte (BMDesk): o link baixa o Setup-BMClientChat.exe (chat + agente; com SETUP_URL no BMDesk) ou abre
+   * o convite do MeshCentral, numa aba nova. A aba abre já no clique
    * (depois da chamada o navegador bloquearia o pop-up) e recebe o endereço quando ele chega
    */
   const baixarAgente = async () => {
@@ -113,13 +116,28 @@ const CartaoTelaRemota: React.FC<{ tecnico: string; quando: string; ultimo: bool
       setBaixando(false);
     }
   };
+  // Dentro do BM-ClientChat o acesso remoto veio junto na instalação: não há o que baixar
+  if (webviewApp) {
+    return (
+      <div className={`self-start max-w-[90%] rounded-2xl rounded-bl-md border px-3 py-2.5 text-sm ${ultimo ? 'bg-rose-50 border-rose-200' : 'bg-white border-stone-200'}`}>
+        <div className="flex items-center gap-2 font-semibold text-rose-700">
+          <MonitorSmartphone className="w-4 h-4" /> Acesso remoto
+        </div>
+        <p className="text-xs text-stone-600 mt-1">
+          {tecnico} pediu para ver a sua tela e ajudar. O acesso remoto já está instalado neste computador: é só aguardar o técnico conectar.
+        </p>
+        <div className="text-[10px] mt-1 text-right text-stone-400">{formatDateTimeBR(quando)}</div>
+      </div>
+    );
+  }
   return (
     <div className={`self-start max-w-[90%] rounded-2xl rounded-bl-md border px-3 py-2.5 text-sm ${ultimo ? 'bg-rose-50 border-rose-200' : 'bg-white border-stone-200'}`}>
       <div className="flex items-center gap-2 font-semibold text-rose-700">
         <MonitorSmartphone className="w-4 h-4" /> Acesso remoto
       </div>
       <p className="text-xs text-stone-600 mt-1">
-        {tecnico} pediu para ver a sua tela e ajudar. Baixe o BMSoft Suporte, abra o arquivo e clique em "Instalar" ou "Conectar".
+        {tecnico} pediu para ver a sua tela e ajudar. Baixe o BMSoft Suporte (chat e acesso remoto), abra o arquivo e siga a instalação. Se o
+        Windows avisar, clique em "Mais informações" e em "Executar assim mesmo".
       </p>
       <div className="flex gap-2 mt-2">
         <input
@@ -362,11 +380,74 @@ const Abrir: React.FC<{
   );
 };
 
+/** Enquanto espera na fila: o assistente (bm-help, server/suporte.ts) oferece ajuda; o cliente escolhe o sistema */
+const OfertaAssistente: React.FC<{ url: string; onEscolhido: () => void; onRecusar: () => void }> = ({ url, onEscolhido, onRecusar }) => {
+  const [sistemas, setSistemas] = useState<{ id: number; nome: string }[] | null>(null);
+  const [escolhido, setEscolhido] = useState<number | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  useEffect(() => {
+    api(`${url}/assistente/sistemas`).then(setSistemas).catch((e) => setErro(e.message));
+  }, [url]);
+  const escolher = async (id: number) => {
+    setEscolhido(id);
+    setErro(null);
+    try {
+      await api(`${url}/assistente/sistema`, { sistema_id: id });
+      onEscolhido();
+    } catch (e: any) {
+      setErro(e.message);
+      setEscolhido(null);
+    }
+  };
+  // Assistente fora do ar: não oferece (o cliente segue esperando o técnico)
+  if (erro && !sistemas) return null;
+  return (
+    <div className="self-start max-w-[90%] rounded-2xl rounded-bl-md border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm">
+      <div className="flex items-center gap-2 font-semibold text-violet-700">
+        <Bot className="w-4 h-4" /> Assistente virtual
+      </div>
+      {escolhido ? (
+        <p className="text-xs text-stone-600 mt-1 flex items-center gap-1.5">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Consultando... a primeira resposta pode levar até um minuto.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-stone-600 mt-1">Enquanto você aguarda, posso tentar ajudar com a sua dúvida. Sobre qual sistema é?</p>
+          <div className="flex items-center gap-1.5 mt-2">
+            {!sistemas && <Loader2 className="w-4 h-4 animate-spin text-violet-400" />}
+            {sistemas && (
+              <>
+                {/* Muitos sistemas: combo digitável (SelectAuto) */}
+                <SelectAuto value="" onChange={(e) => Number(e.target.value) && escolher(Number(e.target.value))} aria-label="Sistema" className={`${INPUT_CLASS} flex-1 min-w-0 text-xs cursor-pointer`}>
+                  <option value="">Escolha o sistema...</option>
+                  {sistemas.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nome}
+                    </option>
+                  ))}
+                </SelectAuto>
+                <button type="button" onClick={onRecusar} className="shrink-0 px-2.5 py-1.5 rounded-lg border border-stone-300 text-stone-600 hover:bg-white text-xs cursor-pointer">
+                  Não, obrigado
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+      {erro && <p className="text-xs text-rose-700 mt-1">{erro}</p>}
+    </div>
+  );
+};
+
 const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = ({ token, onNovo }) => {
   const [c, setC] = useState<Chamado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [texto, setTexto] = useState('');
-  const [encerrando, setEncerrando] = useState(false);
+  /** 'resolvido' = a dúvida foi resolvida pelo assistente (encerra sem cancelar) */
+  const [encerrando, setEncerrando] = useState<false | 'sair' | 'resolvido'>(false);
+  /** Cliente dispensou o assistente neste atendimento */
+  const chaveSemAssistente = `crmweb_suporte_sem_assistente_${token}`;
+  const [semAssistente, setSemAssistente] = useState(() => ler(chaveSemAssistente) === '1');
   const [enviando, setEnviando] = useState(false);
   const fim = useRef<HTMLDivElement>(null);
   const qtd = useRef(0);
@@ -474,7 +555,7 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
         {!encerrado && (
           <button
             type="button"
-            onClick={() => setEncerrando(true)}
+            onClick={() => setEncerrando('sair')}
             className="absolute right-3 top-2 px-2.5 py-1 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 hover:text-rose-700 text-[11px] font-semibold cursor-pointer"
           >
             Encerrar
@@ -507,6 +588,16 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
             </span>
           </div>
         ) : null}
+        {c.assistente && !c.assistente.sistema && !semAssistente && (
+          <OfertaAssistente
+            url={url}
+            onEscolhido={carregar}
+            onRecusar={() => {
+              gravar(chaveSemAssistente, '1');
+              setSemAssistente(true);
+            }}
+          />
+        )}
         {c.mensagens.map((m, i) =>
           m.texto === CUTUCAR ? (
             <div key={m.id} className="self-center text-xs font-semibold text-amber-800 bg-amber-100 rounded-full px-3 py-1 inline-flex items-center gap-1.5">
@@ -524,14 +615,29 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
           <div
             key={m.id}
             className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
-              m.autor === 'cliente' ? 'self-end bg-blue-600 text-white rounded-br-md' : 'self-start bg-white border border-stone-200 rounded-bl-md'
+              m.autor === 'cliente'
+                ? 'self-end bg-blue-600 text-white rounded-br-md'
+                : m.autor === 'assistente'
+                  ? 'self-start bg-violet-50 border border-violet-200 rounded-bl-md'
+                  : 'self-start bg-white border border-stone-200 rounded-bl-md'
             }`}
           >
             {m.autor === 'equipe' && <div className="text-[10px] font-semibold text-blue-600 mb-0.5">{m.usuario_nome || 'Suporte'}</div>}
+            {m.autor === 'assistente' && (
+              <div className="text-[10px] font-semibold text-violet-700 mb-0.5 flex items-center gap-1">
+                <Bot className="w-3 h-3" /> Assistente virtual
+              </div>
+            )}
             {ID_ANYDESK.test(m.texto) ? `Número do AnyDesk enviado: ${formatarAnydesk(ID_ANYDESK.exec(m.texto)![1])}` : m.texto}
             <div className={`text-[10px] mt-0.5 text-right ${m.autor === 'cliente' ? 'text-blue-100' : 'text-stone-400'}`}>{formatDateTimeBR(m.criado_em)}</div>
           </div>
           ),
+        )}
+        {/* Também na primeira resposta (o sistema já foi gravado, a resposta ainda não chegou) */}
+        {c.assistente?.sistema && (enviando || !c.mensagens.some((m) => m.autor === 'assistente')) && (
+          <div className="self-start rounded-2xl rounded-bl-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-700 flex items-center gap-1.5">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Assistente consultando...
+          </div>
         )}
         {!c.mensagens.length && !encerrado && <p className="text-xs text-stone-500 text-center mt-4">Recebemos sua mensagem.<br />Se quiser, mande mais detalhes por aqui.</p>}
         <div ref={fim} />
@@ -542,10 +648,16 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
       {encerrando && (
         <ConfirmDialog
           titulo="Encerrar o atendimento?"
-          mensagem={c.atendente ? 'A conversa termina e você poderá avaliar o atendimento.' : 'Você sai da fila e o pedido é cancelado.'}
+          mensagem={
+            encerrando === 'resolvido'
+              ? 'Que bom que a dúvida foi resolvida! Você sai da fila e poderá avaliar o atendimento.'
+              : c.atendente
+                ? 'A conversa termina e você poderá avaliar o atendimento.'
+                : 'Você sai da fila e o pedido é cancelado.'
+          }
           confirmar="Encerrar"
           onConfirmar={async () => {
-            await api(`${url}/encerrar`, {});
+            await api(`${url}/encerrar`, { resolvido: encerrando === 'resolvido' });
             setEncerrando(false);
             carregar();
           }}
@@ -558,6 +670,16 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
         // Avaliação obrigatória: sem ela o cliente não abre um novo atendimento
         <Avaliar url={url} onFeito={carregar} />
       ) : (
+        <>
+        {/* Conversando com o assistente: se resolveu, encerra sem esperar o técnico */}
+        {c.assistente?.sistema && c.mensagens.some((m) => m.autor === 'assistente') && (
+          <div className="px-3 pt-2 bg-white border-t border-stone-200 flex items-center justify-between gap-2 text-[11px] text-stone-500 shrink-0">
+            <span>Assistente: {c.assistente.sistema}. Se preferir, continue aguardando o técnico.</span>
+            <button type="button" onClick={() => setEncerrando('resolvido')} className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer">
+              Resolveu
+            </button>
+          </div>
+        )}
         <form onSubmit={enviar} className="p-3 bg-white border-t border-stone-200 flex items-end gap-2 shrink-0">
           <textarea
             ref={campoMensagem}
@@ -580,6 +702,7 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
         </form>
+        </>
       )}
     </>
   );

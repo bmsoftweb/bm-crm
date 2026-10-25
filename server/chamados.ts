@@ -91,7 +91,7 @@ const SECAO_ABERTA = '(SELECT s.id FROM chamado_secoes s WHERE s.chamado_id = ? 
 /** Mensagem na linha do tempo do chamado, ligada à seção aberta */
 export function gravarMensagem(m: {
   chamado_id: number;
-  autor: 'equipe' | 'cliente' | 'sistema';
+  autor: 'equipe' | 'cliente' | 'sistema' | 'assistente';
   texto: string;
   usuario_id?: number | null;
   interna?: boolean;

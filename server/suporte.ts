@@ -6,6 +6,7 @@ import { fecharSecao, gravarMensagem, NR_FILA } from './chamados.js';
 import { registrarLead } from './chatbot.js';
 import { donoDoTelefone, telefoneWhatsApp } from './whatsapp.js';
 import { notificar } from './notificacoes.js';
+import { bmhelpLigado, perguntarBmhelp, sistemasBmhelp } from './bmhelp.js';
 import { erroCelular } from '../src/utils/formatters.js';
 
 /**
@@ -38,6 +39,44 @@ export function chamadoDoToken(token: string): number | null {
   if (!Number.isInteger(n) || n < 1) return null;
   const esperado = tokenSuporte(n);
   return esperado.length === token.length && crypto.timingSafeEqual(Buffer.from(esperado), Buffer.from(token)) ? n : null;
+}
+
+/**
+ * Assistente (bm-help, server/bmhelp.ts): enquanto o cliente espera na fila sem técnico, ele escolhe o sistema e
+ * a IA responde a dúvida do chamado e as mensagens seguintes. Para sozinho quando um técnico assume.
+ * Banco: chamados.bmhelp_sistema_id / bmhelp_sessao e o autor 'assistente' em chamado_mensagens
+ * (extras/bmhelp_assistente.sql); só são lidos com o bm-help configurado
+ */
+const LIMITE_ASSISTENTE = 10;
+const assistenteAtivo = (c: any) => bmhelpLigado() && !c.atendente_id && !['encerrado', 'cancelado'].includes(c.status);
+
+/** Pergunta ao bm-help pelo chamado e grava a resposta como mensagem do assistente */
+async function responderAssistente(chamadoId: number, pergunta: string) {
+  const [[a]] = await pool.query<any[]>(
+    `SELECT bmhelp_sistema_id, bmhelp_sessao,
+            (SELECT COUNT(*) FROM chamado_mensagens m WHERE m.chamado_id = c.id AND m.autor = 'assistente') AS qtd
+       FROM chamados c WHERE c.id = ?`,
+    [chamadoId],
+  );
+  if (!a?.bmhelp_sistema_id) return;
+  const qtd = Number(a.qtd);
+  // Teto de custo por chamado: avisa uma vez e para
+  if (qtd >= LIMITE_ASSISTENTE) {
+    if (qtd === LIMITE_ASSISTENTE) {
+      await gravarMensagem({ chamado_id: chamadoId, autor: 'assistente', texto: 'Chegamos ao limite de perguntas ao assistente neste atendimento. Um técnico já vai falar com você.' });
+    }
+    return;
+  }
+  let resposta: string;
+  try {
+    const r = await perguntarBmhelp(Number(a.bmhelp_sistema_id), pergunta, a.bmhelp_sessao || null);
+    if (r.sessao && r.sessao !== a.bmhelp_sessao) await pool.query('UPDATE chamados SET bmhelp_sessao = ? WHERE id = ?', [r.sessao.slice(0, 100), chamadoId]);
+    resposta = r.texto || 'Não encontrei uma resposta para isso. Um técnico já vai falar com você.';
+  } catch (err: any) {
+    console.error(`Suporte (assistente): ${err.message}`);
+    resposta = 'Não consegui consultar agora. Um técnico já vai falar com você.';
+  }
+  await gravarMensagem({ chamado_id: chamadoId, autor: 'assistente', texto: resposta });
 }
 
 const digitos = (v: unknown, max: number) => String(v ?? '').replace(/\D/g, '').slice(0, max);
@@ -291,9 +330,17 @@ export function createSuporteRouter(): Router {
     const [msgs] = await pool.query<any[]>(
       `SELECT m.id, m.autor, m.texto, m.criado_em, u.nome AS usuario_nome
          FROM chamado_mensagens m LEFT JOIN usuarios u ON u.id = m.usuario_id
-        WHERE m.chamado_id = ? AND m.autor IN ('cliente','equipe') AND m.interna = 0 ORDER BY m.id`,
+        WHERE m.chamado_id = ? AND m.autor IN ('cliente','equipe','assistente') AND m.interna = 0 ORDER BY m.id`,
       [c.id],
     );
+    // Assistente: oferecido enquanto ninguém assumiu; sistema = o que o cliente escolheu (null = ainda não escolheu)
+    let assistente: { sistema: string | null } | null = null;
+    if (assistenteAtivo(c)) {
+      const [[a]] = await pool.query<any[]>('SELECT bmhelp_sistema_id FROM chamados WHERE id = ?', [c.id]);
+      const id = Number(a?.bmhelp_sistema_id) || null;
+      const sistemas = id ? await sistemasBmhelp().catch(() => []) : [];
+      assistente = { sistema: id ? (sistemas.find((s) => s.id === id)?.nome ?? 'escolhido') : null };
+    }
     res.json({
       numero: c.numero,
       titulo: c.titulo,
@@ -302,6 +349,7 @@ export function createSuporteRouter(): Router {
       // Só enquanto espera um técnico; assumido ou encerrado: null
       posicao: c.posicao == null ? null : Number(c.posicao),
       avaliado: Boolean(Number(c.avaliado)),
+      assistente,
       mensagens: msgs,
     });
   }));
@@ -312,6 +360,33 @@ export function createSuporteRouter(): Router {
     const msg = texto(req.body?.texto, 4000);
     if (!msg) throw erro(400, 'Escreva a mensagem.');
     await gravarMensagem({ chamado_id: c.id, autor: 'cliente', texto: msg });
+    // Sem técnico e com o sistema escolhido: o assistente responde (a requisição espera a resposta)
+    if (assistenteAtivo(c)) await responderAssistente(c.id, msg);
+    res.json({ success: true });
+  }));
+
+  /** Sistemas que o assistente conhece (o cliente escolhe sobre qual é a dúvida) */
+  router.get('/api/publico/suporte/chamado/:token/assistente/sistemas', rota(async (req, res) => {
+    const c = await doToken(req.params.token);
+    if (!assistenteAtivo(c)) throw erro(409, 'O assistente não está disponível neste atendimento.');
+    res.json(await sistemasBmhelp().catch((e) => {
+      console.error(`Suporte (assistente): ${e.message}`);
+      throw erro(503, 'O assistente está indisponível agora. Um técnico já vai falar com você.');
+    }));
+  }));
+
+  /** Cliente escolheu o sistema: o assistente já responde a dúvida que abriu o chamado */
+  router.post('/api/publico/suporte/chamado/:token/assistente/sistema', rota(async (req, res) => {
+    const c = await doToken(req.params.token);
+    if (!assistenteAtivo(c)) throw erro(409, 'O assistente não está disponível neste atendimento.');
+    const id = Number(req.body?.sistema_id);
+    const sis = (await sistemasBmhelp()).find((s) => s.id === id);
+    if (!sis) throw erro(400, 'Escolha um dos sistemas.');
+    // Trocar de sistema começa conversa nova no bm-help
+    await pool.query('UPDATE chamados SET bmhelp_sistema_id = ?, bmhelp_sessao = NULL WHERE id = ?', [id, c.id]);
+    await gravarMensagem({ chamado_id: c.id, autor: 'sistema', texto: `Cliente pediu ajuda ao assistente (bm-help), sistema ${sis.nome}.` });
+    const [[d]] = await pool.query<any[]>('SELECT descricao FROM chamados WHERE id = ?', [c.id]);
+    await responderAssistente(c.id, String(d?.descricao || c.titulo));
     res.json({ success: true });
   }));
 
@@ -322,12 +397,16 @@ export function createSuporteRouter(): Router {
   router.post('/api/publico/suporte/chamado/:token/encerrar', rota(async (req, res) => {
     const c = await doToken(req.params.token);
     if (['encerrado', 'cancelado'].includes(c.status)) throw erro(409, 'Este atendimento já foi encerrado.');
-    const cancelar = !c.atendente_id;
+    // Dúvida resolvida pelo assistente: encerrado (e o cliente avalia), não cancelado
+    const resolvido = Boolean(req.body?.resolvido) && assistenteAtivo(c);
+    const cancelar = !c.atendente_id && !resolvido;
     await pool.query('UPDATE chamados SET status = ?, encerrado_em = NOW() WHERE id = ?', [cancelar ? 'cancelado' : 'encerrado', c.id]);
     await gravarMensagem({
       chamado_id: c.id,
       autor: 'sistema',
-      texto: cancelar ? 'Chamado cancelado pelo cliente antes do atendimento (saiu da fila).' : 'Chamado encerrado pelo cliente.',
+      texto: resolvido
+        ? 'Chamado encerrado pelo cliente: o assistente (bm-help) resolveu a dúvida, sem precisar de técnico.'
+        : cancelar ? 'Chamado cancelado pelo cliente antes do atendimento (saiu da fila).' : 'Chamado encerrado pelo cliente.',
     });
     await fecharSecao(c.id, 'encerrado');
     res.json({ success: true, status: cancelar ? 'cancelado' : 'encerrado' });
