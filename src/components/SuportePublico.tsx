@@ -5,7 +5,6 @@ import { erroCelular, formatDateTimeBR } from '../utils/formatters';
 import { ConfirmDialog } from './ConfirmDialog';
 import { BotaoClipe, imagemColada, PreviaImagem } from './AnexarImagem';
 import { destravarSom, tocarAviso } from '../utils/som';
-import { INPUT_CLASS } from '../utils/formStyles';
 
 /**
  * Página pública /suporte?e=<empresa> (dentro do painel do widget.js, no site do cliente): abre o
@@ -48,6 +47,9 @@ const gravar = (k: string, v: string | null) => {
     // sem storage
   }
 };
+
+/** Campos do chat no mesmo visual do formulário de abertura: caixa arredondada com borda (classe campo-site, index.css) */
+const CAMPO = 'campo-site bg-white px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 outline-none transition-colors';
 
 const soDigitos = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max);
 
@@ -151,7 +153,7 @@ const CartaoTelaRemota: React.FC<{ tecnico: string; quando: string; ultimo: bool
           placeholder="Nome deste computador (OBRIGATÓRIO)"
           aria-label="Nome deste computador (obrigatório)"
           title="Obrigatório: ajuda o técnico a achar este computador (ex.: Recepção, Caixa 1, Notebook da Maria)"
-          className={`${INPUT_CLASS} flex-1 min-w-0 text-sm`}
+          className={`${CAMPO} flex-1 min-w-0`}
         />
         <button
           type="button"
@@ -414,12 +416,12 @@ const OfertaAssistente: React.FC<{ url: string; onEscolhido: () => void; onRecus
       ) : (
         <>
           <p className="text-xs text-stone-600 mt-1">Enquanto você aguarda, posso tentar ajudar com a sua dúvida. Sobre qual sistema é?</p>
-          <div className="flex items-center gap-1.5 mt-2">
+          <div className="flex flex-col gap-1.5 mt-2">
             {!sistemas && <Loader2 className="w-4 h-4 animate-spin text-violet-400" />}
             {sistemas && (
               <>
-                {/* Muitos sistemas: combo digitável (SelectAuto) */}
-                <SelectAuto value="" onChange={(e) => Number(e.target.value) && escolher(Number(e.target.value))} aria-label="Sistema" className={`${INPUT_CLASS} flex-1 min-w-0 text-xs cursor-pointer`}>
+                {/* Muitos sistemas: combo digitável (SelectAuto) na linha toda; "Não, obrigado" embaixo, à direita */}
+                <SelectAuto value="" onChange={(e) => Number(e.target.value) && escolher(Number(e.target.value))} aria-label="Sistema" className={`${CAMPO} w-full cursor-pointer`}>
                   <option value="">Escolha o sistema...</option>
                   {sistemas.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -427,7 +429,7 @@ const OfertaAssistente: React.FC<{ url: string; onEscolhido: () => void; onRecus
                     </option>
                   ))}
                 </SelectAuto>
-                <button type="button" onClick={onRecusar} className="shrink-0 px-2.5 py-1.5 rounded-lg border border-stone-300 text-stone-600 hover:bg-white text-xs cursor-pointer">
+                <button type="button" onClick={onRecusar} className="self-end px-2.5 py-1 rounded-lg border border-stone-300 text-stone-600 hover:bg-white text-xs cursor-pointer">
                   Não, obrigado
                 </button>
               </>
@@ -729,7 +731,7 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
             maxLength={4000}
             placeholder={enviando ? 'Enviando...' : 'Escreva a sua mensagem'}
             aria-label="Mensagem"
-            className={`${INPUT_CLASS} flex-1 resize-none text-sm`}
+            className={`${CAMPO} flex-1 resize-none`}
           />
           <button type="submit" disabled={enviando || (!texto.trim() && !imagem)} title="Enviar" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white cursor-pointer disabled:opacity-40">
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -758,7 +760,7 @@ const Avaliar: React.FC<{ url: string; onFeito: () => void }> = ({ url, onFeito 
         ))}
       </div>
       {nota > 0 && nota <= 3 && (
-        <textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} maxLength={2000} placeholder="O que podemos melhorar?" aria-label="Comentário" className={`${INPUT_CLASS} w-full resize-none text-sm`} />
+        <textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} maxLength={2000} placeholder="O que podemos melhorar?" aria-label="Comentário" className={`${CAMPO} w-full resize-none`} />
       )}
       {erro && <div className="p-2 rounded-lg bg-rose-50 text-rose-800 text-xs">{erro}</div>}
       <button

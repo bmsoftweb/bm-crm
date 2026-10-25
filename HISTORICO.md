@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.173 — 2026-10-25
+
+- Chat de suporte: o campo da mensagem e os demais campos do chat ganharam o visual do formulário de abertura (caixa arredondada com borda); no cartão do assistente, a escolha do sistema ocupa a linha toda e o "Não, obrigado" não sai mais do cartão.
+
 ## 0.0.172 — 2026-10-25
 
 - Chat de suporte: imagens nos dois sentidos. O cliente manda um print pelo widget (Ctrl+V no campo da mensagem ou botão de clipe) e o técnico também, pela tela de chamados (chamados do site, ou nota interna em qualquer canal). A imagem é reduzida no navegador e aparece em miniatura, que abre grande ao clicar. Com o assistente (bm-help) ativo, o print vai junto para ele analisar. Requer as colunas `chamado_mensagens.imagem` e `imagem_tipo`.
