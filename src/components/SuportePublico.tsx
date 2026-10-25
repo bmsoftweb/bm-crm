@@ -3,6 +3,7 @@ import { SelectAuto } from './SelectAuto';
 import { Bell, Bot, CheckCircle2, Download, Headset, Loader2, MonitorSmartphone, Send, Star, X } from 'lucide-react';
 import { erroCelular, formatDateTimeBR } from '../utils/formatters';
 import { ConfirmDialog } from './ConfirmDialog';
+import { BotaoClipe, imagemColada, PreviaImagem } from './AnexarImagem';
 import { destravarSom, tocarAviso } from '../utils/som';
 import { INPUT_CLASS } from '../utils/formStyles';
 
@@ -21,7 +22,7 @@ interface Chamado {
   avaliado: boolean;
   /** Assistente (bm-help) enquanto ninguém assumiu; sistema null = o cliente ainda não escolheu */
   assistente: { sistema: string | null } | null;
-  mensagens: { id: number; autor: 'cliente' | 'equipe' | 'assistente'; texto: string; criado_em: string; usuario_nome: string | null }[];
+  mensagens: { id: number; autor: 'cliente' | 'equipe' | 'assistente'; texto: string; criado_em: string; usuario_nome: string | null; tem_imagem?: number | boolean }[];
 }
 
 const api = async (url: string, corpo?: unknown) => {
@@ -443,6 +444,8 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
   const [c, setC] = useState<Chamado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [texto, setTexto] = useState('');
+  /** Print que vai junto na próxima mensagem (data URI reduzido) */
+  const [imagem, setImagem] = useState<string | null>(null);
   /** 'resolvido' = a dúvida foi resolvida pelo assistente (encerra sem cancelar) */
   const [encerrando, setEncerrando] = useState<false | 'sair' | 'resolvido'>(false);
   /** Cliente dispensou o assistente neste atendimento */
@@ -517,7 +520,11 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
         tocarAviso('suporte');
       }
       const de = (ultima ?? novas[novas.length - 1]).usuario_nome || 'Suporte';
-      const texto = !ultima ? 'Precisa de sua atenção no chat do suporte.' : ultima.texto === TELA_REMOTA ? 'Pediu para acessar a sua tela.' : ultima.texto;
+      const texto = !ultima
+        ? 'Precisa de sua atenção no chat do suporte.'
+        : ultima.texto === TELA_REMOTA
+          ? 'Pediu para acessar a sua tela.'
+          : ultima.texto || (ultima.tem_imagem ? 'Enviou uma imagem.' : '');
       try {
         window.parent.postMessage({ crmweb: cutucou ? 'cutucar' : 'mensagem', de, texto: texto.slice(0, 200) }, '*');
       } catch {
@@ -535,11 +542,12 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
     // Enter de novo enquanto envia: ignora (o campo fica só leitura, não desabilitado, para manter o foco)
-    if (!texto.trim() || enviando) return;
+    if ((!texto.trim() && !imagem) || enviando) return;
     setEnviando(true);
     try {
-      await api(`${url}/mensagens`, { texto: texto.trim() });
+      await api(`${url}/mensagens`, { texto: texto.trim(), imagem: imagem || undefined });
       setTexto('');
+      setImagem(null);
       carregar();
     } catch (err: any) {
       setErro(err.message);
@@ -628,6 +636,18 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
                 <Bot className="w-3 h-3" /> Assistente virtual
               </div>
             )}
+            {Boolean(Number(m.tem_imagem)) && (
+              // Clique abre a imagem inteira em outra aba
+              <a href={`${url}/imagens/${m.id}`} target="_blank" rel="noreferrer" className="block my-0.5">
+                <img
+                  src={`${url}/imagens/${m.id}`}
+                  alt="Imagem enviada"
+                  // A rolagem até o fim aconteceu antes de a imagem ter altura: a última rola de novo quando carrega
+                  onLoad={() => i === c.mensagens.length - 1 && fim.current?.scrollIntoView({ block: 'end' })}
+                  className="max-h-48 max-w-full rounded-lg bg-white object-contain"
+                />
+              </a>
+            )}
             {ID_ANYDESK.test(m.texto) ? `Número do AnyDesk enviado: ${formatarAnydesk(ID_ANYDESK.exec(m.texto)![1])}` : m.texto}
             <div className={`text-[10px] mt-0.5 text-right ${m.autor === 'cliente' ? 'text-blue-100' : 'text-stone-400'}`}>{formatDateTimeBR(m.criado_em)}</div>
           </div>
@@ -680,11 +700,24 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
             </button>
           </div>
         )}
-        <form onSubmit={enviar} className="p-3 bg-white border-t border-stone-200 flex items-end gap-2 shrink-0">
+        <form onSubmit={enviar} className="p-3 bg-white border-t border-stone-200 flex flex-col gap-2 shrink-0">
+          {imagem && <PreviaImagem src={imagem} onRemover={() => setImagem(null)} />}
+          <div className="flex items-end gap-2">
+          <BotaoClipe
+            onImagem={setImagem}
+            onErro={setErro}
+            disabled={enviando}
+            className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 hover:text-blue-600 cursor-pointer disabled:opacity-40"
+          />
           <textarea
             ref={campoMensagem}
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
+            onPaste={(e) => {
+              imagemColada(e)
+                .then((img) => img && setImagem(img))
+                .catch((err) => setErro(err.message));
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -698,9 +731,10 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
             aria-label="Mensagem"
             className={`${INPUT_CLASS} flex-1 resize-none text-sm`}
           />
-          <button type="submit" disabled={enviando || !texto.trim()} title="Enviar" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white cursor-pointer disabled:opacity-40">
+          <button type="submit" disabled={enviando || (!texto.trim() && !imagem)} title="Enviar" className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 text-white cursor-pointer disabled:opacity-40">
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
+          </div>
         </form>
         </>
       )}

@@ -19,6 +19,7 @@ import {
   criarChamado,
   encerrarChamado,
   enviarMensagemChamado,
+  baixarImagemChamado,
   fetchChamado,
   fetchChamados, fetchTecnicosChamados,
   fetchFilaChamados,
@@ -42,6 +43,7 @@ import { lerSessao } from '../utils/session';
 import { useGrudarNoFim } from '../utils/grudarNoFim';
 import { AtividadeModal } from './AtividadeModal';
 import { BotaoConversaBot } from './ConversaBot';
+import { BotaoClipe, imagemColada, PreviaImagem } from './AnexarImagem';
 
 /**
  * Suporte › Fila de Chamados e Chamados Ativos (server/chamados.ts), no modelo do solweb: a fila
@@ -776,6 +778,8 @@ const ChamadoAberto: React.FC<{
   const [c, setC] = useState<ChamadoDetalhe | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [texto, setTexto] = useState('');
+  /** Print que vai junto na próxima mensagem (data URI reduzido) */
+  const [imagem, setImagem] = useState<string | null>(null);
   const [interna, setInterna] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [dialogo, setDialogo] = useState<'encerrar' | 'transferir' | 'tarefa' | 'historico' | null>(null);
@@ -1003,15 +1007,19 @@ const ChamadoAberto: React.FC<{
   );
 
 
+  /** Imagem: no chat do site, ou numa nota interna (o WhatsApp leva só texto) */
+  const aceitaImagem = c.canal === 'web' || interna;
+
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
     // Enter de novo enquanto envia: ignora (o campo fica só leitura, não desabilitado, para manter o foco)
-    if (!texto.trim() || enviando) return;
+    if ((!texto.trim() && !imagem) || enviando) return;
     setEnviando(true);
     setErro(null);
     try {
-      const r = await enviarMensagemChamado(c.id, texto.trim(), interna);
+      const r = await enviarMensagemChamado(c.id, texto.trim(), interna, imagem);
       setTexto('');
+      setImagem(null);
       // Nota gravada: o interruptor volta para resposta ao cliente (a próxima nota é escolha de novo)
       setInterna(false);
       if (r.aviso) onToast(r.aviso);
@@ -1327,6 +1335,7 @@ const ChamadoAberto: React.FC<{
                 {/* Assistente (bm-help): respondeu o cliente enquanto ele esperava na fila (server/suporte.ts) */}
                 {m.autor === 'assistente' ? 'Assistente virtual (bm-help)' : m.usuario_nome || (m.autor === 'cliente' ? nomeChamado(c, 'Cliente') : 'Equipe')}
               </div>
+              {Boolean(Number(m.tem_imagem)) && <ImagemDoChamado chamadoId={c.id} msgId={m.id} />}
               {m.texto}
               <div className={`text-[10px] mt-1 text-right ${m.autor === 'equipe' && !m.interna ? 'text-blue-100' : 'text-stone-400'}`}>{formatDateTimeBR(m.criado_em)}</div>
             </div>
@@ -1346,10 +1355,18 @@ const ChamadoAberto: React.FC<{
       {/* Resposta */}
       {podeEscrever ? (
         <form onSubmit={enviar} className="px-5 py-3 border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 flex flex-col gap-2">
+          {imagem && <PreviaImagem src={imagem} onRemover={() => setImagem(null)} />}
           <textarea
             ref={campoResposta}
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
+            onPaste={(e) => {
+              // Print colado: vai pelo chat do site (o WhatsApp leva só texto) ou na nota interna
+              if (!aceitaImagem) return;
+              imagemColada(e)
+                .then((img) => img && setImagem(img))
+                .catch((err) => setErro(err.message));
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -1374,10 +1391,18 @@ const ChamadoAberto: React.FC<{
                 disabled={enviando}
                 className={`${botao} border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800`}
               />
+              {aceitaImagem && (
+                <BotaoClipe
+                  onImagem={setImagem}
+                  onErro={setErro}
+                  disabled={enviando}
+                  className={`${botao} border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800`}
+                />
+              )}
               <Toggle checked={interna} onChange={setInterna} size="sm" label={<span className="inline-flex items-center gap-1 text-xs"><StickyNote className="w-3.5 h-3.5 text-amber-600" /> Nota interna</span>} />
               {botoesSite}
             </div>
-            <button type="submit" disabled={enviando || !texto.trim()} className={`${botao} ${interna ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+            <button type="submit" disabled={enviando || (!texto.trim() && !(imagem && aceitaImagem))} className={`${botao} ${interna ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
               {enviando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
               {enviando ? 'Enviando...' : interna ? 'Gravar nota' : 'Enviar'}
             </button>
@@ -1720,5 +1745,27 @@ const NovoChamado: React.FC<{ onFechar: () => void; onCriado: (id: number, numer
         <Toggle checked={v.atender} onChange={(atender) => alterar({ atender })} size="sm" label="Atender agora (o chamado fica comigo)" />
       </div>
     </ConfirmDialog>
+  );
+};
+
+/** Print de uma mensagem (chat do site): busca com o token e abre inteiro em outra aba ao clicar */
+const ImagemDoChamado: React.FC<{ chamadoId: number; msgId: number }> = ({ chamadoId, msgId }) => {
+  const [src, setSrc] = useState<string | null>(null);
+  const [falhou, setFalhou] = useState(false);
+  useEffect(() => {
+    let url: string | null = null;
+    baixarImagemChamado(chamadoId, msgId)
+      .then((b) => setSrc((url = URL.createObjectURL(b))))
+      .catch(() => setFalhou(true));
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [chamadoId, msgId]);
+  if (falhou) return <div className="text-[11px] italic opacity-70">(imagem indisponível)</div>;
+  if (!src) return <Loader2 className="w-4 h-4 animate-spin my-1 opacity-60" />;
+  return (
+    <a href={src} target="_blank" rel="noreferrer" className="block my-0.5" title="Abrir a imagem">
+      <img src={src} alt="Imagem enviada" className="max-h-56 max-w-full rounded-lg bg-white object-contain" />
+    </a>
   );
 };

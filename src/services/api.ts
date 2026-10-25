@@ -917,11 +917,13 @@ export interface ChamadoResumo {
 
 export interface ChamadoMensagem {
   id: number;
-  autor: 'equipe' | 'cliente' | 'sistema';
+  autor: 'equipe' | 'cliente' | 'sistema' | 'assistente';
   texto: string;
   interna: boolean;
   criado_em: string;
   usuario_nome: string | null;
+  /** Tem print (chat do site): a imagem vem por baixarImagemChamado */
+  tem_imagem?: number | boolean;
 }
 
 export interface ChamadoDetalhe extends ChamadoResumo {
@@ -1141,8 +1143,14 @@ export const vincularComputador = (id: number, pc: ComputadorBmdesk) =>
 /** Endereço da tela remota do computador (abre em outra aba) */
 export const acessarComputador = (id: number, pc: ComputadorBmdesk): Promise<{ url: string }> =>
   enviar('POST', `/api/chamados/${id}/acessar-computador`, { computador: pc.id, nome: pc.nome });
-export const enviarMensagemChamado = (id: number, texto: string, interna: boolean): Promise<{ success: boolean; aviso: string | null }> =>
-  enviar('POST', `/api/chamados/${id}/mensagens`, { texto, interna });
+export const enviarMensagemChamado = (id: number, texto: string, interna: boolean, imagem?: string | null): Promise<{ success: boolean; aviso: string | null }> =>
+  enviar('POST', `/api/chamados/${id}/mensagens`, { texto, interna, imagem: imagem || undefined });
+/** Imagem de uma mensagem do chamado (com o token: o <img> sozinho não manda o cabeçalho) */
+export async function baixarImagemChamado(id: number, msgId: number): Promise<Blob> {
+  const r = await fetch(`/api/chamados/${id}/mensagens/${msgId}/imagem`, { headers: headers() });
+  if (!r.ok) await parseOrThrow(r);
+  return r.blob();
+}
 
 // ------------------------------------------------------------
 // Pesquisa de satisfação (Suporte › Pesquisa de Satisfação; server/pesquisasSatisfacao.ts)

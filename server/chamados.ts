@@ -69,7 +69,7 @@ const SELECT = `
          p.tecnico_padrao_id, tp.nome AS tecnico_padrao_nome,
          TIMESTAMPDIFF(MINUTE, c.criado_em, NOW()) AS espera_min,
          (c.sla_prazo IS NOT NULL AND c.sla_prazo < NOW() AND c.status NOT IN ${ENCERRADOS}) AS sla_vencido,
-         (SELECT m.texto FROM chamado_mensagens m WHERE m.chamado_id = c.id AND m.autor <> 'sistema' ORDER BY m.id DESC LIMIT 1) AS ultima,
+         (SELECT IF(m.texto = '' AND m.imagem IS NOT NULL, '📷 Imagem', m.texto) FROM chamado_mensagens m WHERE m.chamado_id = c.id AND m.autor <> 'sistema' ORDER BY m.id DESC LIMIT 1) AS ultima,
          ${NR_FILA} AS nr_fila
     FROM chamados c
     LEFT JOIN pessoas p ON p.id = c.pessoa_id
@@ -88,6 +88,21 @@ const numeros = (r: any) => ({ ...r, espera_min: Number(r.espera_min), sla_venci
 
 const SECAO_ABERTA = '(SELECT s.id FROM chamado_secoes s WHERE s.chamado_id = ? AND s.fim IS NULL ORDER BY s.id DESC LIMIT 1)';
 
+export type ImagemMensagem = { tipo: string; dados: Buffer };
+
+/**
+ * Imagem (print) de uma mensagem do chat do site: data URI que o navegador já reduziu (até 1600 px).
+ * Vazio = sem imagem; formato que não é imagem ou grande demais = erro 400
+ */
+export function lerImagem(v: unknown): ImagemMensagem | null {
+  if (!v) return null;
+  const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(String(v));
+  if (!m) throw erro(400, 'A imagem precisa ser PNG, JPG, WebP ou GIF.');
+  const dados = Buffer.from(m[2], 'base64');
+  if (dados.length > 3 * 1024 * 1024) throw erro(400, 'Imagem grande demais (máximo 3 MB).');
+  return { tipo: m[1], dados };
+}
+
 /** Mensagem na linha do tempo do chamado, ligada à seção aberta */
 export function gravarMensagem(m: {
   chamado_id: number;
@@ -96,10 +111,11 @@ export function gravarMensagem(m: {
   usuario_id?: number | null;
   interna?: boolean;
   whatsapp_id?: number | null;
+  imagem?: ImagemMensagem | null;
 }) {
   return pool.query(
-    `INSERT INTO chamado_mensagens (chamado_id, secao_id, usuario_id, autor, texto, interna, whatsapp_id) VALUES (?, ${SECAO_ABERTA}, ?, ?, ?, ?, ?)`,
-    [m.chamado_id, m.chamado_id, m.usuario_id ?? null, m.autor, m.texto, m.interna ? 1 : 0, m.whatsapp_id ?? null],
+    `INSERT INTO chamado_mensagens (chamado_id, secao_id, usuario_id, autor, texto, interna, whatsapp_id, imagem, imagem_tipo) VALUES (?, ${SECAO_ABERTA}, ?, ?, ?, ?, ?, ?, ?)`,
+    [m.chamado_id, m.chamado_id, m.usuario_id ?? null, m.autor, m.texto, m.interna ? 1 : 0, m.whatsapp_id ?? null, m.imagem?.dados ?? null, m.imagem?.tipo ?? null],
   );
 }
 
@@ -328,7 +344,7 @@ export function createChamadosRouter(): Router {
       [req.params.id],
     );
     const [mensagens] = await pool.query<any[]>(
-      `SELECT m.id, m.autor, m.texto, m.interna, m.criado_em, m.usuario_id, u.nome AS usuario_nome
+      `SELECT m.id, m.autor, m.texto, m.interna, m.criado_em, m.usuario_id, u.nome AS usuario_nome, m.imagem IS NOT NULL AS tem_imagem
          FROM chamado_mensagens m LEFT JOIN usuarios u ON u.id = m.usuario_id WHERE m.chamado_id = ? ORDER BY m.id`,
       [req.params.id],
     );
@@ -494,7 +510,7 @@ export function createChamadosRouter(): Router {
    * Mensagem da equipe no chamado. Chamado do site: o cliente lê no chat do site; dos outros canais: vai pelo WhatsApp da
    * pessoa, se tiver. Devolve um aviso quando não deu para mandar ao cliente.
    */
-  async function mensagemEquipe(c: any, res: Response, texto: string, interna = false): Promise<string | null> {
+  async function mensagemEquipe(c: any, res: Response, texto: string, interna = false, imagem: ImagemMensagem | null = null): Promise<string | null> {
     let whatsappId: number | null = null;
     let aviso: string | null = null;
     if (!interna && c.canal !== 'web') {
@@ -513,7 +529,7 @@ export function createChamadosRouter(): Router {
         whatsappId = w[0]?.id ?? null;
       }
     }
-    await gravarMensagem({ chamado_id: c.id, usuario_id: eu(res), autor: 'equipe', texto, interna, whatsapp_id: whatsappId });
+    await gravarMensagem({ chamado_id: c.id, usuario_id: eu(res), autor: 'equipe', texto, interna, whatsapp_id: whatsappId, imagem });
     return aviso;
   }
 
@@ -630,10 +646,24 @@ export function createChamadosRouter(): Router {
     conferirDono(c, res);
     if (!c.atendente_id) throw erro(400, 'Assuma o chamado antes de responder.');
     const texto = String(req.body?.texto ?? '').trim().slice(0, 4000);
-    if (!texto) throw erro(400, 'Escreva a mensagem.');
+    const imagem = lerImagem(req.body?.imagem);
+    if (!texto && !imagem) throw erro(400, 'Escreva a mensagem.');
     const interna = Boolean(req.body?.interna);
-    const aviso = await mensagemEquipe(c, res, texto, interna);
+    // Imagem só pelo chat do site (o envio pelo WhatsApp é só texto); nota interna aceita em qualquer canal
+    if (imagem && !interna && c.canal !== 'web') throw erro(400, 'A imagem vai só pelo chat do site: este chamado não veio pelo site.');
+    const aviso = await mensagemEquipe(c, res, texto, interna, imagem);
     res.json({ success: true, aviso });
+  }));
+
+  /** Imagem de uma mensagem do chamado (a tela do técnico busca com o token e mostra) */
+  router.get('/chamados/:id/mensagens/:msg/imagem', rota(async (req, res) => {
+    const c = await chamadoDaEmpresa(req.params.id, emp(res));
+    const [r] = await pool.query<any[]>('SELECT imagem, imagem_tipo FROM chamado_mensagens WHERE id = ? AND chamado_id = ? AND imagem IS NOT NULL', [
+      Number(req.params.msg) || 0,
+      c.id,
+    ]);
+    if (!r[0]) throw erro(404, 'Imagem não encontrada.');
+    res.set('Content-Type', r[0].imagem_tipo || 'image/jpeg').set('Cache-Control', 'private, max-age=86400').send(r[0].imagem);
   }));
 
   /**

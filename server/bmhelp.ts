@@ -58,11 +58,16 @@ export async function sistemasBmhelp(): Promise<{ id: number; nome: string }[]> 
  * Pergunta e espera a resposta inteira (o bm-help responde aos poucos; aqui junta tudo).
  * Sem sessão abre conversa nova; com ela, continua a mesma (o bm-help lembra do que já foi falado)
  */
-export async function perguntarBmhelp(sistemaId: number, pergunta: string, sessao: string | null): Promise<{ texto: string; sessao: string }> {
+export async function perguntarBmhelp(
+  sistemaId: number,
+  pergunta: string,
+  sessao: string | null,
+  imagem: { tipo: string; base64: string } | null = null,
+): Promise<{ texto: string; sessao: string }> {
   // A função da Vercel vai até 120 s; a primeira resposta (abre o código do sistema) leva uns 30 a 60 s
   const r = await chamar(
     '/api/perguntar',
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sistemaId, pergunta, sessaoId: sessao || undefined }) },
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sistemaId, pergunta, sessaoId: sessao || undefined, imagem: imagem || undefined }) },
     105000,
   );
   return { texto: (await r.text()).trim(), sessao: r.headers.get('X-Sessao') || sessao || '' };

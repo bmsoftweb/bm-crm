@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import express, { Router, Request, Response } from 'express';
 import { pool } from './db.js';
 import { chamarBmdesk } from './bmdesk.js';
-import { fecharSecao, gravarMensagem, NR_FILA } from './chamados.js';
+import { fecharSecao, gravarMensagem, ImagemMensagem, lerImagem, NR_FILA } from './chamados.js';
 import { registrarLead } from './chatbot.js';
 import { donoDoTelefone, telefoneWhatsApp } from './whatsapp.js';
 import { notificar } from './notificacoes.js';
@@ -51,7 +51,7 @@ const LIMITE_ASSISTENTE = 10;
 const assistenteAtivo = (c: any) => bmhelpLigado() && !c.atendente_id && !['encerrado', 'cancelado'].includes(c.status);
 
 /** Pergunta ao bm-help pelo chamado e grava a resposta como mensagem do assistente */
-async function responderAssistente(chamadoId: number, pergunta: string) {
+async function responderAssistente(chamadoId: number, pergunta: string, imagem: ImagemMensagem | null = null) {
   const [[a]] = await pool.query<any[]>(
     `SELECT bmhelp_sistema_id, bmhelp_sessao,
             (SELECT COUNT(*) FROM chamado_mensagens m WHERE m.chamado_id = c.id AND m.autor = 'assistente') AS qtd
@@ -69,7 +69,12 @@ async function responderAssistente(chamadoId: number, pergunta: string) {
   }
   let resposta: string;
   try {
-    const r = await perguntarBmhelp(Number(a.bmhelp_sistema_id), pergunta, a.bmhelp_sessao || null);
+    const r = await perguntarBmhelp(
+      Number(a.bmhelp_sistema_id),
+      pergunta,
+      a.bmhelp_sessao || null,
+      imagem ? { tipo: imagem.tipo, base64: imagem.dados.toString('base64') } : null,
+    );
     if (r.sessao && r.sessao !== a.bmhelp_sessao) await pool.query('UPDATE chamados SET bmhelp_sessao = ? WHERE id = ?', [r.sessao.slice(0, 100), chamadoId]);
     resposta = r.texto || 'Não encontrei uma resposta para isso. Um técnico já vai falar com você.';
   } catch (err: any) {
@@ -328,7 +333,7 @@ export function createSuporteRouter(): Router {
   router.get('/api/publico/suporte/chamado/:token', rota(async (req, res) => {
     const c = await doToken(req.params.token);
     const [msgs] = await pool.query<any[]>(
-      `SELECT m.id, m.autor, m.texto, m.criado_em, u.nome AS usuario_nome
+      `SELECT m.id, m.autor, m.texto, m.criado_em, u.nome AS usuario_nome, m.imagem IS NOT NULL AS tem_imagem
          FROM chamado_mensagens m LEFT JOIN usuarios u ON u.id = m.usuario_id
         WHERE m.chamado_id = ? AND m.autor IN ('cliente','equipe','assistente') AND m.interna = 0 ORDER BY m.id`,
       [c.id],
@@ -358,11 +363,25 @@ export function createSuporteRouter(): Router {
     const c = await doToken(req.params.token);
     if (['encerrado', 'cancelado'].includes(c.status)) throw erro(409, 'Este atendimento foi encerrado. Abra um novo, se precisar.');
     const msg = texto(req.body?.texto, 4000);
-    if (!msg) throw erro(400, 'Escreva a mensagem.');
-    await gravarMensagem({ chamado_id: c.id, autor: 'cliente', texto: msg });
-    // Sem técnico e com o sistema escolhido: o assistente responde (a requisição espera a resposta)
-    if (assistenteAtivo(c)) await responderAssistente(c.id, msg);
+    // Print da tela (colado ou escolhido no clipe): vai junto, ou sozinho
+    const imagem = lerImagem(req.body?.imagem);
+    if (!msg && !imagem) throw erro(400, 'Escreva a mensagem.');
+    await gravarMensagem({ chamado_id: c.id, autor: 'cliente', texto: msg, imagem });
+    // Sem técnico e com o sistema escolhido: o assistente responde (a requisição espera a resposta; o print vai junto)
+    if (assistenteAtivo(c)) await responderAssistente(c.id, msg, imagem);
     res.json({ success: true });
+  }));
+
+  /** Imagem de uma mensagem do chat (só as que o cliente vê) */
+  router.get('/api/publico/suporte/chamado/:token/imagens/:msg', rota(async (req, res) => {
+    const c = await doToken(req.params.token);
+    const [r] = await pool.query<any[]>(
+      `SELECT imagem, imagem_tipo FROM chamado_mensagens
+        WHERE id = ? AND chamado_id = ? AND interna = 0 AND autor IN ('cliente','equipe','assistente') AND imagem IS NOT NULL`,
+      [Number(req.params.msg) || 0, c.id],
+    );
+    if (!r[0]) throw erro(404, 'Imagem não encontrada.');
+    res.set('Content-Type', r[0].imagem_tipo || 'image/jpeg').set('Cache-Control', 'private, max-age=86400').send(r[0].imagem);
   }));
 
   /** Sistemas que o assistente conhece (o cliente escolhe sobre qual é a dúvida) */

@@ -32,7 +32,7 @@ const lerDataUri = (arquivo: File) =>
  * como veio; só o que passa de ~1,3 MB é reduzido para 1600 px no lado maior.
  * PNG preserva a transparência do logo; se ficar grande (foto), vira JPEG com fundo branco.
  */
-async function prepararImagem(arquivo: File, original = false): Promise<string> {
+export async function prepararImagem(arquivo: File, original = false): Promise<string> {
   if (!arquivo.type.startsWith('image/')) throw new Error('Escolha um arquivo de imagem (PNG, JPG, WebP…).');
   if (original && arquivo.size <= ORIGINAL_MAX_BYTES) return lerDataUri(arquivo);
   const url = URL.createObjectURL(arquivo);

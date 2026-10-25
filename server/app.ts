@@ -103,10 +103,10 @@ const SQL_USUARIO_EMPRESA = `
 /** App Express com todas as rotas /api. Local: server.ts adiciona o Vite e o listen; Vercel: api/index.ts */
 export function createApp() {
   const app = express();
-  // Documentos de contrato e arquivos das conversas (base64) passam do limite normal de 2 MB
+  // Documentos de contrato, arquivos das conversas e imagens do chat do suporte (base64) passam do limite normal de 2 MB
   const jsonNormal = express.json({ limit: '2mb' });
   const jsonDocumentos = express.json({ limit: '25mb' });
-  const comArquivo = /^\/api\/(contratos\/\d+\/documentos|whatsapp\/conversas\/\d+|jornada\/arquivos)$/;
+  const comArquivo = /^\/api\/(contratos\/\d+\/documentos|whatsapp\/conversas\/\d+|jornada\/arquivos|chamados\/\d+\/mensagens|publico\/suporte\/chamado\/[^/]+\/mensagens)$/;
   app.use((req, res, next) => (comArquivo.test(req.path) ? jsonDocumentos : jsonNormal)(req, res, next));
 
   // ==========================================================

@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.172 — 2026-10-25
+
+- Chat de suporte: imagens nos dois sentidos. O cliente manda um print pelo widget (Ctrl+V no campo da mensagem ou botão de clipe) e o técnico também, pela tela de chamados (chamados do site, ou nota interna em qualquer canal). A imagem é reduzida no navegador e aparece em miniatura, que abre grande ao clicar. Com o assistente (bm-help) ativo, o print vai junto para ele analisar. Requer as colunas `chamado_mensagens.imagem` e `imagem_tipo`.
+
 ## 0.0.171 — 2026-10-25
 
 - Chat de suporte: enquanto o cliente espera na fila sem técnico, o assistente virtual (bm-help) oferece ajuda. O cliente escolhe o sistema, o assistente responde a dúvida do chamado e as mensagens seguintes (até 10 respostas) e para quando um técnico assume. O botão "Resolveu" encerra o chamado sem precisar de técnico. Na tela do técnico, as respostas aparecem como "Assistente virtual (bm-help)". Requer `extras/bmhelp_assistente.sql` e as variáveis BMHELP_URL, BMHELP_EMAIL e BMHELP_SENHA.
