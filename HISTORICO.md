@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.179 — 2026-10-26
+
+- Pesquisa de Satisfação: as grades de pesquisas e de atendimentos selecionados ganharam o padrão completo das listas — menu no indicador (Ajustar/Melhor largura, linhas da grade, Colunas, Salvar Configuração), redimensionar e arrastar colunas, ordenar pelo cabeçalho e configuração salva por usuário. Novo componente GradeLista para levar o mesmo padrão a outras telas com tabela própria.
+
 ## 0.0.178 — 2026-10-26
 
 - Pesquisa de Satisfação: as listas de pesquisas e de atendimentos selecionados seguem o padrão dos demais grids (grade de ponta a ponta, cabeçalho fixo, indicador, Ações fixas à direita com ícones pequenos).

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { ChevronRight, CircleCheck, Dices, Eye, Inbox, Loader2, Mail, MessageCircle, Phone, Play, Plus, Save, Trash2, X } from 'lucide-react';
+import { CircleCheck, Dices, Eye, Loader2, Mail, MessageCircle, Phone, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   buscarPessoasPesquisa,
   CanalPesquisa,
@@ -33,6 +33,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { AvisoErro } from './AvisoErro';
 import { BotaoConversaBot } from './ConversaBot';
 import { BotaoAcao } from './MenuAcoes';
+import { ColunaGrade, GradeLista } from './GradeLista';
 import { createPortal } from 'react-dom';
 
 /**
@@ -397,30 +398,84 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
   /** Já sorteada: o filtro fica como no primeiro sorteio (mais atendimentos, só pelo "Sortear +x") */
   const filtroTravado = itens.length > 0;
 
-  // Mesmo visual das listas do app (CrudView): grade de ponta a ponta, indicador, sobra e Ações fixas à direita
-  const th = 'px-3 py-2.5 font-semibold text-center text-stone-600 dark:text-stone-300 border-b border-r border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 whitespace-nowrap';
-  const td = 'px-3 py-[7.5px] text-stone-700 dark:text-stone-300 border-b border-r border-stone-100 dark:border-stone-800/60';
-  const thIndicador = 'sticky left-0 z-20 w-[30px] min-w-[30px] max-w-[30px] px-0 border-b border-r border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950';
-  const tdIndicador = 'sticky left-0 z-[5] w-[30px] min-w-[30px] max-w-[30px] px-0 text-center align-middle bg-inherit border-b border-r border-stone-200 dark:border-stone-800';
-  const thAcoes = `${th} sticky right-0 z-20 w-px border-l border-r-0`;
-  const tdAcoes = `${td} sticky right-0 z-[5] w-px text-center whitespace-nowrap bg-inherit border-l border-l-stone-200 dark:border-l-stone-800 border-r-0`;
-  const linha = 'group bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors';
   const barra = 'px-4 py-2.5 border-b border-stone-200 dark:border-stone-800 flex flex-wrap items-center gap-2 shrink-0';
-  const vazio = (colunas: number, texto: string) => (
-    <tr>
-      <td colSpan={colunas} className="px-3 py-16 text-center">
-        <div className="flex flex-col items-center gap-2 text-stone-400">
-          <Inbox className="w-8 h-8" />
-          <span className="text-xs">{texto}</span>
-        </div>
-      </td>
-    </tr>
-  );
-  const indicador = (
-    <td className={tdIndicador}>
-      <ChevronRight className="w-3.5 h-3.5 mx-auto text-stone-300 opacity-0 group-hover:opacity-100 dark:text-stone-600" />
-    </td>
-  );
+
+  // Colunas das duas grades (padrão das listas: menu no indicador, larguras, ordem e colunas salvas por usuário)
+  const colunasPesquisas: ColunaGrade<PesquisaResumo>[] = [
+    { nome: 'criado_em', rotulo: 'Criada em', tipo: 'data', render: (p) => formatDateBR(p.criado_em), valor: (p) => p.criado_em },
+    { nome: 'descricao', rotulo: 'Descrição', render: (p) => <span className="font-semibold text-stone-900 dark:text-stone-100">{p.descricao}</span>, valor: (p) => p.descricao },
+    { nome: 'canal', rotulo: 'Contato', render: (p) => rotuloCanal(p.canal), valor: (p) => rotuloCanal(p.canal) },
+    { nome: 'situacao', rotulo: 'Situação', render: (p) => <Etiqueta par={SITUACAO_PESQUISA[p.situacao]} />, valor: (p) => p.situacao },
+    { nome: 'total_filtrados', rotulo: 'Filtrados', tipo: 'numero', render: (p) => p.total_filtrados ?? '—', valor: (p) => p.total_filtrados },
+    { nome: 'selecionados', rotulo: 'Selecionados', tipo: 'numero', render: (p) => p.selecionados, valor: (p) => p.selecionados },
+    { nome: 'respondidos', rotulo: 'Respondidos', tipo: 'numero', render: (p) => p.respondidos, valor: (p) => p.respondidos },
+    { nome: 'media', rotulo: 'Nota média', tipo: 'numero', render: (p) => (p.media == null ? '—' : p.media.toLocaleString('pt-BR')), valor: (p) => p.media },
+  ];
+  const colunasItens: ColunaGrade<ItemPesquisa>[] = [
+    {
+      nome: 'selecionado',
+      rotulo: 'Selecionado',
+      tipo: 'centro',
+      render: (i) => (
+        <span onClick={(e) => e.stopPropagation()}>
+          <Toggle
+            size="sm"
+            checked={i.selecionado}
+            disabled={i.situacao !== 'sorteado'}
+            title={i.situacao !== 'sorteado' ? 'Já contatado' : i.selecionado ? 'Não contatar este' : 'Contatar este'}
+            onChange={(x) => acao('marcar', async () => (await marcarItemPesquisa(i.id, x), await recarregarAtual()))}
+          />
+        </span>
+      ),
+      valor: (i) => (i.selecionado ? 1 : 0),
+    },
+    { nome: 'lote', rotulo: 'Lote', tipo: 'numero', render: (i) => i.lote, valor: (i) => i.lote },
+    {
+      nome: 'data_atendimento',
+      rotulo: 'Atendido em',
+      tipo: 'data',
+      render: (i) => <span className="whitespace-nowrap">{i.data_atendimento ? formatDateTimeBR(i.data_atendimento) : '—'}</span>,
+      valor: (i) => i.data_atendimento,
+    },
+    { nome: 'assunto', rotulo: 'Atendimento', render: (i) => i.assunto, valor: (i) => i.assunto },
+    {
+      nome: 'pessoa_nome',
+      rotulo: 'Cliente',
+      render: (i) => (
+        <>
+          {i.pessoa_nome ?? '—'}
+          {atual && <Contato canal={atual.canal} item={i} />}
+        </>
+      ),
+      valor: (i) => i.pessoa_nome,
+    },
+    { nome: 'atendente_nome', rotulo: 'Técnico', render: (i) => <span className="whitespace-nowrap">{i.atendente_nome ?? 'Bot'}</span>, valor: (i) => i.atendente_nome ?? 'Bot' },
+    {
+      nome: 'situacao',
+      rotulo: 'Situação',
+      render: (i) => (
+        <span className="whitespace-nowrap">
+          <Etiqueta par={SITUACAO_ITEM[i.situacao]} />
+          {i.precisa_retorno && <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Tarefa de retorno criada</div>}
+        </span>
+      ),
+      valor: (i) => i.situacao,
+    },
+    { nome: 'nota', rotulo: 'Nota', tipo: 'numero', render: (i) => <span className="whitespace-nowrap">{i.nota ? `${i.nota} ${'⭐'.repeat(i.nota)}` : '—'}</span>, valor: (i) => i.nota },
+    {
+      nome: 'retorno',
+      rotulo: 'Retorno do cliente',
+      classe: 'min-w-[30ch] max-w-[40ch]',
+      render: (i) => (
+        <>
+          {i.resumo && <div className="text-stone-700 dark:text-stone-200">{i.resumo}</div>}
+          {i.comentario && i.comentario !== i.resumo && <div className="text-[11px] text-stone-500 italic">"{i.comentario}"</div>}
+          {i.registrado_por_nome && <div className="text-[10px] text-stone-400">registrado por {i.registrado_por_nome}</div>}
+        </>
+      ),
+      valor: (i) => i.resumo,
+    },
+  ];
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-stone-900">
@@ -466,63 +521,27 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
                 Pesquisas: <strong className="text-stone-900 dark:text-stone-100">{lista?.length ?? '…'}</strong>
               </span>
             </div>
-            <div className="flex-1 overflow-auto min-h-0">
-              <table className="w-full text-xs border-separate border-spacing-0">
-                <thead className="sticky top-0 z-10">
-                  <tr>
-                    <th className={thIndicador} />
-                    <th className={th}>Criada em</th>
-                    <th className={th}>Descrição</th>
-                    <th className={th}>Contato</th>
-                    <th className={th}>Situação</th>
-                    <th className={th}>Filtrados</th>
-                    <th className={th}>Selecionados</th>
-                    <th className={th}>Respondidos</th>
-                    <th className={th}>Nota média</th>
-                    <th className={`${th} w-full`} />
-                    <th className={thAcoes}>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lista === null ? (
-                    <tr>
-                      <td colSpan={11} className="px-3 py-12 text-center">
-                        <Loader2 className="w-4 h-4 animate-spin text-stone-400 mx-auto" />
-                      </td>
-                    </tr>
-                  ) : !lista.length ? (
-                    vazio(11, 'Nenhuma pesquisa ainda. Crie a primeira em "Nova pesquisa".')
+            <GradeLista
+              recurso="pesquisas_satisfacao"
+              colunas={colunasPesquisas}
+              linhas={lista}
+              chave={(p) => p.id}
+              onClick={(p) => abrir(p.id, p.selecionados ? 'selecionados' : 'filtro')}
+              selecionadoId={atual?.id}
+              vazio='Nenhuma pesquisa ainda. Crie a primeira em "Nova pesquisa".'
+              onToast={onToast}
+              acoes={(p) => (
+                <>
+                  <BotaoAcao icone={Eye} titulo="Abrir" descricao="Abre o filtro da pesquisa" onClick={() => abrir(p.id)} />
+                  {p.situacao === 'concluida' || p.situacao === 'cancelada' ? (
+                    <span className="inline-block w-[22px]" title="A pesquisa já está encerrada" />
                   ) : (
-                    lista.map((p) => {
-                      const encerrada = p.situacao === 'concluida' || p.situacao === 'cancelada';
-                      return (
-                        <tr key={p.id} onClick={() => abrir(p.id, p.selecionados ? 'selecionados' : 'filtro')} className={`${linha} cursor-pointer`}>
-                          {indicador}
-                          <td className={`${td} text-center whitespace-nowrap`}>{formatDateBR(p.criado_em)}</td>
-                          <td className={`${td} font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap`}>{p.descricao}</td>
-                          <td className={`${td} whitespace-nowrap`}>{rotuloCanal(p.canal)}</td>
-                          <td className={`${td} whitespace-nowrap`}><Etiqueta par={SITUACAO_PESQUISA[p.situacao]} /></td>
-                          <td className={`${td} text-right`}>{p.total_filtrados ?? '—'}</td>
-                          <td className={`${td} text-right`}>{p.selecionados}</td>
-                          <td className={`${td} text-right`}>{p.respondidos}</td>
-                          <td className={`${td} text-right`}>{p.media == null ? '—' : p.media.toLocaleString('pt-BR')}</td>
-                          <td className={td} />
-                          <td className={tdAcoes} onClick={(e) => e.stopPropagation()}>
-                            <BotaoAcao icone={Eye} titulo="Abrir" descricao="Abre o filtro da pesquisa" onClick={() => abrir(p.id)} />
-                            {encerrada ? (
-                              <span className="inline-block w-[22px]" title="A pesquisa já está encerrada" />
-                            ) : (
-                              <BotaoAcao icone={CircleCheck} titulo="Concluir" descricao="Encerra a pesquisa mesmo com gente sem responder" onClick={() => setConcluindo(p)} />
-                            )}
-                            <BotaoAcao icone={Trash2} titulo="Excluir" descricao="Apaga a pesquisa (pede confirmação)" tom="perigo" onClick={() => setExcluindo(p)} />
-                          </td>
-                        </tr>
-                      );
-                    })
+                    <BotaoAcao icone={CircleCheck} titulo="Concluir" descricao="Encerra a pesquisa mesmo com gente sem responder" onClick={() => setConcluindo(p)} />
                   )}
-                </tbody>
-              </table>
-            </div>
+                  <BotaoAcao icone={Trash2} titulo="Excluir" descricao="Apaga a pesquisa (pede confirmação)" tom="perigo" onClick={() => setExcluindo(p)} />
+                </>
+              )}
+            />
           </>
         )}
 
@@ -713,69 +732,23 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto min-h-0">
-              <table className="w-full text-xs border-separate border-spacing-0">
-                <thead className="sticky top-0 z-10">
-                  <tr>
-                    <th className={thIndicador} />
-                    <th className={th}>Selecionado</th>
-                    <th className={th}>Lote</th>
-                    <th className={th}>Atendido em</th>
-                    <th className={th}>Atendimento</th>
-                    <th className={th}>Cliente</th>
-                    <th className={th}>Técnico</th>
-                    <th className={th}>Situação</th>
-                    <th className={th}>Nota</th>
-                    <th className={th}>Retorno do cliente</th>
-                    <th className={`${th} w-full`} />
-                    <th className={thAcoes}>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!itens.length
-                    ? vazio(12, 'Nenhum atendimento sorteado. Volte ao Filtro e clique em "Salvar e sortear".')
-                    : itens.map((i: ItemPesquisa) => (
-                        <tr key={i.id} className={`${linha} ${i.selecionado ? '' : 'opacity-50'}`}>
-                          {indicador}
-                          <td className={`${td} text-center`}>
-                            <Toggle
-                              size="sm"
-                              checked={i.selecionado}
-                              disabled={i.situacao !== 'sorteado'}
-                              title={i.situacao !== 'sorteado' ? 'Já contatado' : i.selecionado ? 'Não contatar este' : 'Contatar este'}
-                              onChange={(x) => acao('marcar', async () => (await marcarItemPesquisa(i.id, x), await recarregarAtual()))}
-                            />
-                          </td>
-                          <td className={`${td} text-right`}>{i.lote}</td>
-                          <td className={`${td} text-center whitespace-nowrap`}>{i.data_atendimento ? formatDateTimeBR(i.data_atendimento) : '—'}</td>
-                          <td className={td}>{i.assunto}</td>
-                          <td className={td}>
-                            {i.pessoa_nome ?? '—'}
-                            <Contato canal={atual.canal} item={i} />
-                          </td>
-                          <td className={`${td} whitespace-nowrap`}>{i.atendente_nome ?? 'Bot'}</td>
-                          <td className={`${td} whitespace-nowrap`}>
-                            <Etiqueta par={SITUACAO_ITEM[i.situacao]} />
-                            {i.precisa_retorno && <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Tarefa de retorno criada</div>}
-                          </td>
-                          <td className={`${td} text-right whitespace-nowrap`}>{i.nota ? `${i.nota} ${'⭐'.repeat(i.nota)}` : '—'}</td>
-                          <td className={`${td} min-w-[30ch] max-w-[40ch]`}>
-                            {i.resumo && <div className="text-stone-700 dark:text-stone-200">{i.resumo}</div>}
-                            {i.comentario && i.comentario !== i.resumo && <div className="text-[11px] text-stone-500 italic">"{i.comentario}"</div>}
-                            {i.registrado_por_nome && <div className="text-[10px] text-stone-400">registrado por {i.registrado_por_nome}</div>}
-                          </td>
-                          <td className={td} />
-                          <td className={tdAcoes}>
-                            {i.atividade_id && Number(i.executor_bot) === 1 && <BotaoConversaBot atividadeId={i.atividade_id} />}
-                            {atual.canal === 'ligacao' && i.situacao === 'enviado' && (
-                              <BotaoAcao icone={Phone} titulo="Registrar retorno" descricao="O que o cliente disse na ligação" onClick={() => setRetorno(i.id)} />
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                </tbody>
-              </table>
-            </div>
+            <GradeLista
+              recurso="pesquisa_itens"
+              colunas={colunasItens}
+              linhas={itens}
+              chave={(i) => i.id}
+              classeLinha={(i) => (i.selecionado ? '' : 'opacity-50')}
+              vazio='Nenhum atendimento sorteado. Volte ao Filtro e clique em "Salvar e sortear".'
+              onToast={onToast}
+              acoes={(i) => (
+                <>
+                  {i.atividade_id && Number(i.executor_bot) === 1 && <BotaoConversaBot atividadeId={i.atividade_id} />}
+                  {atual.canal === 'ligacao' && i.situacao === 'enviado' && (
+                    <BotaoAcao icone={Phone} titulo="Registrar retorno" descricao="O que o cliente disse na ligação" onClick={() => setRetorno(i.id)} />
+                  )}
+                </>
+              )}
+            />
           </>
         )}
       </div>
