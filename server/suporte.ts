@@ -6,7 +6,7 @@ import { fecharSecao, gravarMensagem, ImagemMensagem, lerImagem, NR_FILA } from 
 import { registrarLead } from './chatbot.js';
 import { donoDoTelefone, telefoneWhatsApp } from './whatsapp.js';
 import { notificar } from './notificacoes.js';
-import { bmhelpLigado, perguntarBmhelp, sistemasBmhelp } from './bmhelp.js';
+import { bmhelpLigado, pedeTecnico, perguntarBmhelp, sistemasBmhelp } from './bmhelp.js';
 import { erroCelular } from '../src/utils/formatters.js';
 
 /**
@@ -44,11 +44,20 @@ export function chamadoDoToken(token: string): number | null {
 /**
  * Assistente (bm-help, server/bmhelp.ts): enquanto o cliente espera na fila sem técnico, ele escolhe o sistema e
  * a IA responde a dúvida do chamado e as mensagens seguintes. Para sozinho quando um técnico assume.
- * Banco: chamados.bmhelp_sistema_id / bmhelp_sessao e o autor 'assistente' em chamado_mensagens
+ * Banco: chamados.bmhelp_sistema_id (0 = cliente dispensou o assistente) / bmhelp_sessao e o autor 'assistente' em chamado_mensagens
  * (extras/bmhelp_assistente.sql); só são lidos com o bm-help configurado
  */
 const LIMITE_ASSISTENTE = 10;
 const assistenteAtivo = (c: any) => bmhelpLigado() && !c.atendente_id && !['encerrado', 'cancelado'].includes(c.status);
+
+/** Cliente não quer o assistente (pediu um técnico ou "Não, obrigado"): desliga e ele segue na fila */
+async function dispensarAssistente(chamadoId: number, avisarCliente: boolean) {
+  await pool.query('UPDATE chamados SET bmhelp_sistema_id = 0, bmhelp_sessao = NULL WHERE id = ?', [chamadoId]);
+  await gravarMensagem({ chamado_id: chamadoId, autor: 'sistema', texto: 'Cliente dispensou o assistente (bm-help): aguarda um técnico na fila.' });
+  if (avisarCliente) {
+    await gravarMensagem({ chamado_id: chamadoId, autor: 'assistente', texto: 'Tudo bem! Encerrei o assistente. Você continua na fila e um técnico já vai falar com você.' });
+  }
+}
 
 /** Pergunta ao bm-help pelo chamado e grava a resposta como mensagem do assistente */
 async function responderAssistente(chamadoId: number, pergunta: string, imagem: ImagemMensagem | null = null) {
@@ -343,8 +352,11 @@ export function createSuporteRouter(): Router {
     if (assistenteAtivo(c)) {
       const [[a]] = await pool.query<any[]>('SELECT bmhelp_sistema_id FROM chamados WHERE id = ?', [c.id]);
       const id = Number(a?.bmhelp_sistema_id) || null;
-      const sistemas = id ? await sistemasBmhelp().catch(() => []) : [];
-      assistente = { sistema: id ? (sistemas.find((s) => s.id === id)?.nome ?? 'escolhido') : null };
+      // 0 = dispensado: não oferece mais
+      if (a?.bmhelp_sistema_id == null || id) {
+        const sistemas = id ? await sistemasBmhelp().catch(() => []) : [];
+        assistente = { sistema: id ? (sistemas.find((s) => s.id === id)?.nome ?? 'escolhido') : null };
+      }
     }
     res.json({
       numero: c.numero,
@@ -367,8 +379,13 @@ export function createSuporteRouter(): Router {
     const imagem = lerImagem(req.body?.imagem);
     if (!msg && !imagem) throw erro(400, 'Escreva a mensagem.');
     await gravarMensagem({ chamado_id: c.id, autor: 'cliente', texto: msg, imagem });
-    // Sem técnico e com o sistema escolhido: o assistente responde (a requisição espera a resposta; o print vai junto)
-    if (assistenteAtivo(c)) await responderAssistente(c.id, msg, imagem);
+    if (assistenteAtivo(c)) {
+      const [[a]] = await pool.query<any[]>('SELECT bmhelp_sistema_id FROM chamados WHERE id = ?', [c.id]);
+      // Conversando com o assistente e pediu um técnico: desliga o assistente e segue na fila
+      if (Number(a?.bmhelp_sistema_id) && pedeTecnico(msg)) await dispensarAssistente(c.id, true);
+      // Sem técnico e com o sistema escolhido: o assistente responde (a requisição espera a resposta; o print vai junto)
+      else await responderAssistente(c.id, msg, imagem);
+    }
     res.json({ success: true });
   }));
 
@@ -392,6 +409,17 @@ export function createSuporteRouter(): Router {
       console.error(`Suporte (assistente): ${e.message}`);
       throw erro(503, 'O assistente está indisponível agora. Um técnico já vai falar com você.');
     }));
+  }));
+
+  /** Botões "Falar com técnico" (na conversa com o assistente) e "Não, obrigado" (na oferta) */
+  router.post('/api/publico/suporte/chamado/:token/assistente/dispensar', rota(async (req, res) => {
+    const c = await doToken(req.params.token);
+    if (assistenteAtivo(c)) {
+      const [[a]] = await pool.query<any[]>('SELECT bmhelp_sistema_id FROM chamados WHERE id = ?', [c.id]);
+      // Já dispensado: nada a fazer; recusou na oferta (sem conversa): sem mensagem ao cliente
+      if (a?.bmhelp_sistema_id == null || Number(a.bmhelp_sistema_id)) await dispensarAssistente(c.id, Boolean(Number(a?.bmhelp_sistema_id)));
+    }
+    res.json({ success: true });
   }));
 
   /** Cliente escolheu o sistema: o assistente já responde a dúvida que abriu o chamado */

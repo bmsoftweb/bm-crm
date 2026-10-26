@@ -450,9 +450,6 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
   const [imagem, setImagem] = useState<string | null>(null);
   /** 'resolvido' = a dúvida foi resolvida pelo assistente (encerra sem cancelar) */
   const [encerrando, setEncerrando] = useState<false | 'sair' | 'resolvido'>(false);
-  /** Cliente dispensou o assistente neste atendimento */
-  const chaveSemAssistente = `crmweb_suporte_sem_assistente_${token}`;
-  const [semAssistente, setSemAssistente] = useState(() => ler(chaveSemAssistente) === '1');
   const [enviando, setEnviando] = useState(false);
   const fim = useRef<HTMLDivElement>(null);
   const qtd = useRef(0);
@@ -541,6 +538,11 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
   if (!c) return <div className="flex-1 flex items-center justify-center">{erro ?? <Loader2 className="w-6 h-6 animate-spin text-stone-400" />}</div>;
 
   const encerrado = ['encerrado', 'cancelado'].includes(c.status);
+  /** Cliente não quer o assistente: ele desliga e o cliente segue na fila do técnico */
+  const dispensarAssistente = () =>
+    api(`${url}/assistente/dispensar`, {})
+      .then(carregar)
+      .catch((e) => setErro(e.message));
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
     // Enter de novo enquanto envia: ignora (o campo fica só leitura, não desabilitado, para manter o foco)
@@ -598,14 +600,11 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
             </span>
           </div>
         ) : null}
-        {c.assistente && !c.assistente.sistema && !semAssistente && (
+        {c.assistente && !c.assistente.sistema && (
           <OfertaAssistente
             url={url}
             onEscolhido={carregar}
-            onRecusar={() => {
-              gravar(chaveSemAssistente, '1');
-              setSemAssistente(true);
-            }}
+            onRecusar={dispensarAssistente}
           />
         )}
         {c.mensagens.map((m, i) =>
@@ -696,10 +695,16 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
         {/* Conversando com o assistente: se resolveu, encerra sem esperar o técnico */}
         {c.assistente?.sistema && c.mensagens.some((m) => m.autor === 'assistente') && (
           <div className="px-3 pt-2 bg-white border-t border-stone-200 flex items-center justify-between gap-2 text-[11px] text-stone-500 shrink-0">
-            <span>Assistente: {c.assistente.sistema}. Se preferir, continue aguardando o técnico.</span>
-            <button type="button" onClick={() => setEncerrando('resolvido')} className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer">
-              Resolveu
-            </button>
+            <span>Assistente: {c.assistente.sistema}</span>
+            <span className="flex gap-1.5 shrink-0">
+              {/* Desliga o assistente e segue na fila (o mesmo que escrever "quero falar com um técnico") */}
+              <button type="button" onClick={dispensarAssistente} disabled={enviando} className="px-2.5 py-1 rounded-lg border border-stone-300 text-stone-600 hover:bg-stone-50 font-semibold cursor-pointer disabled:opacity-40">
+                Falar com técnico
+              </button>
+              <button type="button" onClick={() => setEncerrando('resolvido')} className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer">
+                Resolveu
+              </button>
+            </span>
           </div>
         )}
         <form onSubmit={enviar} className="p-3 bg-white border-t border-stone-200 flex flex-col gap-2 shrink-0">

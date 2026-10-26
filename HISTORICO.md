@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.177 — 2026-10-26
+
+- Chat de suporte: quando o cliente pede um técnico enquanto conversa com o assistente (bm-help) — escrevendo algo como "quero conversar com um técnico" ou pelo botão novo "Falar com técnico" —, o assistente é desligado e o cliente segue na fila aguardando o técnico. O "Não, obrigado" da oferta agora fica gravado no chamado (antes valia só naquele navegador).
+
 ## 0.0.176 — 2026-10-25
 
 - Chat de suporte 50px mais alto: o painel do widget no site passou de 600 para 650px, e a janela do BM-ClientChat também (instalador Setup-BMClientChat.exe atualizado).

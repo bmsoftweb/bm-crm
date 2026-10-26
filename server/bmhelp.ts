@@ -72,3 +72,16 @@ export async function perguntarBmhelp(
   );
   return { texto: (await r.text()).trim(), sessao: r.headers.get('X-Sessao') || sessao || '' };
 }
+
+/**
+ * O cliente pediu para falar com uma pessoa ("quero falar com um técnico", "atendente por favor"...): o chat
+ * desliga o assistente e o cliente segue na fila. "pessoa" sozinha não conta (pessoa física/jurídica é do sistema).
+ * ponytail: lista de frases, não IA; frase fora do padrão passa como dúvida (o botão "Falar com técnico" cobre)
+ */
+const PEDE_TECNICO = [
+  /\b(falar|conversar|ser atendid[oa]|atendimento|chamar|chama|passa|passar|transfer\w*)\b.{0,25}\b(t[eé]cnico|atendente|humano)/i,
+  /\b(quero|prefiro|preciso de|cad[eê])\s+(o |a |um |uma )?(t[eé]cnico|atendente|humano)/i,
+  /\b(falar|conversar)\s+com\s+(uma |alguma )?(pessoa|algu[eé]m)\b/i,
+  /^\W*(o |um |a |uma )?(t[eé]cnico|atendente|humano)s?\W*(por favor|pf|pfv)?\W*$/i,
+];
+export const pedeTecnico = (texto: string) => PEDE_TECNICO.some((r) => r.test(texto));
