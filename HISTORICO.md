@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.180 — 2026-10-26
+
+- Pesquisa de Satisfação refeita com o CrudView (o mesmo componente de Negócios, Propostas etc.): a lista tem busca, busca avançada, paginação e o menu do indicador; "Novo" e editar abrem a pesquisa numa aba com Filtro e Atendimentos Selecionados. Os atendimentos sorteados também são um CrudView, só com os da pesquisa, com o "Selecionado" na coluna estreita e Conversa do Bot/Registrar retorno nas Ações. Concluir e Excluir ficam nas ações da lista. Removido o componente GradeLista (cópia da lógica do CrudView).
+
 ## 0.0.179 — 2026-10-26
 
 - Pesquisa de Satisfação: as grades de pesquisas e de atendimentos selecionados ganharam o padrão completo das listas — menu no indicador (Ajustar/Melhor largura, linhas da grade, Colunas, Salvar Configuração), redimensionar e arrastar colunas, ordenar pelo cabeçalho e configuração salva por usuário. Novo componente GradeLista para levar o mesmo padrão a outras telas com tabela própria.

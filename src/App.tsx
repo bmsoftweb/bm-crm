@@ -40,7 +40,7 @@ import { Headset, KeyRound, Printer } from 'lucide-react';
 import { imprimirOS } from './utils/imprimirOS';
 import { AcaoEncerrarOS } from './components/EncerrarOS';
 import { AcaoGerarOS, ConfirmarGerarOS } from './components/GerarOS';
-import { AcaoRetornoLigacao, PesquisasSatisfacao } from './components/PesquisasSatisfacao';
+import { AcaoRetornoLigacao, BotaoConcluirPesquisa, PesquisaEditor } from './components/PesquisasSatisfacao';
 import { PainelSuporte } from './components/PainelSuporte';
 import { Prospeccao } from './components/Prospeccao';
 import { ContratoDocumentos } from './components/ContratoDocumentos';
@@ -462,9 +462,12 @@ export default function App() {
       if (nome === 'propostas' || nome === 'pedidos') {
         return <DocumentoEditor tipo={nome} id={record?.id ?? null} onFechar={fechar} onGravado={aoGravar} onToast={showToast} />;
       }
+      if (nome === 'pesquisas_satisfacao') {
+        return <PesquisaEditor id={record ? Number(record.id) : null} resources={resources} onGravado={aoGravar} onNavigate={navegar} onToast={showToast} />;
+      }
       return null;
     },
-    [resourceNegocios, showToast, pedirConversa],
+    [resourceNegocios, showToast, pedirConversa, resources, navegar],
   );
 
   // ----------------------------------------------------------
@@ -501,7 +504,6 @@ export default function App() {
     painel_suporte: ['Painel de Suporte', 'Chamados, WhatsApp e satisfação no período, comparados com o período anterior'],
     chamados_fila: ['Fila de Chamados', 'Chamados aguardando atendimento, em ordem de chegada'],
     chamados_ativos: ['Chamados Ativos', 'Atendimento dos chamados de suporte'],
-    pesquisas_satisfacao: ['Pesquisa de Satisfação', 'Sorteie atendimentos e pergunte aos clientes como foi'],
     prospeccao: ['Prospecção', 'Busque empresas no Google Maps por segmento e região e inclua as qualificadas como leads'],
     consultas: ['Consultas', 'Pergunte sobre os seus dados em português: a IA consulta o banco e mostra o resultado em tabela'],
   };
@@ -562,10 +564,6 @@ export default function App() {
           <div className="px-4 sm:px-6 lg:px-8 py-6">
             <PainelSuporte refreshToken={refreshToken} onNavigate={navegar} onNavigateFiltrado={navegarFiltrado} />
           </div>
-        </main>
-      ) : activeTab === 'pesquisas_satisfacao' ? (
-        <main className="flex-1 flex flex-col min-h-0 w-full">
-          <PesquisasSatisfacao refreshToken={refreshToken} onToast={showToast} />
         </main>
       ) : activeTab === 'consultas' ? (
         <main className="flex-1 flex flex-col min-h-0 w-full">
@@ -692,6 +690,8 @@ export default function App() {
                       />
                     </>
                   )
+                : activeResource.name === 'pesquisas_satisfacao'
+                  ? (row, { recarregar }) => <BotaoConcluirPesquisa row={row} onConcluida={recarregar} onToast={showToast} />
                 : activeResource.name === 'produtos'
                   ? (row, { abrir, recarregar }) => <BotaoClonar tipo="produtos" registro={row} onAbrir={abrir} onRecarregar={recarregar} onToast={showToast} />
                 : activeResource.name === 'contratos'

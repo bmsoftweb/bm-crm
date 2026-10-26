@@ -486,20 +486,6 @@ export function createPesquisasSatisfacaoRouter(): Router {
   const emp = (res: Response) => Number(res.locals.empresaId);
   const eu = (res: Response) => Number(res.locals.usuarioId);
 
-  /** Aba Pesquisas: a lista, com os totais */
-  router.get('/pesquisas-satisfacao', rota(async (_req, res) => {
-    const [r] = await pool.query<any[]>(
-      `SELECT ps.id, ps.descricao, ps.canal, ps.situacao, ps.quantidade, ps.total_filtrados, ps.criado_em, ps.executada_em, ps.concluida_em, u.nome AS criado_por_nome,
-              (SELECT COUNT(*) FROM pesquisas_satisfacao_itens i WHERE i.pesquisa_id = ps.id AND i.selecionado = 1) AS selecionados,
-              (SELECT COUNT(*) FROM pesquisas_satisfacao_itens i WHERE i.pesquisa_id = ps.id AND i.situacao = 'respondido') AS respondidos,
-              (SELECT ROUND(AVG(i.nota), 1) FROM pesquisas_satisfacao_itens i WHERE i.pesquisa_id = ps.id AND i.nota IS NOT NULL) AS media
-         FROM pesquisas_satisfacao ps LEFT JOIN usuarios u ON u.id = ps.criado_por
-        WHERE ps.empresa_id = ? ORDER BY ps.id DESC`,
-      [emp(res)],
-    );
-    res.json(r.map((x) => ({ ...x, selecionados: Number(x.selecionados), respondidos: Number(x.respondidos), media: x.media == null ? null : Number(x.media) })));
-  }));
-
   /** Uma pesquisa com os atendimentos sorteados */
   router.get('/pesquisas-satisfacao/:id', rota(async (req, res) => {
     const p = await pesquisaDaEmpresa(req.params.id, emp(res));
@@ -568,12 +554,6 @@ export function createPesquisasSatisfacaoRouter(): Router {
       d.responsavel_id,
       p.id,
     ]);
-    res.json({ success: true });
-  }));
-
-  router.delete('/pesquisas-satisfacao/:id', rota(async (req, res) => {
-    const p = await pesquisaDaEmpresa(req.params.id, emp(res));
-    await pool.query('DELETE FROM pesquisas_satisfacao WHERE id = ?', [p.id]);
     res.json({ success: true });
   }));
 

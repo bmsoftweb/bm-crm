@@ -83,6 +83,8 @@ interface CrudViewProps {
   filtrosIniciais?: { filtros: FiltroAvancado[]; seq: number } | null;
   /** Registro que abre numa aba de edição quando outra tela leva até ele (ex.: atividade → contrato); `seq` novo = abrir de novo */
   registroInicial?: { id: string | number; seq: number } | null;
+  /** Lista embutida num editor: só os registros deste pai (ex.: atendimentos de uma pesquisa); o usuário não tira o filtro */
+  filtroPai?: { campo: string; valor: string | number };
 }
 
 /** Uma aba aberta sobre um registro (inclusão ou edição) */
@@ -134,6 +136,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
   usuario,
   filtrosIniciais,
   registroInicial,
+  filtroPai,
 }) => {
   /**
    * Campos personalizados marcados como "na lista" viram colunas virtuais: o valor
@@ -698,6 +701,8 @@ export const CrudView: React.FC<CrudViewProps> = ({
         sort,
         dir,
         filters: visao === 'lista' && resource.filtroLista ? [...filtrosEfetivos, resource.filtroLista] : filtrosEfetivos,
+        filterField: filtroPai?.campo,
+        filterValue: filtroPai == null ? undefined : String(filtroPai.valor),
         arvore: modoArvore ? 'raizes' : undefined,
         minhas,
       });

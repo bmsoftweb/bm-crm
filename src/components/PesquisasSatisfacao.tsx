@@ -1,29 +1,26 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { CircleCheck, Dices, Eye, Loader2, Mail, MessageCircle, Phone, Play, Plus, Save, Trash2, X } from 'lucide-react';
+import { CircleCheck, Dices, Eye, Loader2, Phone, Play, Save, X } from 'lucide-react';
 import {
   buscarPessoasPesquisa,
   CanalPesquisa,
   criarPesquisa,
   DadosPesquisa,
-  concluirPesquisa, excluirPesquisa,
+  concluirPesquisa,
   executarPesquisa,
   fetchItemDaAtividade,
   fetchOptions,
   fetchPesquisa,
-  fetchPesquisas,
   FiltroPesquisa,
-  ItemPesquisa,
   marcarItemPesquisa,
   Pesquisa,
-  PesquisaResumo,
   previaPesquisa,
   registrarRetornoPesquisa,
   salvarPesquisa,
   sortearPesquisa,
 } from '../services/api';
-import { Id, OpcaoRef } from '../types';
-import { diaUtilAnteriorIso, formatDateBR, formatDateTimeBR } from '../utils/formatters';
+import { Id, OpcaoRef, RegistroCrud, ResourceDef } from '../types';
+import { diaUtilAnteriorIso, formatDateBR } from '../utils/formatters';
 import { INPUT_CLASS, LABEL_CLASS, FIELD_CLASS, HINT_CLASS } from '../utils/formStyles';
 import { DateField } from './DateField';
 import { NumberField } from './NumberField';
@@ -33,7 +30,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { AvisoErro } from './AvisoErro';
 import { BotaoConversaBot } from './ConversaBot';
 import { BotaoAcao } from './MenuAcoes';
-import { ColunaGrade, GradeLista } from './GradeLista';
+import { CrudView } from './CrudView';
 import { createPortal } from 'react-dom';
 
 /**
@@ -54,14 +51,6 @@ const SITUACAO_PESQUISA: Record<string, [string, string]> = {
   em_andamento: ['Em andamento', 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'],
   concluida: ['Concluída', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'],
   cancelada: ['Cancelada', 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'],
-};
-const SITUACAO_ITEM: Record<string, [string, string]> = {
-  sorteado: ['Sorteado', 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300'],
-  enviado: ['Contatado', 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'],
-  em_conversa: ['Em conversa', 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'],
-  respondido: ['Respondido', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'],
-  sem_resposta: ['Sem resposta', 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'],
-  falhou: ['Falhou', 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'],
 };
 const Etiqueta: React.FC<{ par?: [string, string] }> = ({ par }) =>
   par ? <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${par[1]}`}>{par[0]}</span> : null;
@@ -90,22 +79,6 @@ const vazia = (): DadosPesquisa => ({
 const botao = 'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50';
 const botaoSecundario = `${botao} border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800`;
 const botaoPrimario = `${botao} bg-blue-600 hover:bg-blue-700 text-white`;
-
-/**
- * Para onde vai o contato: depois de contatado, o destino usado; antes, o do cadastro pelo tipo de contato
- * (WhatsApp/ligação = celular, e-mail = e-mail). Faltando, aviso em âmbar (desmarque ou corrija o cadastro)
- */
-const Contato: React.FC<{ canal: CanalPesquisa; item: ItemPesquisa }> = ({ canal, item }) => {
-  const valor = item.destino || (canal === 'email' ? item.pessoa_email : item.pessoa_telefone);
-  const Icone = canal === 'email' ? Mail : canal === 'ligacao' ? Phone : MessageCircle;
-  return valor ? (
-    <div className="flex items-center gap-1 text-[11px] text-stone-500 dark:text-stone-400">
-      <Icone className="w-3 h-3 shrink-0" /> {valor}
-    </div>
-  ) : (
-    <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">{canal === 'email' ? 'Sem e-mail no cadastro' : 'Sem celular no cadastro'}</div>
-  );
-};
 
 /** Vários ids de uma lista: chips removíveis + combo para acrescentar */
 const Multipla: React.FC<{ rotulo: string; opcoes: OpcaoRef[]; valor?: number[]; onChange: (ids: number[]) => void; vazio: string }> = ({ rotulo, opcoes, valor = [], onChange, vazio }) => {
@@ -312,21 +285,59 @@ export const AcaoRetornoLigacao: React.FC<{ atividadeId: Id; onGravado: () => vo
   );
 };
 
-export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg: string) => void }> = ({ refreshToken, onToast }) => {
-  const [aba, setAba] = useState<'pesquisas' | 'filtro' | 'selecionados'>('pesquisas');
-  const [lista, setLista] = useState<PesquisaResumo[] | null>(null);
+/** Lista (CrudView) › Concluir: encerra a pesquisa mesmo com gente sem responder, com confirmação */
+export const BotaoConcluirPesquisa: React.FC<{ row: RegistroCrud; onConcluida: () => void; onToast: (msg: string) => void }> = ({ row, onConcluida, onToast }) => {
+  const [confirmando, setConfirmando] = useState(false);
+  if (row.situacao === 'concluida' || row.situacao === 'cancelada') return null;
+  return (
+    <>
+      <BotaoAcao icone={CircleCheck} titulo="Concluir" descricao="Encerra a pesquisa mesmo com gente sem responder" onClick={() => setConfirmando(true)} />
+      {confirmando &&
+        createPortal(
+          <ConfirmDialog
+            titulo="Concluir a pesquisa?"
+            mensagem={`"${row.descricao}" fica concluída e ninguém mais é contatado. Quem já foi contatado e responder depois ainda tem a resposta gravada.`}
+            confirmar="Concluir"
+            tom="normal"
+            onConfirmar={async () => {
+              await concluirPesquisa(Number(row.id));
+              setConfirmando(false);
+              onToast('Pesquisa concluída.');
+              onConcluida();
+            }}
+            onCancelar={() => setConfirmando(false)}
+          />,
+          document.body,
+        )}
+    </>
+  );
+};
+
+/**
+ * Pesquisa aberta numa aba do CrudView (Suporte › Pesquisa de Satisfação): Filtro e Atendimentos Selecionados.
+ * `id` null = nova pesquisa; depois de gravar ela continua aberta aqui.
+ */
+export const PesquisaEditor: React.FC<{
+  id: number | null;
+  resources: ResourceDef[];
+  onGravado: () => void;
+  onNavigate: (tela: string) => void;
+  onToast: (msg: string) => void;
+}> = ({ id, resources, onGravado, onNavigate, onToast }) => {
+  const [aba, setAba] = useState<'filtro' | 'selecionados'>('filtro');
   const [atual, setAtual] = useState<Pesquisa | null>(null);
   const [v, setV] = useState<DadosPesquisa>(vazia);
   const [nomesClientes, setNomesClientes] = useState<Record<number, string>>({});
   const [previa, setPrevia] = useState<number | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
-  const [excluindo, setExcluindo] = useState<PesquisaResumo | null>(null);
-  const [concluindo, setConcluindo] = useState<PesquisaResumo | null>(null);
   const [executando, setExecutando] = useState(false);
   const [mais, setMais] = useState('10');
   const [retorno, setRetorno] = useState<number | null>(null);
+  /** Recarrega a lista dos atendimentos (CrudView embutido) */
+  const [versaoItens, setVersaoItens] = useState(0);
   const [opcoes, setOpcoes] = useState<{ segmentos: OpcaoRef[]; usuarios: OpcaoRef[]; departamentos: OpcaoRef[]; categorias: OpcaoRef[] }>({ segmentos: [], usuarios: [], departamentos: [], categorias: [] });
+  const recursoItens = resources.find((r) => r.name === 'pesquisa_itens');
 
   useEffect(() => {
     Promise.all([fetchOptions('segmentos', 'nome'), fetchOptions('usuarios', 'nome'), fetchOptions('departamentos', 'nome'), fetchOptions('chamado_categorias', 'nome')])
@@ -334,32 +345,24 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
       .catch(() => {});
   }, []);
 
-  const carregarLista = useCallback(() => {
-    fetchPesquisas().then(setLista).catch((e) => setErro(e.message));
-  }, []);
-  useEffect(carregarLista, [carregarLista, refreshToken]);
-
-  const abrir = async (id: number, irPara: typeof aba = 'filtro') => {
+  const abrir = async (id: number, irPara?: typeof aba) => {
     try {
       const p = await fetchPesquisa(id);
       setAtual(p);
       setV({ descricao: p.descricao, objetivo: p.objetivo ?? '', canal: p.canal, conta: p.conta, filtro: p.filtro, quantidade: p.quantidade, responsavel_id: p.responsavel_id });
       // A prévia é do momento (o que ainda não foi sorteado): só aparece depois de "Ver quantos"
       setPrevia(null);
-      setAba(irPara);
+      setAba(irPara ?? (p.itens.length ? 'selecionados' : 'filtro'));
+      setVersaoItens((x) => x + 1);
     } catch (e: any) {
       setErro(e.message);
     }
   };
   const recarregarAtual = () => atual && abrir(atual.id, aba);
-
-  const nova = () => {
-    setAtual(null);
-    setV(vazia());
-    setPrevia(null);
-    setNomesClientes({});
-    setAba('filtro');
-  };
+  useEffect(() => {
+    if (id) abrir(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const f = v.filtro;
   const setFiltro = (m: Partial<FiltroPesquisa>) => {
@@ -400,91 +403,13 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
 
   const barra = 'px-4 py-2.5 border-b border-stone-200 dark:border-stone-800 flex flex-wrap items-center gap-2 shrink-0';
 
-  // Colunas das duas grades (padrão das listas: menu no indicador, larguras, ordem e colunas salvas por usuário)
-  const colunasPesquisas: ColunaGrade<PesquisaResumo>[] = [
-    { nome: 'criado_em', rotulo: 'Criada em', tipo: 'data', render: (p) => formatDateBR(p.criado_em), valor: (p) => p.criado_em },
-    { nome: 'descricao', rotulo: 'Descrição', render: (p) => <span className="font-semibold text-stone-900 dark:text-stone-100">{p.descricao}</span>, valor: (p) => p.descricao },
-    { nome: 'canal', rotulo: 'Contato', render: (p) => rotuloCanal(p.canal), valor: (p) => rotuloCanal(p.canal) },
-    { nome: 'situacao', rotulo: 'Situação', render: (p) => <Etiqueta par={SITUACAO_PESQUISA[p.situacao]} />, valor: (p) => p.situacao },
-    { nome: 'total_filtrados', rotulo: 'Filtrados', tipo: 'numero', render: (p) => p.total_filtrados ?? '—', valor: (p) => p.total_filtrados },
-    { nome: 'selecionados', rotulo: 'Selecionados', tipo: 'numero', render: (p) => p.selecionados, valor: (p) => p.selecionados },
-    { nome: 'respondidos', rotulo: 'Respondidos', tipo: 'numero', render: (p) => p.respondidos, valor: (p) => p.respondidos },
-    { nome: 'media', rotulo: 'Nota média', tipo: 'numero', render: (p) => (p.media == null ? '—' : p.media.toLocaleString('pt-BR')), valor: (p) => p.media },
-  ];
-  const colunasItens: ColunaGrade<ItemPesquisa>[] = [
-    {
-      nome: 'selecionado',
-      rotulo: 'Selecionado',
-      tipo: 'centro',
-      render: (i) => (
-        <span onClick={(e) => e.stopPropagation()}>
-          <Toggle
-            size="sm"
-            checked={i.selecionado}
-            disabled={i.situacao !== 'sorteado'}
-            title={i.situacao !== 'sorteado' ? 'Já contatado' : i.selecionado ? 'Não contatar este' : 'Contatar este'}
-            onChange={(x) => acao('marcar', async () => (await marcarItemPesquisa(i.id, x), await recarregarAtual()))}
-          />
-        </span>
-      ),
-      valor: (i) => (i.selecionado ? 1 : 0),
-    },
-    { nome: 'lote', rotulo: 'Lote', tipo: 'numero', render: (i) => i.lote, valor: (i) => i.lote },
-    {
-      nome: 'data_atendimento',
-      rotulo: 'Atendido em',
-      tipo: 'data',
-      render: (i) => <span className="whitespace-nowrap">{i.data_atendimento ? formatDateTimeBR(i.data_atendimento) : '—'}</span>,
-      valor: (i) => i.data_atendimento,
-    },
-    { nome: 'assunto', rotulo: 'Atendimento', render: (i) => i.assunto, valor: (i) => i.assunto },
-    {
-      nome: 'pessoa_nome',
-      rotulo: 'Cliente',
-      render: (i) => (
-        <>
-          {i.pessoa_nome ?? '—'}
-          {atual && <Contato canal={atual.canal} item={i} />}
-        </>
-      ),
-      valor: (i) => i.pessoa_nome,
-    },
-    { nome: 'atendente_nome', rotulo: 'Técnico', render: (i) => <span className="whitespace-nowrap">{i.atendente_nome ?? 'Bot'}</span>, valor: (i) => i.atendente_nome ?? 'Bot' },
-    {
-      nome: 'situacao',
-      rotulo: 'Situação',
-      render: (i) => (
-        <span className="whitespace-nowrap">
-          <Etiqueta par={SITUACAO_ITEM[i.situacao]} />
-          {i.precisa_retorno && <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Tarefa de retorno criada</div>}
-        </span>
-      ),
-      valor: (i) => i.situacao,
-    },
-    { nome: 'nota', rotulo: 'Nota', tipo: 'numero', render: (i) => <span className="whitespace-nowrap">{i.nota ? `${i.nota} ${'⭐'.repeat(i.nota)}` : '—'}</span>, valor: (i) => i.nota },
-    {
-      nome: 'retorno',
-      rotulo: 'Retorno do cliente',
-      classe: 'min-w-[30ch] max-w-[40ch]',
-      render: (i) => (
-        <>
-          {i.resumo && <div className="text-stone-700 dark:text-stone-200">{i.resumo}</div>}
-          {i.comentario && i.comentario !== i.resumo && <div className="text-[11px] text-stone-500 italic">"{i.comentario}"</div>}
-          {i.registrado_por_nome && <div className="text-[10px] text-stone-400">registrado por {i.registrado_por_nome}</div>}
-        </>
-      ),
-      valor: (i) => i.resumo,
-    },
-  ];
-
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-stone-900">
       {/* Abas */}
       <div className="px-4 pt-3 border-b border-stone-200 dark:border-stone-800 flex items-end gap-1 shrink-0">
         {(
           [
-            ['pesquisas', 'Pesquisas'],
-            ['filtro', atual ? `Filtro — ${atual.descricao}` : 'Filtro (nova pesquisa)'],
+            ['filtro', 'Filtro'],
             ['selecionados', `Atendimentos Selecionados${atual ? ` (${itens.filter((i) => i.selecionado).length})` : ''}`],
           ] as const
         ).map(([id, rotulo]) => (
@@ -509,42 +434,6 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
       )}
 
       <div className={`flex-1 min-h-0 flex flex-col ${aba === 'filtro' ? 'overflow-y-auto p-4' : ''}`}>
-        {/* ---------------- Pesquisas ---------------- */}
-        {aba === 'pesquisas' && (
-          <>
-            <div className={barra}>
-              <button type="button" onClick={nova} className={botaoPrimario}>
-                <Plus className="w-4 h-4" /> Nova pesquisa
-              </button>
-              <div className="flex-1" />
-              <span className="text-xs text-stone-500 dark:text-stone-400">
-                Pesquisas: <strong className="text-stone-900 dark:text-stone-100">{lista?.length ?? '…'}</strong>
-              </span>
-            </div>
-            <GradeLista
-              recurso="pesquisas_satisfacao"
-              colunas={colunasPesquisas}
-              linhas={lista}
-              chave={(p) => p.id}
-              onClick={(p) => abrir(p.id, p.selecionados ? 'selecionados' : 'filtro')}
-              selecionadoId={atual?.id}
-              vazio='Nenhuma pesquisa ainda. Crie a primeira em "Nova pesquisa".'
-              onToast={onToast}
-              acoes={(p) => (
-                <>
-                  <BotaoAcao icone={Eye} titulo="Abrir" descricao="Abre o filtro da pesquisa" onClick={() => abrir(p.id)} />
-                  {p.situacao === 'concluida' || p.situacao === 'cancelada' ? (
-                    <span className="inline-block w-[22px]" title="A pesquisa já está encerrada" />
-                  ) : (
-                    <BotaoAcao icone={CircleCheck} titulo="Concluir" descricao="Encerra a pesquisa mesmo com gente sem responder" onClick={() => setConcluindo(p)} />
-                  )}
-                  <BotaoAcao icone={Trash2} titulo="Excluir" descricao="Apaga a pesquisa (pede confirmação)" tom="perigo" onClick={() => setExcluindo(p)} />
-                </>
-              )}
-            />
-          </>
-        )}
-
         {/* ---------------- Filtro ---------------- */}
         {aba === 'filtro' && (
           <div className="max-w-4xl space-y-4">
@@ -667,7 +556,7 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
                   acao('salvar', async () => {
                     const id = await gravar();
                     onToast('Pesquisa gravada.');
-                    carregarLista();
+                    onGravado();
                     await abrir(id, 'filtro');
                   })
                 }
@@ -684,7 +573,7 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
                       const id = await gravar();
                       const r = await sortearPesquisa(id);
                       onToast(`${r.sorteados} de ${r.filtrados} atendimento(s) sorteado(s).`);
-                      carregarLista();
+                      onGravado();
                       await abrir(id, 'selecionados');
                     })
                   }
@@ -717,7 +606,7 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
                       acao('mais', async () => {
                         const r = await sortearPesquisa(atual.id, Number(mais) || 0);
                         onToast(`+${r.sorteados} atendimento(s) sorteado(s) (o filtro ainda achava ${r.filtrados}).`);
-                        carregarLista();
+                        onGravado();
                         await recarregarAtual();
                       })
                     }
@@ -732,58 +621,47 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
               </button>
             </div>
 
-            <GradeLista
-              recurso="pesquisa_itens"
-              colunas={colunasItens}
-              linhas={itens}
-              chave={(i) => i.id}
-              classeLinha={(i) => (i.selecionado ? '' : 'opacity-50')}
-              vazio='Nenhum atendimento sorteado. Volte ao Filtro e clique em "Salvar e sortear".'
-              onToast={onToast}
-              acoes={(i) => (
-                <>
-                  {i.atividade_id && Number(i.executor_bot) === 1 && <BotaoConversaBot atividadeId={i.atividade_id} />}
-                  {atual.canal === 'ligacao' && i.situacao === 'enviado' && (
-                    <BotaoAcao icone={Phone} titulo="Registrar retorno" descricao="O que o cliente disse na ligação" onClick={() => setRetorno(i.id)} />
-                  )}
-                </>
-              )}
-            />
+            {recursoItens && (
+              <CrudView
+                resource={recursoItens}
+                allResources={resources}
+                refreshToken={versaoItens}
+                onToast={onToast}
+                onCountChange={() => {}}
+                onNavigate={onNavigate}
+                filtroPai={{ campo: 'pesquisa_id', valor: atual.id }}
+                colunaInicial={{
+                  titulo: 'Selecionado (contatar este)',
+                  render: (row, ctx) => (
+                    <Toggle
+                      size="sm"
+                      checked={Boolean(Number(row.selecionado))}
+                      disabled={row.situacao !== 'sorteado' || ocupado !== null}
+                      title={row.situacao !== 'sorteado' ? 'Já contatado' : Number(row.selecionado) ? 'Não contatar este' : 'Contatar este'}
+                      onChange={(x) =>
+                        acao('marcar', async () => {
+                          await marcarItemPesquisa(Number(row.id), x);
+                          ctx.recarregar();
+                          await recarregarAtual();
+                        })
+                      }
+                    />
+                  ),
+                }}
+                acoesLinha={(row) => (
+                  <>
+                    {row.atividade_id && Number(row.executor_bot) === 1 && <BotaoConversaBot atividadeId={Number(row.atividade_id)} />}
+                    {atual.canal === 'ligacao' && row.situacao === 'enviado' && (
+                      <BotaoAcao icone={Phone} titulo="Registrar retorno" descricao="O que o cliente disse na ligação" onClick={() => setRetorno(Number(row.id))} />
+                    )}
+                  </>
+                )}
+              />
+            )}
           </>
         )}
       </div>
 
-      {concluindo && (
-        <ConfirmDialog
-          titulo="Concluir a pesquisa?"
-          mensagem={`"${concluindo.descricao}" fica concluída e ninguém mais é contatado. Quem já foi contatado e responder depois ainda tem a resposta gravada.`}
-          confirmar="Concluir"
-          tom="normal"
-          onConfirmar={async () => {
-            await concluirPesquisa(concluindo.id);
-            setConcluindo(null);
-            onToast('Pesquisa concluída.');
-            carregarLista();
-          }}
-          onCancelar={() => setConcluindo(null)}
-        />
-      )}
-      {excluindo && (
-        <ConfirmDialog
-          titulo="Excluir a pesquisa?"
-          mensagem={`"${excluindo.descricao}" e os atendimentos sorteados dela saem de vez (as atividades e tarefas já criadas continuam).`}
-          confirmar="Excluir"
-          onConfirmar={async () => {
-            await excluirPesquisa(excluindo.id);
-            if (atual?.id === excluindo.id) nova();
-            setExcluindo(null);
-            setAba('pesquisas');
-            onToast('Pesquisa excluída.');
-            carregarLista();
-          }}
-          onCancelar={() => setExcluindo(null)}
-        />
-      )}
       {executando && atual && (
         <ConfirmDialog
           titulo={`Executar a pesquisa "${atual.descricao}"?`}
@@ -802,7 +680,7 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
               const r = await executarPesquisa(atual.id);
               setExecutando(false);
               onToast(r.falhas ? `${r.executados} contatado(s); ${r.falhas} com falha: ${r.erro}` : `${r.executados} atendimento(s) contatado(s).`);
-              carregarLista();
+              onGravado();
               await recarregarAtual();
             } finally {
               setOcupado(null);
@@ -818,7 +696,7 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
           onGravado={() => {
             setRetorno(null);
             onToast('Retorno registrado.');
-            carregarLista();
+            onGravado();
             recarregarAtual();
           }}
         />

@@ -350,6 +350,26 @@ const CRIADO_ATUALIZADO = [
   { name: 'atualizado_em', label: 'Atualizado em', type: 'datetime', readOnly: true } as FieldDef,
 ];
 
+const CANAIS_PESQUISA = [
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'email', label: 'E-mail' },
+  { value: 'ligacao', label: 'Ligação' },
+];
+const SITUACOES_PESQUISA = [
+  { value: 'rascunho', label: 'Rascunho' },
+  { value: 'em_andamento', label: 'Em andamento' },
+  { value: 'concluida', label: 'Concluída' },
+  { value: 'cancelada', label: 'Cancelada' },
+];
+const SITUACOES_ITEM_PESQUISA = [
+  { value: 'sorteado', label: 'Sorteado' },
+  { value: 'enviado', label: 'Contatado' },
+  { value: 'em_conversa', label: 'Em conversa' },
+  { value: 'respondido', label: 'Respondido' },
+  { value: 'sem_resposta', label: 'Sem resposta' },
+  { value: 'falhou', label: 'Falhou' },
+];
+
 const ID: FieldDef = { name: 'id', label: 'ID', type: 'number', readOnly: true, width: 'xs' };
 
 const itensFields = (fk: string, label: string, ref: string): FieldDef[] => [
@@ -1210,6 +1230,132 @@ export const RESOURCES: ResourceDef[] = [
       },
       { name: 'ativo', label: 'Ativo', type: 'boolean', listed: true, filterable: true, default: true, width: 'xs' },
       ...CRIADO_ATUALIZADO,
+    ],
+  },
+  {
+    // Suporte › Pesquisa de Satisfação: a lista no CrudView; incluir e abrir usam o editor próprio
+    // (src/components/PesquisasSatisfacao.tsx), que grava pelas rotas de server/pesquisasSatisfacao.ts.
+    // Por isso os campos são só leitura: o CRUD genérico só lista e exclui.
+    name: 'pesquisas_satisfacao',
+    table: 'pesquisas_satisfacao',
+    tenantColumn: 'empresa_id',
+    scopeSql: 't.empresa_id = ?',
+    label: 'Pesquisa de Satisfação',
+    labelSingular: 'Pesquisa',
+    description: 'Sorteie atendimentos e pergunte aos clientes como foi',
+    icon: 'ClipboardCheck',
+    group: 'suporte',
+    pk: ['id'],
+    autoIncrement: true,
+    labelField: 'descricao',
+    defaultSort: { field: 'id', dir: 'desc' },
+    canCreate: true,
+    canUpdate: true,
+    canDelete: true,
+    semDadosDoBanco: true,
+    fields: [
+      ID,
+      { name: 'criado_em', label: 'Criada em', type: 'date', readOnly: true, listed: true, filterable: true, width: 'sm' },
+      { name: 'descricao', label: 'Descrição', type: 'text', readOnly: true, listed: true, searchable: true, filterable: true },
+      { name: 'canal', label: 'Contato', type: 'enum', readOnly: true, listed: true, filterable: true, options: CANAIS_PESQUISA },
+      { name: 'situacao', label: 'Situação', type: 'enum', readOnly: true, listed: true, filterable: true, options: SITUACOES_PESQUISA },
+      { name: 'total_filtrados', label: 'Filtrados', type: 'number', readOnly: true, listed: true, width: 'xs' },
+      {
+        name: 'selecionados',
+        label: 'Selecionados',
+        type: 'number',
+        readOnly: true,
+        listed: true,
+        width: 'xs',
+        sql: '(SELECT COUNT(*) FROM pesquisas_satisfacao_itens i WHERE i.pesquisa_id = t.id AND i.selecionado = 1)',
+      },
+      {
+        name: 'respondidos',
+        label: 'Respondidos',
+        type: 'number',
+        readOnly: true,
+        listed: true,
+        width: 'xs',
+        sql: "(SELECT COUNT(*) FROM pesquisas_satisfacao_itens i WHERE i.pesquisa_id = t.id AND i.situacao = 'respondido')",
+      },
+      {
+        name: 'media',
+        label: 'Nota média',
+        type: 'decimal',
+        scale: 1,
+        readOnly: true,
+        listed: true,
+        width: 'xs',
+        sql: '(SELECT ROUND(AVG(i.nota), 1) FROM pesquisas_satisfacao_itens i WHERE i.pesquisa_id = t.id AND i.nota IS NOT NULL)',
+      },
+      { name: 'criado_por_nome', label: 'Criada por', type: 'text', readOnly: true, sql: '(SELECT u.nome FROM usuarios u WHERE u.id = t.criado_por)' },
+      { name: 'executada_em', label: 'Executada em', type: 'datetime', readOnly: true, filterable: true },
+      { name: 'concluida_em', label: 'Concluída em', type: 'datetime', readOnly: true, filterable: true },
+    ],
+  },
+  {
+    // Atendimentos sorteados de uma pesquisa (aba Atendimentos Selecionados do editor). Só leitura aqui:
+    // marcar/desmarcar, executar e registrar retorno usam as rotas de server/pesquisasSatisfacao.ts
+    name: 'pesquisa_itens',
+    table: 'pesquisas_satisfacao_itens',
+    scopeSql: 't.pesquisa_id IN (SELECT id FROM pesquisas_satisfacao WHERE empresa_id = ?)',
+    label: 'Atendimentos Selecionados',
+    labelSingular: 'Atendimento',
+    description: 'Atendimentos sorteados na pesquisa de satisfação',
+    icon: 'ListOrdered',
+    group: 'suporte',
+    oculto: true,
+    pk: ['id'],
+    autoIncrement: true,
+    labelField: 'assunto',
+    defaultSort: { field: 'lote', dir: 'asc' },
+    canCreate: false,
+    canUpdate: false,
+    canDelete: false,
+    fields: [
+      ID,
+      { name: 'pesquisa_id', label: 'Pesquisa', type: 'number', readOnly: true },
+      { name: 'lote', label: 'Lote', type: 'number', readOnly: true, listed: true, filterable: true, width: 'xs' },
+      { name: 'data_atendimento', label: 'Atendido em', type: 'datetime', readOnly: true, listed: true, filterable: true },
+      { name: 'assunto', label: 'Atendimento', type: 'text', readOnly: true, listed: true, searchable: true },
+      {
+        name: 'pessoa_nome',
+        label: 'Cliente',
+        type: 'text',
+        readOnly: true,
+        listed: true,
+        searchable: true,
+        sql: '(SELECT pe.nome FROM pessoas pe WHERE pe.id = t.pessoa_id)',
+      },
+      {
+        name: 'pessoa_contato',
+        label: 'Contato do cliente',
+        type: 'text',
+        readOnly: true,
+        listed: true,
+        // Depois de contatado, o destino usado; antes, o do cadastro pelo tipo de contato (e-mail, ou WhatsApp/telefone)
+        sql: `COALESCE(NULLIF(t.destino, ''), (SELECT IF(ps.canal = 'email', NULLIF(pe.email, ''), COALESCE(NULLIF(pe.whatsapp, ''), NULLIF(pe.telefone, '')))
+                 FROM pessoas pe JOIN pesquisas_satisfacao ps ON ps.id = t.pesquisa_id WHERE pe.id = t.pessoa_id))`,
+      },
+      {
+        name: 'atendente_nome',
+        label: 'Técnico',
+        type: 'text',
+        readOnly: true,
+        listed: true,
+        sql: "COALESCE((SELECT u.nome FROM usuarios u WHERE u.id = t.atendente_id), 'Bot')",
+      },
+      { name: 'situacao', label: 'Situação', type: 'enum', readOnly: true, listed: true, filterable: true, options: SITUACOES_ITEM_PESQUISA },
+      { name: 'nota', label: 'Nota', type: 'number', readOnly: true, listed: true, filterable: true, width: 'xs' },
+      { name: 'resumo', label: 'Retorno do cliente', type: 'text', readOnly: true, listed: true },
+      { name: 'comentario', label: 'Comentário', type: 'text', readOnly: true },
+      { name: 'precisa_retorno', label: 'Tarefa de retorno', type: 'boolean', readOnly: true, listed: true, filterable: true, width: 'xs' },
+      { name: 'registrado_por_nome', label: 'Registrado por', type: 'text', readOnly: true, sql: '(SELECT u.nome FROM usuarios u WHERE u.id = t.registrado_por)' },
+      { name: 'selecionado', label: 'Selecionado', type: 'boolean', readOnly: true, filterable: true },
+      { name: 'atividade_id', label: 'Atividade', type: 'number', readOnly: true },
+      { name: 'executor_bot', label: 'Executor Bot', type: 'number', readOnly: true, sql: '(SELECT a.executor_bot FROM atividades a WHERE a.id = t.atividade_id)' },
+      { name: 'enviado_em', label: 'Contatado em', type: 'datetime', readOnly: true },
+      { name: 'respondido_em', label: 'Respondido em', type: 'datetime', readOnly: true },
     ],
   },
   {

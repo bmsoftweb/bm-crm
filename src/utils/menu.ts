@@ -69,6 +69,7 @@ const ICONS: Record<string, LucideIcon> = {
   Wrench,
   Hammer,
   Receipt,
+  ClipboardCheck,
 };
 
 const GROUP_ORDER: ResourceGroup[] = ['vendas', 'marketing', 'cadastros', 'acesso'];
@@ -113,7 +114,6 @@ export function gruposDoMenu(resources: ResourceDef[]): { titulo: string; itens:
         { id: 'chamados_fila', label: 'Fila de Chamados', descricao: 'Chamados aguardando atendimento', icone: Inbox },
         { id: 'conversas', label: 'Whatsapp', descricao: 'Mensagens do WhatsApp', icone: MessageCircle },
         { id: 'chamados_ativos', label: 'Chamados Ativos', descricao: 'Atendimento dos chamados', icone: Headset },
-        { id: 'pesquisas_satisfacao', label: 'Pesquisa de Satisfação', descricao: 'Pesquisas de avaliação dos atendimentos', icone: ClipboardCheck },
         // Cadastros do grupo suporte entram aqui, depois das telas (Templates foi para Cadastros)
         ...resources
           .filter((r) => r.group === 'suporte' && !r.oculto)
