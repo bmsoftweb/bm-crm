@@ -401,8 +401,9 @@ export const CrudView: React.FC<CrudViewProps> = ({
     setComSobra(true);
     const medidas = medirColunas();
     if (!medidas) return;
+    // +10px de folga: a medida arredonda para baixo e o texto no limite ainda saía cortado com "..."
     setLarguras(
-      Object.fromEntries(colunas.map((f, i) => [f.name, Math.max(60, medidas[i + inicioColunas])])),
+      Object.fromEntries(colunas.map((f, i) => [f.name, Math.max(60, medidas[i + inicioColunas] + 10)])),
     );
   };
 
