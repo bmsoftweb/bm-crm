@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { CircleCheck, Dices, Eye, Loader2, Mail, MessageCircle, Phone, Play, Plus, Save, Trash2, X } from 'lucide-react';
+import { ChevronRight, CircleCheck, Dices, Eye, Inbox, Loader2, Mail, MessageCircle, Phone, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   buscarPessoasPesquisa,
   CanalPesquisa,
@@ -397,6 +397,31 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
   /** Já sorteada: o filtro fica como no primeiro sorteio (mais atendimentos, só pelo "Sortear +x") */
   const filtroTravado = itens.length > 0;
 
+  // Mesmo visual das listas do app (CrudView): grade de ponta a ponta, indicador, sobra e Ações fixas à direita
+  const th = 'px-3 py-2.5 font-semibold text-center text-stone-600 dark:text-stone-300 border-b border-r border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 whitespace-nowrap';
+  const td = 'px-3 py-[7.5px] text-stone-700 dark:text-stone-300 border-b border-r border-stone-100 dark:border-stone-800/60';
+  const thIndicador = 'sticky left-0 z-20 w-[30px] min-w-[30px] max-w-[30px] px-0 border-b border-r border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950';
+  const tdIndicador = 'sticky left-0 z-[5] w-[30px] min-w-[30px] max-w-[30px] px-0 text-center align-middle bg-inherit border-b border-r border-stone-200 dark:border-stone-800';
+  const thAcoes = `${th} sticky right-0 z-20 w-px border-l border-r-0`;
+  const tdAcoes = `${td} sticky right-0 z-[5] w-px text-center whitespace-nowrap bg-inherit border-l border-l-stone-200 dark:border-l-stone-800 border-r-0`;
+  const linha = 'group bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors';
+  const barra = 'px-4 py-2.5 border-b border-stone-200 dark:border-stone-800 flex flex-wrap items-center gap-2 shrink-0';
+  const vazio = (colunas: number, texto: string) => (
+    <tr>
+      <td colSpan={colunas} className="px-3 py-16 text-center">
+        <div className="flex flex-col items-center gap-2 text-stone-400">
+          <Inbox className="w-8 h-8" />
+          <span className="text-xs">{texto}</span>
+        </div>
+      </td>
+    </tr>
+  );
+  const indicador = (
+    <td className={tdIndicador}>
+      <ChevronRight className="w-3.5 h-3.5 mx-auto text-stone-300 opacity-0 group-hover:opacity-100 dark:text-stone-600" />
+    </td>
+  );
+
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-stone-900">
       {/* Abas */}
@@ -428,66 +453,77 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
+      <div className={`flex-1 min-h-0 flex flex-col ${aba === 'filtro' ? 'overflow-y-auto p-4' : ''}`}>
         {/* ---------------- Pesquisas ---------------- */}
         {aba === 'pesquisas' && (
-          <div className="space-y-3">
-            <button type="button" onClick={nova} className={botaoPrimario}>
-              <Plus className="w-4 h-4" /> Nova pesquisa
-            </button>
-            {lista === null ? (
-              <Loader2 className="w-4 h-4 animate-spin text-stone-400" />
-            ) : !lista.length ? (
-              <p className="text-xs text-stone-500 py-6 text-center">Nenhuma pesquisa ainda. Crie a primeira em "Nova pesquisa".</p>
-            ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-left text-[11px] text-stone-500 border-b border-stone-200 dark:border-stone-800">
-                    <th className="py-2 px-2 text-center">Criada em</th>
-                    <th className="py-2 px-2">Descrição</th>
-                    <th className="py-2 px-2">Contato</th>
-                    <th className="py-2 px-2">Situação</th>
-                    <th className="py-2 px-2 text-right">Filtrados</th>
-                    <th className="py-2 px-2 text-right">Selecionados</th>
-                    <th className="py-2 px-2 text-right">Respondidos</th>
-                    <th className="py-2 px-2 text-right">Nota média</th>
-                    <th className="py-2 px-2 text-right">Ações</th>
+          <>
+            <div className={barra}>
+              <button type="button" onClick={nova} className={botaoPrimario}>
+                <Plus className="w-4 h-4" /> Nova pesquisa
+              </button>
+              <div className="flex-1" />
+              <span className="text-xs text-stone-500 dark:text-stone-400">
+                Pesquisas: <strong className="text-stone-900 dark:text-stone-100">{lista?.length ?? '…'}</strong>
+              </span>
+            </div>
+            <div className="flex-1 overflow-auto min-h-0">
+              <table className="w-full text-xs border-separate border-spacing-0">
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th className={thIndicador} />
+                    <th className={th}>Criada em</th>
+                    <th className={th}>Descrição</th>
+                    <th className={th}>Contato</th>
+                    <th className={th}>Situação</th>
+                    <th className={th}>Filtrados</th>
+                    <th className={th}>Selecionados</th>
+                    <th className={th}>Respondidos</th>
+                    <th className={th}>Nota média</th>
+                    <th className={`${th} w-full`} />
+                    <th className={thAcoes}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lista.map((p) => (
-                    <tr key={p.id} onClick={() => abrir(p.id, p.selecionados ? 'selecionados' : 'filtro')} className="border-b border-stone-100 dark:border-stone-800/70 hover:bg-stone-50 dark:hover:bg-stone-800/40 cursor-pointer">
-                      <td className="py-2 px-2 text-center">{formatDateBR(p.criado_em)}</td>
-                      <td className="py-2 px-2 font-semibold">{p.descricao}</td>
-                      <td className="py-2 px-2">{rotuloCanal(p.canal)}</td>
-                      <td className="py-2 px-2"><Etiqueta par={SITUACAO_PESQUISA[p.situacao]} /></td>
-                      <td className="py-2 px-2 text-right">{p.total_filtrados ?? '—'}</td>
-                      <td className="py-2 px-2 text-right">{p.selecionados}</td>
-                      <td className="py-2 px-2 text-right">{p.respondidos}</td>
-                      <td className="py-2 px-2 text-right">{p.media == null ? '—' : p.media.toLocaleString('pt-BR')}</td>
-                      <td className="py-2 px-2 text-right" onClick={(e) => e.stopPropagation()}>
-                        <button type="button" onClick={() => abrir(p.id)} title="Abrir o filtro" className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConcluindo(p)}
-                          disabled={p.situacao === 'concluida' || p.situacao === 'cancelada'}
-                          title={p.situacao === 'concluida' || p.situacao === 'cancelada' ? 'A pesquisa já está encerrada' : 'Concluir: encerra a pesquisa mesmo com gente sem responder'}
-                          className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-transparent"
-                        >
-                          <CircleCheck className="w-4 h-4" />
-                        </button>
-                        <button type="button" onClick={() => setExcluindo(p)} title="Excluir a pesquisa" className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                  {lista === null ? (
+                    <tr>
+                      <td colSpan={11} className="px-3 py-12 text-center">
+                        <Loader2 className="w-4 h-4 animate-spin text-stone-400 mx-auto" />
                       </td>
                     </tr>
-                  ))}
+                  ) : !lista.length ? (
+                    vazio(11, 'Nenhuma pesquisa ainda. Crie a primeira em "Nova pesquisa".')
+                  ) : (
+                    lista.map((p) => {
+                      const encerrada = p.situacao === 'concluida' || p.situacao === 'cancelada';
+                      return (
+                        <tr key={p.id} onClick={() => abrir(p.id, p.selecionados ? 'selecionados' : 'filtro')} className={`${linha} cursor-pointer`}>
+                          {indicador}
+                          <td className={`${td} text-center whitespace-nowrap`}>{formatDateBR(p.criado_em)}</td>
+                          <td className={`${td} font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap`}>{p.descricao}</td>
+                          <td className={`${td} whitespace-nowrap`}>{rotuloCanal(p.canal)}</td>
+                          <td className={`${td} whitespace-nowrap`}><Etiqueta par={SITUACAO_PESQUISA[p.situacao]} /></td>
+                          <td className={`${td} text-right`}>{p.total_filtrados ?? '—'}</td>
+                          <td className={`${td} text-right`}>{p.selecionados}</td>
+                          <td className={`${td} text-right`}>{p.respondidos}</td>
+                          <td className={`${td} text-right`}>{p.media == null ? '—' : p.media.toLocaleString('pt-BR')}</td>
+                          <td className={td} />
+                          <td className={tdAcoes} onClick={(e) => e.stopPropagation()}>
+                            <BotaoAcao icone={Eye} titulo="Abrir" descricao="Abre o filtro da pesquisa" onClick={() => abrir(p.id)} />
+                            {encerrada ? (
+                              <span className="inline-block w-[22px]" title="A pesquisa já está encerrada" />
+                            ) : (
+                              <BotaoAcao icone={CircleCheck} titulo="Concluir" descricao="Encerra a pesquisa mesmo com gente sem responder" onClick={() => setConcluindo(p)} />
+                            )}
+                            <BotaoAcao icone={Trash2} titulo="Excluir" descricao="Apaga a pesquisa (pede confirmação)" tom="perigo" onClick={() => setExcluindo(p)} />
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
-            )}
-          </div>
+            </div>
+          </>
         )}
 
         {/* ---------------- Filtro ---------------- */}
@@ -645,8 +681,8 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
 
         {/* ---------------- Atendimentos Selecionados ---------------- */}
         {aba === 'selecionados' && atual && (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
+          <>
+            <div className={barra}>
               <Etiqueta par={SITUACAO_PESQUISA[atual.situacao]} />
               <span className="text-xs text-stone-500">
                 {rotuloCanal(atual.canal)} • {itens.filter((i) => i.selecionado).length} selecionado(s) • {aguardando} aguardando contato • {itens.filter((i) => i.situacao === 'respondido').length} respondido(s)
@@ -677,68 +713,70 @@ export const PesquisasSatisfacao: React.FC<{ refreshToken: number; onToast: (msg
               </button>
             </div>
 
-            {!itens.length ? (
-              <p className="text-xs text-stone-500 py-6 text-center">Nenhum atendimento sorteado. Volte ao Filtro e clique em "Salvar e sortear".</p>
-            ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-left text-[11px] text-stone-500 border-b border-stone-200 dark:border-stone-800">
-                    <th className="py-2 px-2">Selecionado</th>
-                    <th className="py-2 px-2 text-right">Lote</th>
-                    <th className="py-2 px-2 text-center">Atendido em</th>
-                    <th className="py-2 px-2">Atendimento</th>
-                    <th className="py-2 px-2">Cliente</th>
-                    <th className="py-2 px-2">Técnico</th>
-                    <th className="py-2 px-2">Situação</th>
-                    <th className="py-2 px-2 text-right">Nota</th>
-                    <th className="py-2 px-2">Retorno do cliente</th>
-                    <th className="py-2 px-2 text-right">Ações</th>
+            <div className="flex-1 overflow-auto min-h-0">
+              <table className="w-full text-xs border-separate border-spacing-0">
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th className={thIndicador} />
+                    <th className={th}>Selecionado</th>
+                    <th className={th}>Lote</th>
+                    <th className={th}>Atendido em</th>
+                    <th className={th}>Atendimento</th>
+                    <th className={th}>Cliente</th>
+                    <th className={th}>Técnico</th>
+                    <th className={th}>Situação</th>
+                    <th className={th}>Nota</th>
+                    <th className={th}>Retorno do cliente</th>
+                    <th className={`${th} w-full`} />
+                    <th className={thAcoes}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {itens.map((i: ItemPesquisa) => (
-                    <tr key={i.id} className={`border-b border-stone-100 dark:border-stone-800/70 align-top ${i.selecionado ? '' : 'opacity-50'}`}>
-                      <td className="py-2 px-2">
-                        <Toggle
-                          size="sm"
-                          checked={i.selecionado}
-                          disabled={i.situacao !== 'sorteado'}
-                          title={i.situacao !== 'sorteado' ? 'Já contatado' : i.selecionado ? 'Não contatar este' : 'Contatar este'}
-                          onChange={(x) => acao('marcar', async () => (await marcarItemPesquisa(i.id, x), await recarregarAtual()))}
-                        />
-                      </td>
-                      <td className="py-2 px-2 text-right">{i.lote}</td>
-                      <td className="py-2 px-2 text-center whitespace-nowrap">{i.data_atendimento ? formatDateTimeBR(i.data_atendimento) : '—'}</td>
-                      <td className="py-2 px-2">{i.assunto}</td>
-                      <td className="py-2 px-2">
-                        {i.pessoa_nome ?? '—'}
-                        <Contato canal={atual.canal} item={i} />
-                      </td>
-                      <td className="py-2 px-2">{i.atendente_nome ?? 'Bot'}</td>
-                      <td className="py-2 px-2 whitespace-nowrap">
-                        <Etiqueta par={SITUACAO_ITEM[i.situacao]} />
-                        {i.precisa_retorno && <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Tarefa de retorno criada</div>}
-                      </td>
-                      <td className="py-2 px-2 text-right whitespace-nowrap">{i.nota ? `${i.nota} ${'⭐'.repeat(i.nota)}` : '—'}</td>
-                      <td className="py-2 px-2 max-w-[40ch]">
-                        {i.resumo && <div className="text-stone-700 dark:text-stone-200">{i.resumo}</div>}
-                        {i.comentario && i.comentario !== i.resumo && <div className="text-[11px] text-stone-500 italic">"{i.comentario}"</div>}
-                        {i.registrado_por_nome && <div className="text-[10px] text-stone-400">registrado por {i.registrado_por_nome}</div>}
-                      </td>
-                      <td className="py-2 px-2 text-right whitespace-nowrap">
-                        {i.atividade_id && Number(i.executor_bot) === 1 && <BotaoConversaBot atividadeId={i.atividade_id} />}
-                        {atual.canal === 'ligacao' && i.situacao === 'enviado' && (
-                          <button type="button" onClick={() => setRetorno(i.id)} title="Registrar o retorno da ligação" className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer">
-                            <Phone className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {!itens.length
+                    ? vazio(12, 'Nenhum atendimento sorteado. Volte ao Filtro e clique em "Salvar e sortear".')
+                    : itens.map((i: ItemPesquisa) => (
+                        <tr key={i.id} className={`${linha} ${i.selecionado ? '' : 'opacity-50'}`}>
+                          {indicador}
+                          <td className={`${td} text-center`}>
+                            <Toggle
+                              size="sm"
+                              checked={i.selecionado}
+                              disabled={i.situacao !== 'sorteado'}
+                              title={i.situacao !== 'sorteado' ? 'Já contatado' : i.selecionado ? 'Não contatar este' : 'Contatar este'}
+                              onChange={(x) => acao('marcar', async () => (await marcarItemPesquisa(i.id, x), await recarregarAtual()))}
+                            />
+                          </td>
+                          <td className={`${td} text-right`}>{i.lote}</td>
+                          <td className={`${td} text-center whitespace-nowrap`}>{i.data_atendimento ? formatDateTimeBR(i.data_atendimento) : '—'}</td>
+                          <td className={td}>{i.assunto}</td>
+                          <td className={td}>
+                            {i.pessoa_nome ?? '—'}
+                            <Contato canal={atual.canal} item={i} />
+                          </td>
+                          <td className={`${td} whitespace-nowrap`}>{i.atendente_nome ?? 'Bot'}</td>
+                          <td className={`${td} whitespace-nowrap`}>
+                            <Etiqueta par={SITUACAO_ITEM[i.situacao]} />
+                            {i.precisa_retorno && <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Tarefa de retorno criada</div>}
+                          </td>
+                          <td className={`${td} text-right whitespace-nowrap`}>{i.nota ? `${i.nota} ${'⭐'.repeat(i.nota)}` : '—'}</td>
+                          <td className={`${td} min-w-[30ch] max-w-[40ch]`}>
+                            {i.resumo && <div className="text-stone-700 dark:text-stone-200">{i.resumo}</div>}
+                            {i.comentario && i.comentario !== i.resumo && <div className="text-[11px] text-stone-500 italic">"{i.comentario}"</div>}
+                            {i.registrado_por_nome && <div className="text-[10px] text-stone-400">registrado por {i.registrado_por_nome}</div>}
+                          </td>
+                          <td className={td} />
+                          <td className={tdAcoes}>
+                            {i.atividade_id && Number(i.executor_bot) === 1 && <BotaoConversaBot atividadeId={i.atividade_id} />}
+                            {atual.canal === 'ligacao' && i.situacao === 'enviado' && (
+                              <BotaoAcao icone={Phone} titulo="Registrar retorno" descricao="O que o cliente disse na ligação" onClick={() => setRetorno(i.id)} />
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                 </tbody>
               </table>
-            )}
-          </div>
+            </div>
+          </>
         )}
       </div>
 
