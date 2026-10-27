@@ -12,6 +12,8 @@ interface AdvancedSearchProps {
   resource: ResourceDef;
   /** Combos de chave estrangeira já carregados pela listagem */
   refOptions: Record<string, OpcaoRef[]>;
+  /** Botão de atualizar dos combos: busca de novo as opções do campo */
+  onAtualizarOpcoes?: (campo: string) => Promise<void>;
   /** Filtros atualmente aplicados, para reidratar o painel ao reabrir */
   aplicados: FiltroAvancado[];
   /** fechar: veio do botão Aplicar (o painel fecha); Limpar mantém aberto para montar outro filtro */
@@ -53,6 +55,7 @@ function paraFormulario(filtros: FiltroAvancado[]): Record<string, string> {
 export const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
   resource,
   refOptions,
+  onAtualizarOpcoes,
   aplicados,
   onAplicar,
   onFechar,
@@ -201,6 +204,7 @@ export const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
           onChange={(v) => setValor(f.name, v)}
           vazioLabel="Todos"
           className={inputClass}
+          onAtualizar={onAtualizarOpcoes && (() => onAtualizarOpcoes(f.name))}
         />
       );
     }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, RefreshCw, X } from 'lucide-react';
 import { OpcaoRef } from '../types';
 
 interface SelectBuscaProps {
@@ -13,6 +13,8 @@ interface SelectBuscaProps {
   required?: boolean;
   disabled?: boolean;
   className?: string;
+  /** Busca a lista de novo no servidor (ex.: registro criado em outra tela); sem ela, não há o botão */
+  onAtualizar?: () => Promise<void>;
 }
 
 /** Quantas opções a lista desenha de uma vez (a busca é que acha o resto) */
@@ -32,8 +34,21 @@ export const SelectBusca: React.FC<SelectBuscaProps> = ({
   required,
   disabled,
   className = '',
+  onAtualizar,
 }) => {
   const [aberto, setAberto] = useState(false);
+  const [atualizando, setAtualizando] = useState(false);
+  const atualizar = async () => {
+    if (!onAtualizar || atualizando) return;
+    setAtualizando(true);
+    try {
+      await onAtualizar();
+    } catch {
+      // Falhou: fica a lista que já estava
+    } finally {
+      setAtualizando(false);
+    }
+  };
   const [busca, setBusca] = useState('');
   const [destaque, setDestaque] = useState(0);
   /** Sem espaço embaixo (perto do pé da tela) e mais espaço em cima: a lista abre para cima */
@@ -133,7 +148,7 @@ export const SelectBusca: React.FC<SelectBuscaProps> = ({
           setAberto(true);
         }}
         onKeyDown={teclado}
-        className={`${className} pr-14 text-ellipsis`}
+        className={`${className} ${onAtualizar ? 'pr-20' : 'pr-14'} text-ellipsis`}
       />
 
       <div className="absolute inset-y-0 right-2 flex items-center gap-0.5">
@@ -145,6 +160,18 @@ export const SelectBusca: React.FC<SelectBuscaProps> = ({
             className="p-0.5 rounded text-stone-400 hover:text-rose-600 cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {onAtualizar && !disabled && (
+          <button
+            type="button"
+            title="Atualizar a lista (traz o que foi cadastrado em outra tela)"
+            aria-label="Atualizar a lista"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={atualizar}
+            className="p-0.5 rounded text-stone-400 hover:text-blue-600 cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${atualizando ? 'animate-spin' : ''}`} />
           </button>
         )}
         <ChevronDown className={`w-3.5 h-3.5 text-stone-400 transition-transform ${aberto ? 'rotate-180' : ''}`} />

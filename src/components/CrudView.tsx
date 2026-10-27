@@ -611,6 +611,18 @@ export const CrudView: React.FC<CrudViewProps> = ({
   /** Muda quando uma ação da lista (ex.: importação) pode ter criado registros referenciados */
   const [versaoCombos, setVersaoCombos] = useState(0);
 
+  /** Botão de atualizar de um combo: limpa o cache do recurso ligado e busca de novo só as opções dele */
+  const atualizarOpcoes = useCallback(
+    async (campo: string) => {
+      const f = refFields.find((x) => x.name === campo);
+      if (!f) return;
+      invalidateOptions(f.ref!.resource);
+      const opcoes = await fetchOptions(f.ref!.resource, f.ref!.labelField);
+      setRefOptions((m) => ({ ...m, [campo]: opcoes }));
+    },
+    [refFields],
+  );
+
   // Carrega os combos de chave estrangeira do recurso
   useEffect(() => {
     let alive = true;
@@ -1229,6 +1241,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
           camposVisiveis={camposBuscaAtuais}
           camposExtras={camposPersonalizados}
           refOptions={refOptions}
+          onAtualizarOpcoes={atualizarOpcoes}
           aplicados={filtros}
           onAplicar={(novos, fechar) => {
             setFiltros(novos);
@@ -1622,6 +1635,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
           }
           record={abaAtual.record}
           refOptions={refOptions}
+          onAtualizarOpcoes={atualizarOpcoes}
           onCancel={() => fecharAba(abaAtual.key)}
           onSave={(payload) => handleSave(abaAtual, payload)}
           colunasVisiveis={listedFields.map((f) => f.name)}

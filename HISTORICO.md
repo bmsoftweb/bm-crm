@@ -2,6 +2,15 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.183 — 2026-10-27
+
+- Leads separados de Pessoas: nova tela Marketing › Leads (tabela leads, só os campos de contato). A Prospecção, o "Cadastrar" das Conversas e os contatos novos do WhatsApp entram como lead; Pessoas fica só com o cadastro de trabalho. "Converter em cliente" (e o chatbot/Automação ao abrir um negócio) copia o lead para Pessoas e leva junto as conversas, atendimentos, avaliações, disparos e atividades. Lead excluído deixa esses registros sem dono.
+- WhatsApp: número que não está em Pessoas é procurado nos leads; a lista e a conversa mostram o nome do lead.
+- Prospecção: o "já está no CRM" confere também os leads; "Ver leads" abre a tela de Leads.
+- Script scripts/migrar-leads.ts: levou os leads antigos de Pessoas para a tabela leads (quem tinha negócio, proposta, pesquisa ou histórico virou cliente), com backup e reversão.
+- Telas que ficam abertas em segundo plano recarregam a lista e os combos ao voltar (ex.: segmento criado na Prospecção aparece na tela de Leads).
+- Combos de cadastro e da busca avançada ganharam o botão de atualizar a lista.
+
 ## 0.0.182 — 2026-10-27
 
 - Importar pessoas de arquivo: corrigido o erro "HTTP 504" em planilhas grandes (ex.: 6 mil clientes). As pessoas novas e os endereços delas entram num único comando por lote, os endereços de quem já existe são lidos de uma vez, e o navegador envia 150 linhas por vez, para cada lote caber no tempo limite do servidor.

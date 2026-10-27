@@ -41,6 +41,7 @@ import { imprimirOS } from './utils/imprimirOS';
 import { AcaoEncerrarOS } from './components/EncerrarOS';
 import { AcaoGerarOS, ConfirmarGerarOS } from './components/GerarOS';
 import { AcaoRetornoLigacao, BotaoConcluirPesquisa, PesquisaEditor } from './components/PesquisasSatisfacao';
+import { ConverterLead } from './components/ConverterLead';
 import { PainelSuporte } from './components/PainelSuporte';
 import { Prospeccao } from './components/Prospeccao';
 import { ContratoDocumentos } from './components/ContratoDocumentos';
@@ -437,6 +438,16 @@ export default function App() {
   useEffect(() => {
     setUsoTelas((u) => [activeTab, ...u.filter((t) => t !== activeTab)].slice(0, MAX_TELAS));
   }, [activeTab]);
+  // Tela escondida que volta a aparecer recarrega (lista, combos): o que mudou em outra tela (ex.: segmento criado na
+  // Prospecção, leads incluídos) aparece. Filtros, página e formulários abertos continuam como estavam.
+  const [voltas, setVoltas] = useState<Record<string, number>>({});
+  const telaAnterior = useRef(activeTab);
+  useEffect(() => {
+    if (telaAnterior.current === activeTab) return;
+    telaAnterior.current = activeTab;
+    // Primeira visita: a tela monta agora e já carrega sozinha
+    if (usoTelas.includes(activeTab)) setVoltas((v) => ({ ...v, [activeTab]: (v[activeTab] ?? 0) + 1 }));
+  }, [activeTab, usoTelas]);
   const telasMontadas = useMemo(
     () => (usoTelas.includes(activeTab) ? usoTelas : [activeTab, ...usoTelas]).slice(0, MAX_TELAS).sort(),
     [usoTelas, activeTab],
@@ -520,19 +531,19 @@ export default function App() {
         <main className="flex-1 flex flex-col min-h-0 w-full">
           <Kanban
             resourceNegocios={resourceNegocios}
-            refreshToken={refreshToken}
+            refreshToken={refreshToken + (voltas[tela] ?? 0)}
             onToast={showToast}
             onConversar={pedirConversa}
           />
         </main>
       ) : activeTab === 'conversas' ? (
         <main className="flex-1 flex flex-col min-h-0 w-full">
-          <ConversasView refreshToken={refreshToken} onVisto={atualizarNaoVistas} pedido={pedidoConversa} onToast={showToast} onVoltarFila={() => navegar('chamados_fila')} />
+          <ConversasView refreshToken={refreshToken + (voltas[tela] ?? 0)} onVisto={atualizarNaoVistas} pedido={pedidoConversa} onToast={showToast} onVoltarFila={() => navegar('chamados_fila')} />
         </main>
       ) : activeTab === 'chamados_fila' ? (
         <main className="flex-1 flex flex-col min-h-0 w-full">
           <ChamadosFila
-            refreshToken={refreshToken}
+            refreshToken={refreshToken + (voltas[tela] ?? 0)}
             onMudou={atualizarFilaChamados}
             onAbrir={(id) => {
               setChamadoAbrir(id);
@@ -548,7 +559,7 @@ export default function App() {
       ) : activeTab === 'chamados_ativos' ? (
         <main className="flex-1 flex flex-col min-h-0 w-full">
           <ChamadosAtivos
-            refreshToken={refreshToken}
+            refreshToken={refreshToken + (voltas[tela] ?? 0)}
             abrir={chamadoAbrir}
             onMudou={atualizarFilaChamados}
             onConversar={(pessoaId) => pedirConversa({ pessoaId })}
@@ -562,7 +573,7 @@ export default function App() {
       ) : activeTab === 'painel_suporte' ? (
         <main className="flex-1 overflow-y-auto min-h-0 w-full">
           <div className="px-4 sm:px-6 lg:px-8 py-6">
-            <PainelSuporte refreshToken={refreshToken} onNavigate={navegar} onNavigateFiltrado={navegarFiltrado} />
+            <PainelSuporte refreshToken={refreshToken + (voltas[tela] ?? 0)} onNavigate={navegar} onNavigateFiltrado={navegarFiltrado} />
           </div>
         </main>
       ) : activeTab === 'consultas' ? (
@@ -571,7 +582,7 @@ export default function App() {
         </main>
       ) : activeTab === 'prospeccao' ? (
         <main className="flex-1 flex flex-col min-h-0 w-full">
-          <Prospeccao onToast={showToast} onVerLeads={(id) => navegarFiltrado('pessoas', [{ field: 'prospeccao_busca_id', op: 'eq', value: id }])} />
+          <Prospeccao onToast={showToast} onVerLeads={(id) => navegarFiltrado('leads', [{ field: 'prospeccao_busca_id', op: 'eq', value: id }])} />
         </main>
       ) : activeTab === 'configuracoes' ? (
         <main className="flex-1 flex flex-col min-h-0 w-full">
@@ -583,7 +594,7 @@ export default function App() {
             key={activeResource.name}
             resource={activeResource}
             allResources={resources}
-            refreshToken={refreshToken}
+            refreshToken={refreshToken + (voltas[tela] ?? 0)}
             onToast={showToast}
             onCountChange={handleCountChange}
             onNavigate={navegar}
@@ -690,6 +701,8 @@ export default function App() {
                       />
                     </>
                   )
+                : activeResource.name === 'leads'
+                  ? (row, { recarregar }) => <ConverterLead registro={row} onConvertido={recarregar} onToast={showToast} />
                 : activeResource.name === 'pesquisas_satisfacao'
                   ? (row, { recarregar }) => <BotaoConcluirPesquisa row={row} onConcluida={recarregar} onToast={showToast} />
                 : activeResource.name === 'produtos'

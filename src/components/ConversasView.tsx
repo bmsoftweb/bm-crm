@@ -463,6 +463,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
   const resumoAberta = conversas?.find((c) => c.telefone === aberta);
   const nomeAberta =
     conversa?.pessoa?.nome ||
+    conversa?.lead?.nome ||
     resumoAberta?.nome ||
     (atividade?.telefone === aberta ? nomePedido : null) ||
     (escolhido?.telefone === aberta ? escolhido.nome : null);
@@ -477,7 +478,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
 
   const aoCadastrar = async (telefone: string) => {
     setCadastrando(null);
-    onToast('Pessoa cadastrada e ligada à conversa.');
+    onToast('Cadastrado e ligado à conversa.');
     // Abrir a conversa liga as mensagens à pessoa nova (pelo telefone)
     if (telefone === aberta) await carregarConversa(telefone);
     else setAberta(telefone);
@@ -845,8 +846,9 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
                   {contatoAberta && nomeAberta && <span className="font-semibold text-stone-600 dark:text-stone-300">{nomeAberta} · </span>}
                   {nomeAberta || perfilAberta ? formatarTelefoneWa(aberta) : ''}
                   {!nomeAberta && (
-                    <span className="italic text-amber-600 dark:text-amber-400">{perfilAberta ? ' · ' : ''}não cadastrado em Pessoas</span>
+                    <span className="italic text-amber-600 dark:text-amber-400">{perfilAberta ? ' · ' : ''}não cadastrado</span>
                   )}
+                  {conversa?.lead && <span className="italic text-amber-600 dark:text-amber-400"> · lead</span>}
                 </div>
               </div>
               {conversa?.departamento && (
@@ -974,7 +976,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
               {conversa && !nomeAberta && (
                 <button
                   onClick={() => setCadastrando({ telefone: aberta, nome: perfilAberta || '' })}
-                  title="Cadastrar este número em Pessoas"
+                  title="Cadastrar este número como lead ou como contato de uma pessoa"
                   className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
                 >
                   <UserPlus className="w-4 h-4" />
@@ -1546,7 +1548,7 @@ const CadastroRapido: React.FC<{ telefone: string; nome: string; onFechar: () =>
   onFechar,
   onCadastrado,
 }) => {
-  /** Nova pessoa (lead) ou contato de uma pessoa que já existe */
+  /** Novo lead (Marketing › Leads) ou contato de uma pessoa que já existe */
   const [modo, setModo] = useState<'pessoa' | 'contato'>('pessoa');
   const [nome, setNome] = useState(nomeInicial);
   const [fone, setFone] = useState(telefoneCadastro(telefone));
@@ -1572,7 +1574,7 @@ const CadastroRapido: React.FC<{ telefone: string; nome: string; onFechar: () =>
     setErro(null);
     try {
       if (modo === 'pessoa') {
-        await createRecord('pessoas', { tipo: 'lead', nome: nome.trim(), whatsapp: fone.trim(), email: email.trim() || null });
+        await createRecord('leads', { origem: 'whatsapp', nome: nome.trim(), whatsapp: fone.trim(), email: email.trim() || null });
       } else {
         if (!pessoaId) throw new Error('Escolha a pessoa (empresa-cliente) do contato.');
         await createRecord('pessoas_contatos', {
@@ -1600,7 +1602,7 @@ const CadastroRapido: React.FC<{ telefone: string; nome: string; onFechar: () =>
           <div className="min-w-0">
             <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">Cadastrar este número</h3>
             <p className="text-[11px] text-stone-500 dark:text-stone-400">
-              {modo === 'pessoa' ? 'Nova pessoa, como lead; o restante do cadastro fica em Pessoas.' : 'Contato de uma pessoa que já está cadastrada (ex.: o comprador de um cliente).'}
+              {modo === 'pessoa' ? 'Novo lead (Marketing › Leads); vira pessoa quando for convertido em cliente.' : 'Contato de uma pessoa que já está cadastrada (ex.: o comprador de um cliente).'}
             </p>
           </div>
           <button type="button" onClick={onFechar} title="Fechar" className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
@@ -1611,7 +1613,7 @@ const CadastroRapido: React.FC<{ telefone: string; nome: string; onFechar: () =>
           <div className="grid grid-cols-2 gap-1.5 p-1 rounded-lg bg-stone-100 dark:bg-stone-800">
             {(
               [
-                ['pessoa', 'Nova pessoa'],
+                ['pessoa', 'Novo lead'],
                 ['contato', 'Contato de uma pessoa'],
               ] as const
             ).map(([v, rotulo]) => (

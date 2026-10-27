@@ -335,6 +335,8 @@ export interface Lead {
   motivos: string[];
   /** Id da pessoa quando já está no CRM */
   pessoa_id: number | null;
+  /** Id do lead quando já está nos Leads (ainda não virou cliente) */
+  lead_id?: number | null;
   /** Está no CRM porque foi incluída pela Prospecção (achada pelo google_place_id, não só pelo telefone) */
   pela_prospeccao?: boolean;
 }
@@ -347,7 +349,8 @@ function numero(v: unknown, padrao: number, min: number, max: number) {
 type Resultado = { leads: Lead[]; encontrados: number; descartados: number };
 
 /** Quem não está no CRM primeiro, e entre eles a maior nota de qualificação */
-const ordenar = (leads: Lead[]) => leads.sort((a, b) => Number(Boolean(a.pessoa_id)) - Number(Boolean(b.pessoa_id)) || b.pontos - a.pontos);
+const noCrm = (l: Lead) => Number(Boolean(l.pessoa_id || l.lead_id));
+const ordenar = (leads: Lead[]) => leads.sort((a, b) => noCrm(a) - noCrm(b) || b.pontos - a.pontos);
 
 async function buscar(empresaId: string, usuarioId: number | null, corpo: any): Promise<Resultado & { busca_id: number | null }> {
   const termo = String(corpo?.termo ?? '').trim().slice(0, 150);
@@ -410,7 +413,7 @@ async function buscar(empresaId: string, usuarioId: number | null, corpo: any): 
     const [g] = await pool.query<any>(
       'INSERT INTO prospeccao_buscas (empresa_id, usuario_id, termo, local, filtros, encontrados, descartados, leads) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [empresaId, usuarioId, termo, local, JSON.stringify({ maximo, ...criterios, ler_sites: lerSites }), lugares.length, lugares.length - leads.length,
-        JSON.stringify(leads.map(({ pessoa_id, pela_prospeccao, ...l }) => l))],
+        JSON.stringify(leads.map(({ pessoa_id, lead_id, pela_prospeccao, ...l }) => l))],
     );
     buscaId = g.insertId;
   } catch (err: any) {
@@ -438,46 +441,55 @@ async function abrirBusca(empresaId: string, id: string): Promise<Resultado & { 
   const [r] = await pool.query<any[]>('SELECT termo, local, filtros, encontrados, descartados, leads FROM prospeccao_buscas WHERE id = ? AND empresa_id = ?', [id, empresaId]);
   if (!r[0]) throw erro(404, 'Busca não encontrada.');
   const b = r[0];
-  const leads: Lead[] = (JSON.parse(b.leads || '[]') as Lead[]).map((l) => ({ ...l, pessoa_id: null }));
+  const leads: Lead[] = (JSON.parse(b.leads || '[]') as Lead[]).map((l) => ({ ...l, pessoa_id: null, lead_id: null }));
   await marcarQuemJaExiste(empresaId, leads);
   ordenar(leads);
   return { leads, encontrados: Number(b.encontrados), descartados: Number(b.descartados), termo: b.termo, local: b.local, filtros: JSON.parse(b.filtros || '{}') };
 }
 
-/** Quem já está no CRM: pelo código do Google ou por algum dos telefones */
+/** Quem já está no CRM (em Pessoas ou nos Leads ainda não convertidos): pelo código do Google ou por algum dos telefones */
 async function marcarQuemJaExiste(empresaId: string, leads: Lead[]) {
   if (!leads.length) return;
-  const [porPlace] = await pool.query<any[]>('SELECT id, google_place_id FROM pessoas WHERE empresa_id = ? AND google_place_id IN (?)', [
-    empresaId,
-    leads.map((l) => l.place_id),
-  ]);
-  const mapaPlace = new Map(porPlace.map((r) => [String(r.google_place_id), Number(r.id)]));
   const chaves = (l: Lead) => [l.whatsapp_site, l.celular, l.telefone].map((t) => chaveTelefone(t)).filter((c): c is string => Boolean(c));
   const todas = [...new Set(leads.flatMap(chaves))];
-  const mapaFone = new Map<string, number>();
-  if (todas.length) {
-    // Mesma chave do WhatsApp (DDD + 8 últimos dígitos), comparada no banco só pelos 8 últimos
-    const [rows] = await pool.query<any[]>(
-      `SELECT id, telefone, whatsapp FROM pessoas
-        WHERE empresa_id = ? AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', ''), 8) IN (?)
-                               OR RIGHT(REGEXP_REPLACE(COALESCE(telefone, ''), '[^0-9]', ''), 8) IN (?))`,
-      [empresaId, todas.map((c) => c.slice(-8)), todas.map((c) => c.slice(-8))],
-    );
-    for (const r of rows) {
-      for (const t of [r.whatsapp, r.telefone]) {
-        const c = chaveTelefone(t);
-        if (c && !mapaFone.has(c)) mapaFone.set(c, Number(r.id));
+  const achar = async (tabela: 'pessoas' | 'leads') => {
+    const extra = tabela === 'leads' ? ' AND convertido_em IS NULL' : '';
+    const [porPlace] = await pool.query<any[]>(`SELECT id, google_place_id FROM ${tabela} WHERE empresa_id = ?${extra} AND google_place_id IN (?)`, [
+      empresaId,
+      leads.map((l) => l.place_id),
+    ]);
+    const place = new Map(porPlace.map((r) => [String(r.google_place_id), Number(r.id)]));
+    const fone = new Map<string, number>();
+    if (todas.length) {
+      // Mesma chave do WhatsApp (DDD + 8 últimos dígitos), comparada no banco só pelos 8 últimos
+      const [rows] = await pool.query<any[]>(
+        `SELECT id, telefone, whatsapp FROM ${tabela}
+          WHERE empresa_id = ?${extra} AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', ''), 8) IN (?)
+                                 OR RIGHT(REGEXP_REPLACE(COALESCE(telefone, ''), '[^0-9]', ''), 8) IN (?))`,
+        [empresaId, todas.map((c) => c.slice(-8)), todas.map((c) => c.slice(-8))],
+      );
+      for (const r of rows) {
+        for (const t of [r.whatsapp, r.telefone]) {
+          const c = chaveTelefone(t);
+          if (c && !fone.has(c)) fone.set(c, Number(r.id));
+        }
       }
     }
-  }
+    return (l: Lead) => ({ id: place.get(l.place_id) ?? chaves(l).map((c) => fone.get(c)).find(Boolean) ?? null, pelaProspeccao: place.has(l.place_id) });
+  };
+  const [pessoa, lead] = await Promise.all([achar('pessoas'), achar('leads')]);
   for (const l of leads) {
-    l.pessoa_id = mapaPlace.get(l.place_id) ?? chaves(l).map((c) => mapaFone.get(c)).find(Boolean) ?? null;
-    l.pela_prospeccao = mapaPlace.has(l.place_id);
+    // Já é cliente vale mais que estar nos Leads
+    const p = pessoa(l);
+    const ld = p.id ? { id: null, pelaProspeccao: false } : lead(l);
+    l.pessoa_id = p.id;
+    l.lead_id = ld.id;
+    l.pela_prospeccao = p.id ? p.pelaProspeccao : ld.pelaProspeccao;
   }
 }
 
 // ==========================================================
-// Inclusão em Pessoas
+// Inclusão nos Leads (viram pessoa só ao converter: server/leads.ts)
 // ==========================================================
 const txt = (v: unknown, max: number) => {
   const s = String(v ?? '').trim();
@@ -531,6 +543,7 @@ async function incluir(empresaId: string, corpo: any): Promise<{ incluidos: numb
       pontos: Math.min(100, Math.max(0, Number(l?.pontos) || 0)),
       motivos: [],
       pessoa_id: null,
+      lead_id: null,
     };
   });
   await marcarQuemJaExiste(empresaId, leads);
@@ -540,7 +553,7 @@ async function incluir(empresaId: string, corpo: any): Promise<{ incluidos: numb
   try {
     await conn.beginTransaction();
     for (const l of leads) {
-      if (l.pessoa_id) continue;
+      if (l.pessoa_id || l.lead_id) continue;
       const obs = [
         `Prospecção (Google Maps) em ${new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} — nota de qualificação ${l.pontos}/100`,
         l.categoria && `Categoria: ${l.categoria}`,
@@ -553,21 +566,12 @@ async function incluir(empresaId: string, corpo: any): Promise<{ incluidos: numb
         .filter(Boolean)
         .join('\n');
       const whatsapp = l.whatsapp_site || l.celular;
-      const [r] = await conn.query<any>(
-        `INSERT INTO pessoas (empresa_id, tipo, google_place_id, prospeccao_busca_id, nome, email, telefone, whatsapp, obs, segmento_id)
-         VALUES (?, 'lead', ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [empresaId, l.place_id, buscaId, l.nome, l.email, l.telefone, whatsapp ? whatsapp.slice(2) : null, obs, segmentoId],
+      // O endereço completo fica na observação; o lead guarda só cidade e UF
+      await conn.query(
+        `INSERT INTO leads (empresa_id, origem, google_place_id, prospeccao_busca_id, nome, email, telefone, whatsapp, cidade, uf, obs, segmento_id)
+         VALUES (?, 'prospeccao', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [empresaId, l.place_id, buscaId, l.nome, l.email, l.telefone, whatsapp ? whatsapp.slice(2) : null, l.endereco_partes.cidade, l.endereco_partes.uf, obs, segmentoId],
       );
-      // Mesmo código dos cadastros feitos no CRM (regras.ts › aposGravar)
-      await conn.query("UPDATE pessoas SET cod_integracao = CONCAT('CRMWEB-', id) WHERE id = ?", [r.insertId]);
-      const e = l.endereco_partes;
-      if (e.logradouro || e.cidade || e.cep) {
-        await conn.query(
-          `INSERT INTO pessoas_enderecos (empresa_id, pessoa_id, tipo, principal, cep, logradouro, numero, bairro, cidade, uf)
-           VALUES (?, ?, 'comercial', 1, ?, ?, ?, ?, ?, ?)`,
-          [empresaId, r.insertId, e.cep, e.logradouro, e.numero, e.bairro, e.cidade, e.uf],
-        );
-      }
       incluidos++;
     }
     await conn.commit();

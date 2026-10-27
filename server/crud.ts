@@ -9,6 +9,7 @@ import { gravarEnvolvidosAtividade, gravarParticipantes, normalizarParticipantes
 import { conferirTrava, contratoDoItem, recalcularContrato } from './contratos.js';
 import { apagarFotosRemovidas, fotosDoProduto, prepararFotos } from './fotos.js';
 import { apagarEventoGoogle, TIPOS_NA_AGENDA } from './agendaGoogle.js';
+import { soltarLead } from './leads.js';
 /** Metadados enviados ao navegador: a consulta própria dos combos fica só no servidor */
 // O SQL próprio (combos, colunas calculadas) não sai do servidor
 const RESOURCES_PUBLICOS = RESOURCES.map(({ optionsSql, minhasSql, ...r }) => ({ ...r, minhas: Boolean(minhasSql), fields: r.fields.map(({ sql, ...f }) => f) }));
@@ -604,6 +605,8 @@ export function createCrudRouter() {
 
       // Na exclusão lógica o registro continua existindo e as regras ainda o enxergam
       await aposGravar(resource.name, resource.exclusaoLogica ? req.params.id : null, afetados);
+      // Lead excluído: as mensagens, atividades e disparos dele ficam sem dono (não somem)
+      if (resource.name === 'leads') await soltarLead(req.params.id);
       if (contratoAfetado) await recalcularContrato(contratoAfetado);
       if (fotosAntes) await apagarFotosRemovidas(fotosAntes, []);
       if (eventoGoogle) await apagarEventoGoogle(String(empresaDa(res)), eventoGoogle).catch((e) => console.error(`Google Agenda: ${e.message}`));

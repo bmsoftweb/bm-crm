@@ -350,6 +350,12 @@ const CRIADO_ATUALIZADO = [
   { name: 'atualizado_em', label: 'Atualizado em', type: 'datetime', readOnly: true } as FieldDef,
 ];
 
+const ORIGENS_LEAD = [
+  { value: 'prospeccao', label: 'Prospecção' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'manual', label: 'Manual' },
+  { value: 'importacao', label: 'Importação' },
+];
 const CANAIS_PESQUISA = [
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'email', label: 'E-mail' },
@@ -585,6 +591,8 @@ export const RESOURCES: ResourceDef[] = [
       },
       { name: 'negocio_id', label: 'Negócio', type: 'text', listed: true, filterable: true, ref: { resource: 'negocios', labelField: 'titulo' } },
       { name: 'pessoa_id', label: 'Contato', type: 'text', listed: true, ref: { resource: 'pessoas', labelField: 'nome' } },
+      // Atividade de um lead (Marketing › Leads); na conversão passa para a pessoa
+      { name: 'lead_id', label: 'Lead', type: 'text', filterable: true, ref: { resource: 'leads', labelField: 'nome' } },
       {
         // De onde veio: Bot executando, criada pelo chatbot/automação (atividades.criada_por_bot), pendência achada na análise de uma conversa (server/pendencias.ts, pela
         // observação), tarefa de chamado, ou lançada à mão. Calculada: não há coluna no banco
@@ -1033,7 +1041,7 @@ export const RESOURCES: ResourceDef[] = [
     ],
     fields: [
       ID,
-      { name: 'tipo', label: 'Tipo', type: 'enum', required: true, listed: true, filterable: true, options: TIPOS_PESSOA, default: 'lead', width: 'xs', span: 1 },
+      { name: 'tipo', label: 'Tipo', type: 'enum', required: true, listed: true, filterable: true, options: TIPOS_PESSOA, default: 'cliente', width: 'xs', span: 1 },
       // Tipo + Nome dividem a primeira linha do formulário (grade de 4 colunas)
       { name: 'nome', label: 'Nome', type: 'text', required: true, listed: true, searchable: true, maxLength: 255, span: 3 },
       { name: 'segmento_id', label: 'Segmento', type: 'text', listed: true, filterable: true, ref: { resource: 'segmentos', labelField: 'nome' } },
@@ -1663,6 +1671,60 @@ export const RESOURCES: ResourceDef[] = [
       { name: 'cor', label: 'Cor', type: 'cor', listed: true, width: 'xs', hint: 'Etiqueta da categoria na fila' },
       { name: 'ativo', label: 'Ativo', type: 'boolean', listed: true, filterable: true, default: true, width: 'xs' },
       { name: 'criado_em', label: 'Criado em', type: 'datetime', readOnly: true },
+    ],
+  },
+  {
+    // Marketing › Leads: contatos que ainda não são clientes (server/leads.ts). Convertido some da lista
+    // (vira pessoa: botão Converter ou ao abrir negócio, chamado, OS, proposta ou pedido)
+    name: 'leads',
+    table: 'leads',
+    tenantColumn: 'empresa_id',
+    scopeSql: 't.empresa_id = ? AND t.convertido_em IS NULL',
+    label: 'Leads',
+    labelSingular: 'Lead',
+    description: 'Contatos que ainda não são clientes: da Prospecção, do WhatsApp e cadastrados à mão',
+    icon: 'Target',
+    group: 'marketing',
+    pk: ['id'],
+    autoIncrement: true,
+    labelField: 'nome',
+    optionsSql: 'SELECT id AS value, nome AS label FROM leads WHERE empresa_id = ? AND convertido_em IS NULL ORDER BY nome LIMIT 5000',
+    defaultSort: { field: 'criado_em', dir: 'desc' },
+    canCreate: true,
+    canUpdate: true,
+    canDelete: true,
+    details: [{ resource: 'atividades', foreignKey: 'lead_id', label: 'Atividades' }],
+    fields: [
+      ID,
+      { name: 'nome', label: 'Nome', type: 'text', required: true, listed: true, searchable: true, maxLength: 255, span: 3 },
+      { name: 'origem', label: 'Origem', type: 'enum', required: true, listed: true, filterable: true, options: ORIGENS_LEAD, default: 'manual', width: 'xs', span: 1 },
+      { name: 'contato', label: 'Contato', type: 'text', listed: true, searchable: true, maxLength: 150, hint: 'Com quem falar na empresa' },
+      { name: 'whatsapp', label: 'WhatsApp', type: 'text', listed: true, searchable: true, maxLength: 30, hint: 'Com DDD. Usado nas campanhas (sem ele, vale o telefone)' },
+      { name: 'telefone', label: 'Telefone', type: 'text', listed: true, searchable: true, maxLength: 30 },
+      { name: 'email', label: 'E-mail', type: 'text', listed: true, searchable: true, maxLength: 255 },
+      { name: 'cidade', label: 'Cidade', type: 'text', listed: true, searchable: true, filterable: true, maxLength: 100 },
+      { name: 'uf', label: 'UF', type: 'text', listed: true, filterable: true, maxLength: 2, width: 'xs' },
+      { name: 'segmento_id', label: 'Segmento', type: 'text', listed: true, filterable: true, ref: { resource: 'segmentos', labelField: 'nome' } },
+      {
+        name: 'nao_receber_campanhas',
+        label: 'Não receber campanhas',
+        type: 'boolean',
+        filterable: true,
+        default: false,
+        hint: 'Fica fora de todas as campanhas. Marcado sozinho quando responde "SAIR" a uma campanha no WhatsApp',
+      },
+      { name: 'obs', label: 'Observação', type: 'textarea' },
+      {
+        name: 'prospeccao_busca_id',
+        label: 'Busca da prospecção',
+        type: 'text',
+        readOnly: true,
+        filterable: true,
+        ref: { resource: 'prospeccao_buscas', labelField: 'termo' },
+        hint: 'Busca da Prospecção que incluiu este lead',
+      },
+      { name: 'google_place_id', label: 'Google Place ID', type: 'text', readOnly: true, hint: 'Código no Google Maps, gravado pela Prospecção: evita incluir o mesmo lead de novo' },
+      ...CRIADO_ATUALIZADO,
     ],
   },
   {

@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { converterLead } from './leads.js';
 import { GoogleGenAI, Type, type Content, type FunctionDeclaration, type Part } from '@google/genai';
 import { pool } from './db.js';
 import { lerConfig } from './config.js';
@@ -509,21 +510,27 @@ export async function registrarLead(ctx: Contexto, a: Record<string, unknown>, o
   const emp = ctx.empresaId;
   const fone = telefoneCadastro(ctx.telefone);
 
+  // Abrir o negócio faz do lead um cliente: o lead (o que já existe com o número, ou um novo, com a origem WhatsApp)
+  // é convertido em pessoa, e as mensagens, atividades e disparos dele vão junto (server/leads.ts)
   if (!ctx.dono.pessoa_id) {
-    const [p] = await pool.query<any>("INSERT INTO pessoas (empresa_id, tipo, nome, whatsapp, email) VALUES (?, 'lead', ?, ?, ?)", [emp, empresa || nome, fone, email]);
-    await aposGravar('pessoas', String(p.insertId));
-    let contatoId: number | null = null;
-    // Falou de uma empresa: a pessoa é a empresa, e quem conversa é o contato dela
-    if (empresa) {
-      const [c] = await pool.query<any>(
-        'INSERT INTO pessoas_contatos (empresa_id, pessoa_id, nome, whatsapp, celular, email, principal) VALUES (?, ?, ?, ?, ?, ?, 1)',
-        [emp, p.insertId, nome, fone, fone, email],
-      );
-      contatoId = c.insertId;
+    let leadId = ctx.dono.lead_id ?? null;
+    if (!leadId) {
+      // Falou de uma empresa: o lead é a empresa, e quem conversa é o contato dela
+      const [l] = await pool.query<any>("INSERT INTO leads (empresa_id, origem, nome, contato, whatsapp, email) VALUES (?, 'whatsapp', ?, ?, ?, ?)", [
+        emp,
+        empresa || nome,
+        empresa ? nome : null,
+        fone,
+        email,
+      ]);
+      leadId = Number(l.insertId);
     }
-    ctx.dono = { pessoa_id: p.insertId, contato_id: contatoId };
+    const pessoaId = await converterLead(emp, leadId);
+    const [c] = await pool.query<any[]>('SELECT id FROM pessoas_contatos WHERE pessoa_id = ? AND principal = 1 ORDER BY id LIMIT 1', [pessoaId]);
+    const contatoId: number | null = c[0]?.id ?? null;
+    ctx.dono = { pessoa_id: pessoaId, contato_id: contatoId };
     await pool.query('UPDATE whatsapp_mensagens SET pessoa_id = ?, contato_id = ? WHERE empresa_id = ? AND telefone = ? AND pessoa_id IS NULL', [
-      p.insertId,
+      pessoaId,
       contatoId,
       emp,
       ctx.telefone,
@@ -609,16 +616,16 @@ async function transferirParaHumano(ctx: Contexto, a: Record<string, unknown>) {
     await avisarDepartamento(ctx, ctx.departamento, motivo);
     return { ok: true, departamento: ctx.departamento.nome };
   }
-  // Com o cliente cadastrado, o vendedor dele (ou o próximo do revezamento) ganha uma atividade
-  if (ctx.dono.pessoa_id) {
+  // Com o cliente (ou lead) cadastrado, o vendedor dele (ou o próximo do revezamento) ganha uma atividade
+  if (ctx.dono.pessoa_id || ctx.dono.lead_id) {
     const [abertos] = await pool.query<any[]>(
       "SELECT id FROM negocios WHERE empresa_id = ? AND pessoa_id = ? AND status = 'aberto' ORDER BY id DESC LIMIT 1",
       [ctx.empresaId, ctx.dono.pessoa_id],
     );
     await pool.query(
-      `INSERT INTO atividades (empresa_id, negocio_id, pessoa_id, assunto, tipo, data_vencimento, hora_vencimento, observacao, lembrete_para, criada_por_bot)
-       VALUES (?, ?, ?, 'Cliente pediu atendimento no WhatsApp', 'whatsapp', CURDATE(), CURTIME(), ?, 'nenhum', 1)`,
-      [ctx.empresaId, abertos[0]?.id ?? null, ctx.dono.pessoa_id, motivo],
+      `INSERT INTO atividades (empresa_id, negocio_id, pessoa_id, lead_id, assunto, tipo, data_vencimento, hora_vencimento, observacao, lembrete_para, criada_por_bot)
+       VALUES (?, ?, ?, ?, 'Cliente pediu atendimento no WhatsApp', 'whatsapp', CURDATE(), CURTIME(), ?, 'nenhum', 1)`,
+      [ctx.empresaId, abertos[0]?.id ?? null, ctx.dono.pessoa_id, ctx.dono.pessoa_id ? null : ctx.dono.lead_id ?? null, motivo],
     );
     if (abertos[0]) await sincronizarNegocio(String(abertos[0].id));
   }
@@ -682,7 +689,11 @@ export async function ehUsuario(empresaId: number, telefone: string): Promise<bo
 /** Cliente esperando no departamento: atividade para o departamento e WhatsApp para quem é dele */
 export async function avisarDepartamento(ctx: Contexto, dep: { id: number; nome: string }, motivo: string) {
   const emp = ctx.empresaId;
-  const [pessoa] = ctx.dono.pessoa_id ? await pool.query<any[]>('SELECT nome FROM pessoas WHERE id = ?', [ctx.dono.pessoa_id]) : [[]];
+  const [pessoa] = ctx.dono.pessoa_id
+    ? await pool.query<any[]>('SELECT nome FROM pessoas WHERE id = ?', [ctx.dono.pessoa_id])
+    : ctx.dono.lead_id
+      ? await pool.query<any[]>('SELECT nome FROM leads WHERE id = ?', [ctx.dono.lead_id])
+      : [[]];
   const [perfil] = await pool.query<any[]>(
     'SELECT nome_contato FROM whatsapp_mensagens WHERE empresa_id = ? AND telefone = ? AND nome_contato IS NOT NULL ORDER BY id DESC LIMIT 1',
     [emp, ctx.telefone],
@@ -692,9 +703,9 @@ export async function avisarDepartamento(ctx: Contexto, dep: { id: number; nome:
     ? await pool.query<any[]>("SELECT id FROM negocios WHERE empresa_id = ? AND pessoa_id = ? AND status = 'aberto' ORDER BY id DESC LIMIT 1", [emp, ctx.dono.pessoa_id])
     : [[]];
   const [a] = await pool.query<any>(
-    `INSERT INTO atividades (empresa_id, negocio_id, pessoa_id, departamento_id, assunto, tipo, data_vencimento, hora_vencimento, observacao, lembrete_para, criada_por_bot)
-     VALUES (?, ?, ?, ?, ?, 'whatsapp', CURDATE(), CURTIME(), ?, 'nenhum', 1)`,
-    [emp, abertos[0]?.id ?? null, ctx.dono.pessoa_id, dep.id, `WhatsApp: cliente aguardando (${dep.nome})`.slice(0, 255), `${quem} — ${motivo}`],
+    `INSERT INTO atividades (empresa_id, negocio_id, pessoa_id, lead_id, departamento_id, assunto, tipo, data_vencimento, hora_vencimento, observacao, lembrete_para, criada_por_bot)
+     VALUES (?, ?, ?, ?, ?, ?, 'whatsapp', CURDATE(), CURTIME(), ?, 'nenhum', 1)`,
+    [emp, abertos[0]?.id ?? null, ctx.dono.pessoa_id, ctx.dono.pessoa_id ? null : ctx.dono.lead_id ?? null, dep.id, `WhatsApp: cliente aguardando (${dep.nome})`.slice(0, 255), `${quem} — ${motivo}`],
   );
   if (abertos[0]) await sincronizarNegocio(String(abertos[0].id));
   const [equipe] = await pool.query<any[]>("SELECT id, telefone FROM usuarios WHERE empresa_id = ? AND ativo = 1 AND departamento_id = ? AND telefone <> ''", [emp, dep.id]);

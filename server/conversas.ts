@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { pool } from './db.js';
-import { apagarParaTodos, ArquivoEnvio, chaveTelefone, citacaoDa, contaWhats, CONTATO_RECENTE, donoDoTelefone, PESSOA_RECENTE, enviarMidiaWhatsApp, enviarWhatsApp, midiaDaMensagem, telefoneWhatsApp, contaDaConversa } from './whatsapp.js';
+import { apagarParaTodos, ArquivoEnvio, chaveTelefone, citacaoDa, contaWhats, CONTATO_RECENTE, donoDoTelefone, LEAD_RECENTE, PESSOA_RECENTE, enviarMidiaWhatsApp, enviarWhatsApp, midiaDaMensagem, telefoneWhatsApp, contaDaConversa } from './whatsapp.js';
 import { sincronizarNegocio } from './regras.js';
 import { lerConfig } from './config.js';
 import { atendimentoAtual, encerrarAtendimento, marcarEncerramento, marcarEvento, minutosDevolver, minutosInatividade, mudarAtendimento } from './chatbot.js';
@@ -522,7 +522,7 @@ export function createConversasRouter(): Router {
       // A Automação de cada número: quem veio pelo WhatsApp das campanhas é atendido pela das campanhas
       const jornadas = { provedor: await lerJornadaConfig(res.locals.empresaId), campanhas: await lerJornadaConfig(res.locals.empresaId, 'campanhas') };
       const [rows] = await pool.query<any[]>(
-        `SELECT w.telefone, x.pessoa_id, p.nome, x.contato_id, c.nome AS contato_nome, COALESCE(c.departamento, c.cargo) AS contato_setor,
+        `SELECT w.telefone, x.pessoa_id, COALESCE(p.nome, ld.nome) AS nome, IF(x.pessoa_id, NULL, ld.id) AS lead_id, x.contato_id, c.nome AS contato_nome, COALESCE(c.departamento, c.cargo) AS contato_setor,
                 ${NOME_CONTATO('w')} AS nome_contato, w.direcao, w.tipo, w.texto, w.arquivo_nome, w.situacao,
                 DATE_FORMAT(w.data_hora, '%Y-%m-%d %H:%i:%s') AS data_hora, x.nao_vistas, x.encerrada, d.nome AS departamento,
                 w.privado_departamento_id, (SELECT dp.nome FROM departamentos dp WHERE dp.id = w.privado_departamento_id) AS privado_departamento,
@@ -533,7 +533,7 @@ export function createConversasRouter(): Router {
                   WHERE r.empresa_id = w.empresa_id AND r.telefone = w.telefone AND r.direcao = 'recebida' AND r.id > COALESCE(x.ultimo_encerramento, 0)) AS chegou_em,
                 -- Pausada: o último evento é a pausa, e depois dela não começou outra espera
                 COALESCE(ev.texto LIKE 'Pausado por%' AND ev.data_hora >= COALESCE(wc.humano_desde, ev.data_hora), 0) AS pausada
-           FROM (SELECT telefone, MAX(IF(tipo NOT IN ('encerramento', 'evento'), id, NULL)) AS ultima, ${PESSOA_RECENTE()} AS pessoa_id, ${CONTATO_RECENTE()} AS contato_id,
+           FROM (SELECT telefone, MAX(IF(tipo NOT IN ('encerramento', 'evento'), id, NULL)) AS ultima, ${PESSOA_RECENTE()} AS pessoa_id, ${CONTATO_RECENTE()} AS contato_id, ${LEAD_RECENTE()} AS lead_id,
                         MAX(IF(tipo = 'evento', id, NULL)) AS ultimo_evento,
                         MAX(IF(tipo = 'encerramento', id, NULL)) AS ultimo_encerramento,
                         SUM(direcao = 'recebida' AND vista = 0) AS nao_vistas,
@@ -544,18 +544,19 @@ export function createConversasRouter(): Router {
            JOIN whatsapp_mensagens w ON w.id = x.ultima
            LEFT JOIN whatsapp_mensagens ev ON ev.id = x.ultimo_evento
            LEFT JOIN pessoas p ON p.id = x.pessoa_id
+           LEFT JOIN leads ld ON ld.id = x.lead_id AND x.pessoa_id IS NULL
            LEFT JOIN pessoas_contatos c ON c.id = x.contato_id
            LEFT JOIN whatsapp_conversas wc ON wc.empresa_id = w.empresa_id AND wc.telefone = w.telefone
            LEFT JOIN departamentos d ON d.id = wc.departamento_id
            LEFT JOIN usuarios ua ON ua.id = wc.atendente_id
            LEFT JOIN usuarios tp ON tp.id = p.tecnico_padrao_id
-          WHERE (? = '' OR p.nome LIKE ? OR c.nome LIKE ? OR ${NOME_CONTATO('w')} LIKE ? OR (? <> '' AND w.telefone LIKE ?))
+          WHERE (? = '' OR p.nome LIKE ? OR ld.nome LIKE ? OR c.nome LIKE ? OR ${NOME_CONTATO('w')} LIKE ? OR (? <> '' AND w.telefone LIKE ?))
             AND (? = 0 OR wc.atendente_id = ?
                  OR (wc.atendente_id IS NULL AND (wc.departamento_id IS NULL OR p.tecnico_padrao_id = ?
                      OR wc.departamento_id = (SELECT u.departamento_id FROM usuarios u WHERE u.id = ?))))
           ORDER BY w.data_hora DESC, w.id DESC
           LIMIT 200`,
-        [res.locals.empresaId, busca, `%${busca}%`, `%${busca}%`, `%${busca}%`, digitos, `%${digitos}%`, minhas ? 1 : 0, eu, eu, eu],
+        [res.locals.empresaId, busca, `%${busca}%`, `%${busca}%`, `%${busca}%`, `%${busca}%`, digitos, `%${digitos}%`, minhas ? 1 : 0, eu, eu, eu],
       );
       // Estado: em atendimento (alguém pegou), aguardando (humano sem atendente; sem bot, quando o
       // cliente foi o último a escrever) ou com o bot
@@ -671,10 +672,16 @@ export function createConversasRouter(): Router {
       );
       let pessoaId: number | null = ult[0]?.pessoa_id ?? null;
       let contatoId: number | null = ult[0]?.contato_id ?? null;
+      let leadId: number | null = null;
       if (!pessoaId) {
-        ({ pessoa_id: pessoaId, contato_id: contatoId } = await donoDoTelefone(emp, telefone));
+        let lead: number | null | undefined;
+        ({ pessoa_id: pessoaId, contato_id: contatoId, lead_id: lead } = await donoDoTelefone(emp, telefone));
         if (pessoaId) {
-          await pool.query('UPDATE whatsapp_mensagens SET pessoa_id = ?, contato_id = ? WHERE empresa_id = ? AND telefone = ? AND pessoa_id IS NULL', [pessoaId, contatoId, emp, telefone]);
+          await pool.query('UPDATE whatsapp_mensagens SET pessoa_id = ?, contato_id = ?, lead_id = NULL WHERE empresa_id = ? AND telefone = ? AND pessoa_id IS NULL', [pessoaId, contatoId, emp, telefone]);
+        } else if (lead) {
+          // Lead cadastrado depois das mensagens (Cadastrar da conversa): liga as que estão sem dono
+          leadId = lead;
+          await pool.query('UPDATE whatsapp_mensagens SET lead_id = ? WHERE empresa_id = ? AND telefone = ? AND pessoa_id IS NULL AND lead_id IS NULL', [lead, emp, telefone]);
         }
       }
       await pool.query("UPDATE whatsapp_mensagens SET vista = 1 WHERE empresa_id = ? AND telefone = ? AND direcao = 'recebida' AND vista = 0", [emp, telefone]);
@@ -698,6 +705,7 @@ export function createConversasRouter(): Router {
         [res.locals.usuarioId, emp, telefone],
       );
       const [pessoa] = pessoaId ? await pool.query<any[]>('SELECT id, nome FROM pessoas WHERE id = ? AND empresa_id = ?', [pessoaId, emp]) : [[]];
+      const [lead] = leadId ? await pool.query<any[]>('SELECT id, nome FROM leads WHERE id = ? AND empresa_id = ?', [leadId, emp]) : [[]];
       const [contato] = contatoId
         ? await pool.query<any[]>('SELECT id, nome, cargo, departamento FROM pessoas_contatos WHERE id = ? AND empresa_id = ?', [contatoId, emp])
         : [[]];
@@ -721,6 +729,7 @@ export function createConversasRouter(): Router {
       const estado = c.atendente_id ? 'atendimento' : Number(c.encerrada) ? 'encerrado' : atendimento === 'humano' || !comBot ? 'aguardando' : 'bot';
       res.json({
         pessoa: pessoa[0] ?? null,
+        lead: lead[0] ?? null,
         contato: contato[0] ?? null,
         atendimento: comBot ? atendimento : null,
         estado,

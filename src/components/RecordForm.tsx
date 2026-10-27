@@ -23,6 +23,8 @@ interface RecordFormProps {
   /** Registro em edição; `null` indica inclusão */
   record: RegistroCrud | null;
   refOptions: Record<string, OpcaoRef[]>;
+  /** Botão de atualizar dos combos: busca de novo as opções do campo */
+  onAtualizarOpcoes?: (campo: string) => Promise<void>;
   onCancel: () => void;
   onSave: (payload: RegistroCrud) => Promise<void>;
   /** Campos que hoje aparecem como coluna na lista */
@@ -126,6 +128,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({
   resource,
   record,
   refOptions,
+  onAtualizarOpcoes,
   onCancel,
   onSave,
   colunasVisiveis,
@@ -472,6 +475,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({
           required={Boolean(field.required)}
           vazioLabel={field.required ? '— Selecione —' : '— Nenhum —'}
           className={inputClass}
+          onAtualizar={onAtualizarOpcoes && (() => onAtualizarOpcoes(field.name))}
         />
       );
     }

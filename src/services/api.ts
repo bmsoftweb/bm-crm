@@ -483,6 +483,8 @@ export interface PreviaCampanha {
   exemplos: { nome: string; destino: string | null; assunto: string; corpo: string }[];
 }
 export const previaCampanha = (id: Id): Promise<PreviaCampanha> => get(`/api/campanhas/${encodeURIComponent(String(id))}/previa`);
+/** Marketing › Leads: copia o lead para Pessoas (cliente) com o que era dele */
+export const converterLead = (id: Id): Promise<{ pessoa_id: number }> => enviar('POST', `/api/leads/${encodeURIComponent(String(id))}/converter`);
 /** Envia agora um disparo pendente ou que falhou */
 export const enviarDisparoAgora = (id: Id): Promise<{ situacao: string }> =>
   enviar('POST', `/api/campanhas/disparos/${encodeURIComponent(String(id))}/enviar`);
@@ -737,6 +739,8 @@ export const fetchConversa = (
   telefone: string,
 ): Promise<{
   pessoa: { id: number; nome: string } | null;
+  /** Sem pessoa: o lead com esse número (Marketing › Leads) */
+  lead: { id: number; nome: string } | null;
   contato: { id: number; nome: string; cargo: string | null; departamento: string | null } | null;
   /** Com o chatbot ligado: quem atende a conversa (null = chatbot desligado) */
   atendimento: 'bot' | 'humano' | null;
@@ -1273,6 +1277,8 @@ export interface LeadProspeccao {
   pontos: number;
   motivos: string[];
   pessoa_id: number | null;
+  /** Já está nos Leads (ainda não é cliente) */
+  lead_id?: number | null;
   /** No CRM porque foi incluída pela Prospecção (pelo código do Google), e não só achada pelo telefone */
   pela_prospeccao?: boolean;
 }

@@ -803,11 +803,12 @@ class Execucao {
           const v = await this.vars();
           // Sem executor: fica para o departamento (ou para a equipe); vence agora, aparece como pendente para quem abrir as atividades
           const [tarefa] = await pool.query<any>(
-            `INSERT INTO atividades (empresa_id, pessoa_id, departamento_id, assunto, tipo, data_vencimento, hora_vencimento, observacao, lembrete_para, criada_por_bot)
-             VALUES (?, ?, ?, ?, 'tarefa', CURDATE(), TIME_FORMAT(CURTIME(), '%H:%i:00'), ?, 'nenhum', 1)`,
+            `INSERT INTO atividades (empresa_id, pessoa_id, lead_id, departamento_id, assunto, tipo, data_vencimento, hora_vencimento, observacao, lembrete_para, criada_por_bot)
+             VALUES (?, ?, ?, ?, ?, 'tarefa', CURDATE(), TIME_FORMAT(CURTIME(), '%H:%i:00'), ?, 'nenhum', 1)`,
             [
               this.ctx.empresaId,
               this.ctx.dono.pessoa_id,
+              this.ctx.dono.pessoa_id ? null : this.ctx.dono.lead_id ?? null,
               d.departamento_id,
               preencher(d.assunto, v).trim().slice(0, 255) || 'Retornar contato do WhatsApp',
               `${preencher(d.observacao ?? '', v).trim()}

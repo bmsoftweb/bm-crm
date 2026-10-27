@@ -301,6 +301,7 @@ export async function citacaoDa(empresaId: string | number, telefone: string, id
 interface Registro {
   pessoa_id?: number | null;
   contato_id?: number | null;
+  lead_id?: number | null;
   usuario_id?: number | null;
   disparo_id?: number | null;
   /** Mensagem privada: só este departamento (e o administrador) vê na tela */
@@ -460,9 +461,9 @@ export async function enviarAutomatica(empresaId: string | number, origem: strin
 /** Reserva a origem (única na empresa) antes de enviar; null se ela já existia (já saiu ou está saindo) */
 export async function reservarEnvio(empresaId: string | number, origem: string, dono: Dono, telefone: string, texto: string): Promise<number | null> {
   const [r] = await pool.query<any>(
-    `INSERT IGNORE INTO whatsapp_mensagens (empresa_id, pessoa_id, contato_id, telefone, direcao, tipo, texto, situacao, origem, vista, data_hora)
-     VALUES (?, ?, ?, ?, 'enviada', 'texto', ?, 'pendente', ?, 1, NOW())`,
-    [empresaId, dono.pessoa_id, dono.contato_id, telefone, texto, origem],
+    `INSERT IGNORE INTO whatsapp_mensagens (empresa_id, pessoa_id, contato_id, lead_id, telefone, direcao, tipo, texto, situacao, origem, vista, data_hora)
+     VALUES (?, ?, ?, ?, ?, 'enviada', 'texto', ?, 'pendente', ?, 1, NOW())`,
+    [empresaId, dono.pessoa_id, dono.contato_id, dono.pessoa_id ? null : dono.lead_id ?? null, telefone, texto, origem],
   );
   return r.affectedRows ? r.insertId : null;
 }
@@ -552,6 +553,8 @@ export function chaveTelefone(bruto: string | null | undefined, comDdi = false):
 export interface Dono {
   pessoa_id: number | null;
   contato_id: number | null;
+  /** Sem pessoa: o lead (Marketing › Leads) com esse número */
+  lead_id?: number | null;
 }
 
 /**
@@ -590,6 +593,7 @@ export function escolherDono(chave: string, candidatos: { de: 'p' | 'c'; pessoa_
  * cadastro. MAX(pessoa_id) pegava o cadastro de maior número quando o mesmo celular está em mais de um.
  */
 export const PESSOA_RECENTE = (a = '') => `CAST(SUBSTRING_INDEX(GROUP_CONCAT(${a}pessoa_id ORDER BY ${a}id DESC), ',', 1) AS UNSIGNED)`;
+export const LEAD_RECENTE = (a = '') => `CAST(SUBSTRING_INDEX(GROUP_CONCAT(${a}lead_id ORDER BY ${a}id DESC), ',', 1) AS UNSIGNED)`;
 export const CONTATO_RECENTE = (a = '') =>
   `NULLIF(CAST(SUBSTRING_INDEX(GROUP_CONCAT(IF(${a}pessoa_id IS NULL, NULL, IFNULL(${a}contato_id, 0)) ORDER BY ${a}id DESC), ',', 1) AS UNSIGNED), 0)`;
 
@@ -607,7 +611,15 @@ export async function donoDoTelefone(empresaId: string | number, telefone: strin
      ORDER BY pessoa_id, contato_id`,
     [empresaId, fim, fim, empresaId, fim, fim, fim],
   );
-  return escolherDono(chave, rows);
+  const dono = escolherDono(chave, rows);
+  if (dono.pessoa_id) return dono;
+  // Não está em Pessoas: pode ser um lead (ainda não convertido)
+  const [leads] = await pool.query<any[]>(
+    `SELECT 'p' AS de, id AS pessoa_id, NULL AS contato_id, whatsapp, NULL AS celular, telefone
+       FROM leads WHERE empresa_id = ? AND convertido_em IS NULL AND (${oito('whatsapp')} OR ${oito('telefone')}) ORDER BY id`,
+    [empresaId, fim, fim],
+  );
+  return { pessoa_id: null, contato_id: null, lead_id: escolherDono(chave, leads).pessoa_id };
 }
 
 /**
@@ -646,12 +658,17 @@ async function registrarEnviada(
   try {
     const waId: string | null = resposta?.key?.id ?? resposta?.messageId ?? null;
     // Sem a pessoa (resposta pela conversa, proposta), procura pelo número; com ela, o contato vem junto se o número for dele
-    const dono = m.pessoa_id ? { pessoa_id: m.pessoa_id, contato_id: m.contato_id ?? null } : await donoDoTelefone(empresaId, numero);
+    const dono: Dono = m.pessoa_id
+      ? { pessoa_id: m.pessoa_id, contato_id: m.contato_id ?? null }
+      : m.lead_id
+        ? { pessoa_id: null, contato_id: null, lead_id: m.lead_id }
+        : await donoDoTelefone(empresaId, numero);
     await pool.query(
       `INSERT INTO whatsapp_mensagens
-         (empresa_id, pessoa_id, contato_id, telefone, direcao, tipo, texto, arquivo_nome, wa_id, resposta_de, situacao, disparo_id, usuario_id, privado_departamento_id, vista, data_hora)
-       VALUES (?, ?, ?, ?, 'enviada', ?, ?, ?, ?, ?, 'enviada', ?, ?, ?, 1, NOW())
+         (empresa_id, pessoa_id, contato_id, lead_id, telefone, direcao, tipo, texto, arquivo_nome, wa_id, resposta_de, situacao, disparo_id, usuario_id, privado_departamento_id, vista, data_hora)
+       VALUES (?, ?, ?, ?, ?, 'enviada', ?, ?, ?, ?, ?, 'enviada', ?, ?, ?, 1, NOW())
        ON DUPLICATE KEY UPDATE pessoa_id = COALESCE(pessoa_id, VALUES(pessoa_id)), contato_id = COALESCE(contato_id, VALUES(contato_id)),
+         lead_id = IF(COALESCE(pessoa_id, VALUES(pessoa_id)) IS NULL, COALESCE(lead_id, VALUES(lead_id)), NULL),
          disparo_id = COALESCE(disparo_id, VALUES(disparo_id)), usuario_id = COALESCE(usuario_id, VALUES(usuario_id)),
          arquivo_nome = COALESCE(arquivo_nome, VALUES(arquivo_nome)), texto = COALESCE(VALUES(texto), texto),
          resposta_de = COALESCE(resposta_de, VALUES(resposta_de))`,
@@ -659,6 +676,7 @@ async function registrarEnviada(
         empresaId,
         dono.pessoa_id,
         dono.contato_id,
+        dono.lead_id ?? null,
         numero,
         m.tipo,
         m.texto,
@@ -754,14 +772,16 @@ async function gravarMensagem(empresaId: number, d: any): Promise<MensagemNova |
   const citada = citadaDe(d);
   const [q] = citada ? await pool.query<any[]>('SELECT id FROM whatsapp_mensagens WHERE empresa_id = ? AND wa_id = ? LIMIT 1', [empresaId, citada]) : [[]];
   const [r] = await pool.query<any>(
-    `INSERT INTO whatsapp_mensagens (empresa_id, pessoa_id, contato_id, telefone, nome_contato, direcao, tipo, texto, arquivo_nome, wa_id, resposta_de, situacao, vista, data_hora)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(FROM_UNIXTIME(?), NOW()))
+    `INSERT INTO whatsapp_mensagens (empresa_id, pessoa_id, contato_id, lead_id, telefone, nome_contato, direcao, tipo, texto, arquivo_nome, wa_id, resposta_de, situacao, vista, data_hora)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(FROM_UNIXTIME(?), NOW()))
      ON DUPLICATE KEY UPDATE pessoa_id = COALESCE(pessoa_id, VALUES(pessoa_id)), contato_id = COALESCE(contato_id, VALUES(contato_id)),
+       lead_id = IF(COALESCE(pessoa_id, VALUES(pessoa_id)) IS NULL, COALESCE(lead_id, VALUES(lead_id)), NULL),
        resposta_de = COALESCE(resposta_de, VALUES(resposta_de))`,
     [
       empresaId,
       dono.pessoa_id,
       dono.contato_id,
+      dono.lead_id ?? null,
       telefone,
       nomeContato,
       recebida ? 'recebida' : 'enviada',

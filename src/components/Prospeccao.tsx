@@ -21,7 +21,7 @@ import { AvisoErro } from './AvisoErro';
 /**
  * Marketing › Prospecção (server/prospeccao.ts): busca empresas no Google Maps (Places API) por
  * segmento e região, mostra as com celular ordenadas pela nota de qualificação e inclui as
- * escolhidas em Pessoas como lead. Cada busca é cobrada pelo Google e fica guardada: "Buscas anteriores"
+ * escolhidas nos Leads (Marketing › Leads). Cada busca é cobrada pelo Google e fica guardada: "Buscas anteriores"
  * reabre o resultado sem chamar o Google de novo.
  */
 
@@ -89,7 +89,7 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
     setResultado(r);
     setIncluidos(new Set());
     // Já vem marcado quem tem nota boa e não está no CRM
-    setMarcados(new Set(r.leads.filter((l) => !l.pessoa_id && l.pontos >= 45).map((l) => l.place_id)));
+    setMarcados(new Set(r.leads.filter((l) => !l.pessoa_id && !l.lead_id && l.pontos >= 45).map((l) => l.place_id)));
   };
 
   /** Reabre uma busca guardada (sem chamar o Google), com os filtros que ela usou */
@@ -110,7 +110,7 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
   };
 
   const mudar = <K extends keyof FiltroProspeccao>(campo: K, valor: FiltroProspeccao[K]) => setFiltro((f) => ({ ...f, [campo]: valor }));
-  const disponivel = (l: LeadProspeccao) => !l.pessoa_id && !incluidos.has(l.place_id);
+  const disponivel = (l: LeadProspeccao) => !l.pessoa_id && !l.lead_id && !incluidos.has(l.place_id);
   const disponiveis = useMemo(() => (resultado?.leads || []).filter(disponivel), [resultado, incluidos]);
 
   const buscar = async (e: React.FormEvent) => {
@@ -143,7 +143,7 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
       const r = await incluirProspeccao(escolhidos, segmento, buscaAberta || null);
       setIncluidos((s) => new Set([...s, ...escolhidos.map((l) => l.place_id)]));
       setMarcados(new Set());
-      onToast(`${r.incluidos} lead(s) incluído(s) em Pessoas${r.existentes ? `; ${r.existentes} já estava(m) no CRM` : ''}.`);
+      onToast(`${r.incluidos} lead(s) incluído(s) nos Leads${r.existentes ? `; ${r.existentes} já estava(m) no CRM` : ''}.`);
     } catch (err: any) {
       setErro(err.message);
     } finally {
@@ -248,10 +248,10 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
               <button
                 type="button"
                 onClick={() => onVerLeads(buscaAberta)}
-                title="Abre Pessoas com os leads que esta busca incluiu"
+                title="Abre os Leads que esta busca incluiu"
                 className={`${botao} border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800`}
               >
-                Ver leads em Pessoas
+                Ver leads
               </button>
             )}
           </div>
@@ -312,9 +312,16 @@ export const Prospeccao: React.FC<Props> = ({ onToast, onVerLeads }) => {
                     <td className="px-3 py-2">
                       <div className="font-semibold text-stone-800 dark:text-stone-100 flex items-center gap-2">
                         {l.nome}
-                        {l.pessoa_id && l.pela_prospeccao ? (
+                        {l.lead_id ? (
                           <span
-                            title="Incluída como lead por uma busca da Prospecção"
+                            title={l.pela_prospeccao ? 'Incluída nos Leads por uma busca da Prospecção' : 'Já está nos Leads: achado pelo telefone'}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          >
+                            Nos Leads
+                          </span>
+                        ) : l.pessoa_id && l.pela_prospeccao ? (
+                          <span
+                            title="Incluída pela Prospecção e já convertida em cliente"
                             className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                           >
                             Incluído pela Prospecção
