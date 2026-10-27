@@ -380,10 +380,12 @@ export const CrudView: React.FC<CrudViewProps> = ({
     const tabela = tabelaRef.current;
     if (!tabela) return null;
     const cabecalhos = Array.from(tabela.querySelectorAll('thead th')) as HTMLElement[];
-    const celulas = Array.from(tabela.querySelectorAll('tbody tr:first-child > td')) as HTMLElement[];
-    const anteriores = [...cabecalhos, ...celulas].map((c) => c.style.width);
+    // Todas as linhas: qualquer célula com a largura (mínima) de antes seguraria a coluna larga na medição
+    const celulas = Array.from(tabela.querySelectorAll('tbody td')) as HTMLElement[];
+    const anteriores = [...cabecalhos, ...celulas].map((c) => [c.style.width, c.style.minWidth, c.style.maxWidth]);
     [...cabecalhos, ...celulas].forEach((c) => {
       c.style.width = '';
+      c.style.minWidth = '';
       c.style.maxWidth = '';
     });
     const larguraTabela = tabela.style.width;
@@ -391,7 +393,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
     const medidas = cabecalhos.map((th) => th.offsetWidth);
     tabela.style.width = larguraTabela;
     [...cabecalhos, ...celulas].forEach((c, i) => {
-      c.style.width = anteriores[i];
+      [c.style.width, c.style.minWidth, c.style.maxWidth] = anteriores[i];
     });
     return medidas;
   };
@@ -449,6 +451,9 @@ export const CrudView: React.FC<CrudViewProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setModoLargura('manual');
+    // Só a coluna arrastada muda: a coluna vazia do fim volta (também depois do "Ajustar largura") e fica com a
+    // diferença; passando da tela, a lista rola para o lado
+    setComSobra(true);
 
     const tabela = tabelaRef.current;
     if (!tabela) return;
@@ -462,10 +467,6 @@ export const CrudView: React.FC<CrudViewProps> = ({
     const mover = (ev: PointerEvent) => {
       const finais = [...base];
       finais[indice] = Math.max(50, base[indice] + ev.clientX - xInicial);
-      // Sem coluna de sobra, quem cede espaço é a coluna seguinte, para o total não mudar
-      if (!comSobra && indice < finais.length - 1) {
-        finais[indice + 1] = Math.max(50, base[indice + 1] - (finais[indice] - base[indice]));
-      }
       setLarguras(Object.fromEntries(colunas.map((f, i) => [f.name, finais[i]])));
     };
 
@@ -521,8 +522,11 @@ export const CrudView: React.FC<CrudViewProps> = ({
     }
   };
   const [visao, setVisao] = useState<'lista' | VisaoCalendario>(lerVisao);
-  /** Ficha embaixo recolhida: entra recolhida ao trocar para Semana/Mês; abre de novo ao escolher outro registro */
-  const [fichaRecolhida, setFichaRecolhida] = useState(false);
+  /**
+   * Painel de baixo (ficha ou grades de detalhe) recolhido: a tela abre com ele recolhido, e ele só abre quando o
+   * usuário clica; aberto ou fechado, fica assim ao escolher outros registros
+   */
+  const [fichaRecolhida, setFichaRecolhida] = useState(true);
   const trocarVisao = (v: 'lista' | VisaoCalendario) => {
     setVisao(v);
     if (v !== 'lista') setFichaRecolhida(true);
@@ -600,9 +604,6 @@ export const CrudView: React.FC<CrudViewProps> = ({
   // Lista com detalhe já abre com o painel: sem seleção, vale a primeira linha.
   // Fechado no X, o painel só volta quando o usuário escolhe uma linha.
   const painelFechado = useRef(false);
-  // Outro registro escolhido: a ficha volta a abrir
-  const idSelecionado = selecionado ? recordId(selecionado) : null;
-  useEffect(() => setFichaRecolhida(false), [idSelecionado]);
   useEffect(() => {
     // No calendário, a ficha só abre quando o usuário escolhe uma atividade
     if (temDetalhe && visao === 'lista' && !selecionado && !painelFechado.current && rows.length) setSelecionado(rows[0]);
@@ -975,7 +976,7 @@ export const CrudView: React.FC<CrudViewProps> = ({
                     {colunas.map((f, iCol) => (
                       <td
                         key={f.name}
-                        style={larguras[f.name] ? { width: larguras[f.name], maxWidth: larguras[f.name] } : undefined}
+                        style={larguras[f.name] ? { width: larguras[f.name], minWidth: larguras[f.name], maxWidth: larguras[f.name] } : undefined}
                         className={`px-3 py-[7.5px] ${
                           // Filhos da árvore (ex.: versões da proposta) com a letra um pouco mais clara;
                           // raiz com filhos (proposta com outras versões) em azul
@@ -1449,7 +1450,8 @@ export const CrudView: React.FC<CrudViewProps> = ({
                       soltarColuna(f.name);
                     }}
                     onClick={() => !f.json && handleSort(f.name)}
-                    style={larguras[f.name] ? { width: larguras[f.name] } : undefined}
+                    // minWidth: sem ele, a coluna vazia do fim (w-full) tira um pouco de cada coluna
+                    style={larguras[f.name] ? { width: larguras[f.name], minWidth: larguras[f.name] } : undefined}
                     className={`relative px-3 py-2.5 text-center font-semibold text-stone-600 dark:text-stone-300 whitespace-nowrap cursor-pointer select-none hover:bg-stone-100 dark:hover:bg-stone-800/60 transition-colors border-b border-r border-stone-200 dark:border-stone-800 ${
                       grade === 'ambas' || grade === 'verticais' ? '' : 'border-r-transparent'
                     } ${
@@ -1603,6 +1605,8 @@ export const CrudView: React.FC<CrudViewProps> = ({
           }}
           onOpenResource={onNavigate}
           acoesLinha={acoesDetalhe}
+          recolhido={fichaRecolhida}
+          onRecolhidoChange={setFichaRecolhida}
         />
       )}
 

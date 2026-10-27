@@ -29,6 +29,9 @@ interface DetailPanelProps {
   onOpenResource: (resourceName: string) => void;
   /** Botões extras na linha (ex.: WhatsApp do contato); null quando o recurso não tem */
   acoesLinha?: (recurso: string, row: RegistroCrud, ctx: { recarregar: () => void }) => React.ReactNode;
+  /** Recolhido controlado pela lista: o painel é recriado a cada registro, e a escolha do usuário continua valendo */
+  recolhido?: boolean;
+  onRecolhidoChange?: (v: boolean) => void;
 }
 
 const DETAIL_LIMIT = 200;
@@ -43,9 +46,17 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   onClose,
   onOpenResource,
   acoesLinha,
+  recolhido,
+  onRecolhidoChange,
 }) => {
   const [activeDetail, setActiveDetail] = useState(0);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [recolhidoLocal, setRecolhidoLocal] = useState(false);
+  const isCollapsed = recolhido ?? recolhidoLocal;
+  const setIsCollapsed = (v: boolean | ((c: boolean) => boolean)) => {
+    const novo = typeof v === 'function' ? v(isCollapsed) : v;
+    if (onRecolhidoChange) onRecolhidoChange(novo);
+    else setRecolhidoLocal(novo);
+  };
   const [rows, setRows] = useState<RegistroCrud[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

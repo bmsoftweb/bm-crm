@@ -2,6 +2,12 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.185 — 2026-10-27
+
+- Listas: arrastar a borda de uma coluna muda só aquela coluna, também depois do "Ajustar largura" (antes a coluna vizinha compensava e as outras encolhiam um pouco); passando da tela, a lista rola para o lado.
+- Listas: "Melhor largura" volta a encolher as colunas pelo conteúdo depois do "Ajustar largura".
+- Painel de detalhamento embaixo das listas (grades de detalhe e ficha): abre sempre minimizado e fica como o usuário deixar (aberto ou fechado) ao escolher outros registros.
+
 ## 0.0.184 — 2026-10-27
 
 - Listas: arrastar a borda de uma coluna em Atividades/Tarefas (e em toda lista com a coluna inicial, como "Concluir") não bagunça mais as outras colunas; o arraste pegava a largura da coluna vizinha.
