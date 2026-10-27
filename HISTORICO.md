@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.182 — 2026-10-27
+
+- Importar pessoas de arquivo: corrigido o erro "HTTP 504" em planilhas grandes (ex.: 6 mil clientes). As pessoas novas e os endereços delas entram num único comando por lote, os endereços de quem já existe são lidos de uma vez, e o navegador envia 150 linhas por vez, para cada lote caber no tempo limite do servidor.
+
 ## 0.0.181 — 2026-10-26
 
 - Listas: "Melhor largura" deixa 10px de folga em cada coluna, para o texto no limite não aparecer cortado com "...".

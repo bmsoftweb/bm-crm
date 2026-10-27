@@ -226,35 +226,108 @@ export function createImportArquivoRouter(): Router {
         return id ?? null;
       };
 
-      /**
-       * Endereço principal da pessoa: completa o que existe só com os valores
-       * preenchidos, ou cria um. Mudou a cidade, o código IBGE deixa de valer.
-       */
-      const completarEndereco = async (pessoaId: number, e: EnderecoImportado) => {
-        const [atual] = await conn.query<any[]>(
-          'SELECT id FROM pessoas_enderecos WHERE empresa_id = ? AND pessoa_id = ? ORDER BY principal DESC, id LIMIT 1',
-          [empresaId, pessoaId],
+      // Poucas idas ao banco por lote: na Vercel cada consulta leva ~100 ms (o banco fica no Brasil) e o lote
+      // tem 120 s. Pessoas novas e os endereços delas entram num INSERT só; os endereços de quem já existe
+      // vêm numa consulta só; só a atualização de quem já existe é uma linha por vez.
+
+      /** Endereço principal (o primeiro, principal antes) de quem já existe e aparece no lote */
+      const idsExistentes = new Set<number>();
+      for (const bruta of linhas) {
+        const p = converter(bruta || {});
+        const id = (p.cod_integracao && porCodigo.get(p.cod_integracao)) || (!p.cod_integracao && p.cpf && porCpf.get(p.cpf)) || null;
+        if (id) idsExistentes.add(id);
+      }
+      const enderecoDe = new Map<number, number>();
+      if (atualizar && idsExistentes.size) {
+        const [ends] = await conn.query<any[]>(
+          'SELECT id, pessoa_id FROM pessoas_enderecos WHERE empresa_id = ? AND pessoa_id IN (?) ORDER BY principal DESC, id',
+          [empresaId, [...idsExistentes]],
         );
-        const cols = END_CAMPOS.filter((c) => e[c] !== null);
-        if (atual.length) {
-          await conn.query(
-            `UPDATE pessoas_enderecos SET ${e.cidade ? 'codigo_ibge = IF(cidade <=> ?, codigo_ibge, NULL), ' : ''}principal = 1${cols
-              .map((c) => `, ${c} = ?`)
-              .join('')} WHERE id = ?`,
-            [...(e.cidade ? [e.cidade] : []), ...cols.map((c) => e[c]), atual[0].id],
-          );
-        } else {
-          await conn.query(
-            `INSERT INTO pessoas_enderecos (empresa_id, pessoa_id, tipo, principal${cols.map((c) => `, ${c}`).join('')})
-             VALUES (?, ?, 'comercial', 1${cols.map(() => ', ?').join('')})`,
-            [empresaId, pessoaId, ...cols.map((c) => e[c])],
-          );
+        for (const e of ends) if (!enderecoDe.has(e.pessoa_id)) enderecoDe.set(e.pessoa_id, e.id);
+      }
+
+      /** Endereços novos, agrupados pelas colunas preenchidas (um INSERT por grupo) */
+      const inserirEnderecos = async (lista: { pessoaId: number; e: EnderecoImportado }[]) => {
+        const grupos = new Map<string, { cols: string[]; valores: any[][] }>();
+        for (const { pessoaId, e } of lista) {
+          const cols = END_CAMPOS.filter((c) => e[c] !== null);
+          const k = cols.join(',');
+          if (!grupos.has(k)) grupos.set(k, { cols, valores: [] });
+          grupos.get(k)!.valores.push([empresaId, pessoaId, 'comercial', 1, ...cols.map((c) => e[c as keyof EnderecoImportado])]);
         }
+        for (const { cols, valores } of grupos.values()) {
+          await conn.query(`INSERT INTO pessoas_enderecos (empresa_id, pessoa_id, tipo, principal${cols.map((c) => `, ${c}`).join('')}) VALUES ?`, [valores]);
+        }
+        enderecos += lista.length;
+      };
+
+      /** Completa o endereço principal de quem já existe (ou cria um). Mudou a cidade, o código IBGE deixa de valer */
+      const completarEndereco = async (pessoaId: number, e: EnderecoImportado) => {
+        const atual = enderecoDe.get(pessoaId);
+        if (!atual) {
+          const [r] = await conn.query<any>(
+            `INSERT INTO pessoas_enderecos (empresa_id, pessoa_id, tipo, principal${END_CAMPOS.filter((c) => e[c] !== null).map((c) => `, ${c}`).join('')})
+             VALUES (?, ?, 'comercial', 1${END_CAMPOS.filter((c) => e[c] !== null).map(() => ', ?').join('')})`,
+            [empresaId, pessoaId, ...END_CAMPOS.filter((c) => e[c] !== null).map((c) => e[c])],
+          );
+          enderecoDe.set(pessoaId, r.insertId);
+          enderecos++;
+          return;
+        }
+        const cols = END_CAMPOS.filter((c) => e[c] !== null);
+        await conn.query(
+          `UPDATE pessoas_enderecos SET ${e.cidade ? 'codigo_ibge = IF(cidade <=> ?, codigo_ibge, NULL), ' : ''}principal = 1${cols
+            .map((c) => `, ${c} = ?`)
+            .join('')} WHERE id = ?`,
+          [...(e.cidade ? [e.cidade] : []), ...cols.map((c) => e[c]), atual],
+        );
         enderecos++;
       };
 
+      /** Pessoas novas ainda não gravadas (vão juntas no INSERT do fim do lote) */
+      let pendentes: { valores: any[]; p: ReturnType<typeof converter> }[] = [];
+      const gravarPendentes = async () => {
+        if (!pendentes.length) return;
+        const lote = pendentes;
+        pendentes = [];
+        const [r] = await conn.query<any>(
+          'INSERT INTO pessoas (empresa_id, tipo, cod_integracao, nome, email, telefone, cpf, obs, segmento_id, personalizados) VALUES ?',
+          [lote.map((x) => x.valores)],
+        );
+        // INSERT de várias linhas com a lista pronta ("simple insert"): o InnoDB reserva os ids de uma vez, em sequência.
+        // Confere assim mesmo antes de usar insertId + i nos endereços (diferente = desfaz o lote).
+        const primeiro = Number(r.insertId);
+        const [[{ n }]] = await conn.query<any>('SELECT COUNT(*) AS n FROM pessoas WHERE empresa_id = ? AND id BETWEEN ? AND ?', [
+          empresaId,
+          primeiro,
+          primeiro + lote.length - 1,
+        ]);
+        if (Number(n) !== lote.length || r.affectedRows !== lote.length) throw new Error('Os códigos das pessoas incluídas não vieram em sequência. Importe de novo.');
+        const comEndereco: { pessoaId: number; e: EnderecoImportado }[] = [];
+        lote.forEach(({ p }, i) => {
+          const id = primeiro + i;
+          if (p.cod_integracao) porCodigo.set(p.cod_integracao, id);
+          if (p.cpf) porCpf.set(p.cpf, id);
+          if (temEndereco(p.endereco)) comEndereco.push({ pessoaId: id, e: p.endereco });
+        });
+        if (comEndereco.length) await inserirEnderecos(comEndereco);
+        // Endereços recém-criados: se a mesma pessoa vier de novo no lote, cai na atualização (relê o principal)
+        if (comEndereco.length) {
+          const [ends] = await conn.query<any[]>(
+            'SELECT id, pessoa_id FROM pessoas_enderecos WHERE empresa_id = ? AND pessoa_id IN (?) ORDER BY principal DESC, id',
+            [empresaId, comEndereco.map((x) => x.pessoaId)],
+          );
+          for (const e of ends) if (!enderecoDe.has(e.pessoa_id)) enderecoDe.set(e.pessoa_id, e.id);
+        }
+      };
+      /** Código ou CPF que ainda está nas pendentes (repetido dentro do arquivo) */
+      const pendente = (p: ReturnType<typeof converter>) =>
+        pendentes.some((x) => (p.cod_integracao && x.p.cod_integracao === p.cod_integracao) || (!p.cod_integracao && p.cpf && x.p.cpf === p.cpf));
+
       for (const bruta of linhas) {
         const p = converter(bruta || {});
+        // Repetido de uma pessoa nova ainda não gravada: grava as pendentes para ele cair na atualização
+        if (pendente(p)) await gravarPendentes();
         const id = (p.cod_integracao && porCodigo.get(p.cod_integracao)) || (!p.cod_integracao && p.cpf && porCpf.get(p.cpf)) || null;
         if (id) {
           if (!atualizar) { ignorados++; continue; }
@@ -278,17 +351,10 @@ export function createImportArquivoRouter(): Router {
         p.segmento_id = await idSegmento(p.segmento);
         const extras = { ...padrao.personalizados, ...p.personalizados };
         const json = Object.keys(extras).length ? JSON.stringify(extras) : null;
-        const [r] = await conn.query<any>(
-          `INSERT INTO pessoas (empresa_id, tipo, cod_integracao, nome, email, telefone, cpf, obs, segmento_id, personalizados)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [empresaId, TIPO, p.cod_integracao, p.nome, p.email, p.telefone, p.cpf, p.obs, p.segmento_id, json],
-        );
-        if (temEndereco(p.endereco)) await completarEndereco(r.insertId, p.endereco);
-        // repetidos dentro do próprio arquivo caem na atualização
-        if (p.cod_integracao) porCodigo.set(p.cod_integracao, r.insertId);
-        if (p.cpf) porCpf.set(p.cpf, r.insertId);
+        pendentes.push({ p, valores: [empresaId, TIPO, p.cod_integracao, p.nome, p.email, p.telefone, p.cpf, p.obs, p.segmento_id, json] });
         inseridos++;
       }
+      await gravarPendentes();
       await conn.commit();
       res.json({
         inseridos,

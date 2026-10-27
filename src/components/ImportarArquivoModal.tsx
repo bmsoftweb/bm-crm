@@ -131,7 +131,9 @@ const ETAPAS = [
 ] as const;
 type Etapa = (typeof ETAPAS)[number]['id'];
 
+// Pessoas: cada lote tem de caber nos 120 s da função na Vercel (quem já existe é atualizado uma linha por vez)
 const LOTE = 1000;
+const LOTE_PESSOAS = 150;
 
 /** Resultado zerado (o das vendas usa: inseridos, atualizados = substituídas, semNome = sem data) */
 const VAZIO = { lidas: 0, inseridos: 0, atualizados: 0, ignorados: 0, semNome: 0, enderecos: 0, segmentosCriados: 0, segmentosNaoEncontrados: [] as string[] };
@@ -457,9 +459,9 @@ export const ImportarArquivoModal: React.FC<Props> = ({ tipo: oQue = 'pessoas', 
       segmentosNaoEncontrados: [],
     };
     try {
-      for (let i = 0; i < mapeadas.length; i += LOTE) {
-        setProgresso(`${Math.min(i + LOTE, mapeadas.length)} de ${mapeadas.length}`);
-        const r = await importarPessoasArquivo(mapeadas.slice(i, i + LOTE), { atualizar, criarSegmentos, padrao: padraoEnvio });
+      for (let i = 0; i < mapeadas.length; i += LOTE_PESSOAS) {
+        setProgresso(`${Math.min(i + LOTE_PESSOAS, mapeadas.length)} de ${mapeadas.length}`);
+        const r = await importarPessoasArquivo(mapeadas.slice(i, i + LOTE_PESSOAS), { atualizar, criarSegmentos, padrao: padraoEnvio });
         total.inseridos += r.inseridos;
         total.atualizados += r.atualizados;
         total.ignorados += r.ignorados;
