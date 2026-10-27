@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.184 — 2026-10-27
+
+- Listas: arrastar a borda de uma coluna em Atividades/Tarefas (e em toda lista com a coluna inicial, como "Concluir") não bagunça mais as outras colunas; o arraste pegava a largura da coluna vizinha.
+
 ## 0.0.183 — 2026-10-27
 
 - Leads separados de Pessoas: nova tela Marketing › Leads (tabela leads, só os campos de contato). A Prospecção, o "Cadastrar" das Conversas e os contatos novos do WhatsApp entram como lead; Pessoas fica só com o cadastro de trabalho. "Converter em cliente" (e o chatbot/Automação ao abrir um negócio) copia o lead para Pessoas e leva junto as conversas, atendimentos, avaliações, disparos e atividades. Lead excluído deixa esses registros sem dono.

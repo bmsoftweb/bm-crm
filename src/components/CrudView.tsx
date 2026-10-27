@@ -454,7 +454,8 @@ export const CrudView: React.FC<CrudViewProps> = ({
     if (!tabela) return;
     const cabecalhos = Array.from(tabela.querySelectorAll('thead th')) as HTMLElement[];
     // Congela as larguras atuais: sem isso o navegador redistribui a sobra e o arraste "escorrega"
-    const base = cabecalhos.slice(1, 1 + colunas.length).map((th) => th.offsetWidth);
+    // A partir da 1ª coluna de dados: depois do indicador e da coluna inicial (ex.: Concluir das atividades)
+    const base = cabecalhos.slice(inicioColunas, inicioColunas + colunas.length).map((th) => th.offsetWidth);
     const indice = colunas.findIndex((f) => f.name === campo);
     const xInicial = e.clientX;
 
