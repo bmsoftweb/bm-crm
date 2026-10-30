@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck, Circle, Globe, Headset, ArrowRightLeft, ClipboardList, Star } from 'lucide-react';
 import { fetchNotificacoes, marcarNotificacaoLida, marcarTodasLidas, Notificacao } from '../services/api';
 import { formatDateTimeBR } from '../utils/formatters';
+import { repetirConsulta } from '../utils/intervalo';
 
 const ICONES: Record<string, React.ElementType> = {
   visita_site: Globe,
@@ -37,8 +38,7 @@ export const NotificacoesSino: React.FC<Props> = ({ onAbrir }) => {
 
   useEffect(() => {
     atualizar();
-    const i = setInterval(atualizar, 15_000);
-    return () => clearInterval(i);
+    return repetirConsulta(atualizar, 15_000);
   }, [atualizar]);
 
   // Fecha ao clicar fora ou com Esc

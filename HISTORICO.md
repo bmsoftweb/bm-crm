@@ -2,6 +2,12 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.186 — 2026-10-30
+
+- Menos consumo na Vercel: a função passa a rodar em São Paulo (gru1), perto do banco (rodava em Washington e cada consulta atravessava o continente).
+- Abas do CRM em segundo plano consultam o servidor no máximo a cada 30 s (fila de chamados, notificações, WhatsApp, atividades, chat de suporte); com a aba visível nada muda, e ao voltar para ela atualiza na hora.
+- Agendamento de cada minuto: e-mail das respostas das pesquisas (IMAP) e Google Agenda passam a rodar a cada 10 minutos.
+
 ## 0.0.185 — 2026-10-27
 
 - Listas: arrastar a borda de uma coluna muda só aquela coluna, também depois do "Ajustar largura" (antes a coluna vizinha compensava e as outras encolhiam um pouco); passando da tela, a lista rola para o lado.

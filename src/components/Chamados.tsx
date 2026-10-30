@@ -44,6 +44,7 @@ import { useGrudarNoFim } from '../utils/grudarNoFim';
 import { AtividadeModal } from './AtividadeModal';
 import { BotaoConversaBot } from './ConversaBot';
 import { BotaoClipe, imagemColada, PreviaImagem } from './AnexarImagem';
+import { repetirConsulta } from '../utils/intervalo';
 
 /**
  * Suporte › Fila de Chamados e Chamados Ativos (server/chamados.ts), no modelo do solweb: a fila
@@ -158,8 +159,7 @@ export function tempoEspera(min: number): string {
 function useRecarga(fn: () => void, deps: unknown[]) {
   useEffect(() => {
     fn();
-    const i = setInterval(fn, 15_000);
-    return () => clearInterval(i);
+    return repetirConsulta(fn, 15_000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }
@@ -453,8 +453,7 @@ export const TecnicosAgora: React.FC = () => {
         })
         .catch(() => {});
     ler();
-    const i = setInterval(ler, 15_000);
-    return () => clearInterval(i);
+    return repetirConsulta(ler, 15_000);
   }, []);
   if (!tecnicos.length && !fila) return null;
   const naFila = (n: number, cor: string) => (n ? cor : 'bg-stone-100 text-stone-400 dark:bg-stone-800');
@@ -584,10 +583,10 @@ export const ChamadosAtivos: React.FC<AtivosProps> = ({ refreshToken, abrir, onM
   }, [filtro, busca]);
   useEffect(() => {
     const t = setTimeout(carregar, busca ? 300 : 0);
-    const i = setInterval(carregar, 15_000);
+    const parar = repetirConsulta(carregar, 15_000);
     return () => {
       clearTimeout(t);
-      clearInterval(i);
+      parar();
     };
   }, [carregar, refreshToken]);
 

@@ -226,14 +226,17 @@ export function createApp() {
   app.get(
     '/api/cron/whatsapp',
     cron(async () => {
+      // E-mail das pesquisas (IMAP) e Google Agenda só a cada 10 minutos: conectar neles é o mais lento do ciclo
+      // e cada minuto da função conta no consumo da Vercel
+      const decimo = new Date().getMinutes() % 10 === 0;
       // Bot das atividades também em paralelo: cada contato espera a IA
       const [inatividade, atividadesBot, respostasPesquisa, agendaGoogle, resto] = await Promise.all([
         verificarInatividade(),
         rodarBotAtividades(45_000),
         // Respostas da pesquisa de satisfação por e-mail (IMAP), também em paralelo
-        lerRespostasPesquisa().catch((e) => `falhou: ${e.message}`),
+        decimo ? lerRespostasPesquisa().catch((e) => `falhou: ${e.message}`) : 'a cada 10 min',
         // Google Agenda da empresa, nos dois sentidos (server/agendaGoogle.ts)
-        sincronizarAgendas(25_000).catch((e) => `falhou: ${e.message}`),
+        decimo ? sincronizarAgendas(25_000).catch((e) => `falhou: ${e.message}`) : 'a cada 10 min',
         (async () => ({
           campanhas: await enviarPendentes(50, 25_000),
           emails: await enviarEmailsCampanha(50, 20_000),

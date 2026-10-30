@@ -6,6 +6,7 @@ import { Id } from '../types';
 import { formatDateTimeBR } from '../utils/formatters';
 import { AvisoErro } from './AvisoErro';
 import { BotaoAcao } from './MenuAcoes';
+import { repetirConsulta } from '../utils/intervalo';
 
 /** Situação de cada conversa do bot: rótulo e cor */
 const SITUACAO: Record<string, [string, string]> = {
@@ -34,8 +35,7 @@ export const ConversaBot: React.FC<{ atividadeId: Id; onFechar: () => void }> = 
   const andamento = dados?.conversas.some((c) => c.situacao === 'conversando');
   useEffect(() => {
     if (!andamento) return;
-    const t = setInterval(carregar, 10_000);
-    return () => clearInterval(t);
+    return repetirConsulta(carregar, 10_000);
   }, [andamento, carregar]);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onFechar();

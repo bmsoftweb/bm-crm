@@ -5,6 +5,7 @@ import { erroCelular, formatDateTimeBR } from '../utils/formatters';
 import { ConfirmDialog } from './ConfirmDialog';
 import { BotaoClipe, imagemColada, PreviaImagem } from './AnexarImagem';
 import { destravarSom, tocarAviso } from '../utils/som';
+import { repetirConsulta } from '../utils/intervalo';
 
 /**
  * Página pública /suporte?e=<empresa> (dentro do painel do widget.js, no site do cliente): abre o
@@ -485,11 +486,10 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
     };
   }, [url]);
 
-  // Atualiza a cada 4 s (resposta da equipe, posição na fila)
+  // Atualiza a cada 4 s (resposta da equipe, posição na fila); com a aba em segundo plano, a cada 30 s
   useEffect(() => {
     carregar();
-    const i = setInterval(carregar, 4000);
-    return () => clearInterval(i);
+    return repetirConsulta(carregar, 4000);
   }, [carregar]);
   // Cancelado, ou encerrado e já avaliado: não há mais nada aqui, vai direto para abrir um novo
   useEffect(() => {

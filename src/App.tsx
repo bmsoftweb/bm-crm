@@ -54,6 +54,7 @@ import { BotaoPermissoes } from './components/PermissoesUsuario';
 import { gruposDoMenu, podeAcessar, podeImportar, type ItemMenu } from './utils/menu';
 import { ThemeMode, getInitialTheme, applyTheme } from './utils/theme';
 import { Sessao, lerSessao, salvarSessao, limparSessao, atualizarSessao } from './utils/session';
+import { repetirConsulta } from './utils/intervalo';
 
 export default function App() {
   // ----------------------------------------------------------
@@ -143,9 +144,8 @@ export default function App() {
   useEffect(() => {
     if (!sessao || !veConversas) return;
     atualizarNaoVistas();
-    // Também com a aba em segundo plano: o aviso sonoro não pode esperar a pessoa voltar
-    const i = setInterval(atualizarNaoVistas, 15_000);
-    return () => clearInterval(i);
+    // Também com a aba em segundo plano (aí a cada 30 s): o aviso sonoro não pode esperar a pessoa voltar
+    return repetirConsulta(atualizarNaoVistas, 15_000);
   }, [sessao, veConversas, atualizarNaoVistas]);
 
   // Etiqueta da Fila de Chamados, para quem trabalha os chamados
@@ -214,9 +214,8 @@ export default function App() {
   useEffect(() => {
     if (!sessao || !veChamados) return;
     atualizarFilaChamados();
-    // A cada 5 s: o aviso de mensagem do cliente não pode demorar (é uma consulta pequena)
-    const i = setInterval(atualizarFilaChamados, 5_000);
-    return () => clearInterval(i);
+    // A cada 5 s: o aviso de mensagem do cliente não pode demorar (é uma consulta pequena); em segundo plano, 30 s
+    return repetirConsulta(atualizarFilaChamados, 5_000);
   }, [sessao, veChamados, atualizarFilaChamados]);
 
   /** Atividades pendentes que executo ou do meu departamento, já conhecidas (null = ainda não carregou: sem aviso na abertura) */
@@ -252,9 +251,8 @@ export default function App() {
     if (!sessao) return;
     if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission();
     atualizarMinhasAtividades();
-    // Também com a aba em segundo plano: é justamente quando a pessoa está em outra tela
-    const i = setInterval(atualizarMinhasAtividades, 15_000);
-    return () => clearInterval(i);
+    // Também com a aba em segundo plano (a cada 30 s): é justamente quando a pessoa está em outra tela
+    return repetirConsulta(atualizarMinhasAtividades, 15_000);
   }, [sessao, atualizarMinhasAtividades]);
 
   // Tela sem permissão (ex.: o Funil, que abre primeiro): vai para a primeira opção do menu que o usuário acessa
