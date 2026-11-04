@@ -3,10 +3,9 @@ import { marcarEvento, minutosInatividade, mudarAtendimento, type ConfigChatbot 
 
 /**
  * Falta de interação no WhatsApp: o app nunca encerra um atendimento sozinho (só alguém da equipe, pelo Encerrar).
- * X minutos (Configurações › Chatbot) depois da última mensagem, com o cliente tendo escrito neste atendimento,
- * a conversa vai para "aguardando" (sem atendente), sem mandar nada ao cliente:
- * - do bot/técnico esperando resposta do cliente;
- * - do cliente que não espera resposta ("ok, obrigado"), com um técnico atendendo.
+ * X minutos (Configurações › Chatbot) depois da última mensagem do bot, com o cliente tendo escrito neste
+ * atendimento e sem responder, a conversa vai para "aguardando", sem mandar nada ao cliente.
+ * Conversa com técnico (assumida ou transferida) nunca entra: fica com ele até encerrar, pausar ou transferir.
  * Do cliente esperando o técnico: nada aqui; a tela do técnico toca a campainha (/whatsapp/nao-vistas).
  * Não entram: conversa já aguardando, parada num Esperar da Automação e mensagens de campanha/automáticas.
  * Roda no cron do WhatsApp (Vercel) e no setInterval local, com trava no MySQL (os dois usam o mesmo banco).
@@ -17,18 +16,17 @@ export const TEXTO_ENCERRAMENTO = 'Atendimento encerrado por falta de interaçã
 /** Mensagem mais velha que o prazo + esta janela não entra (servidor parado, conversa antiga) */
 const JANELA_MIN = 60;
 
-/** Conversas paradas há X minutos: última mensagem do bot/técnico (já entregue) ou do cliente com técnico atendendo */
+/** Conversas do bot paradas há X minutos: última mensagem do bot (já entregue), sem resposta do cliente */
 async function candidatas(empresaId: number, minutos: number) {
   const [rows] = await pool.query<any[]>(
-    `SELECT c.telefone, c.atendente_id, m.direcao
+    `SELECT c.telefone
        FROM whatsapp_conversas c
        JOIN whatsapp_mensagens m ON m.id = (SELECT MAX(z.id) FROM whatsapp_mensagens z
                                              WHERE z.empresa_id = c.empresa_id AND z.telefone = c.telefone AND z.tipo <> 'evento')
       WHERE c.empresa_id = ? AND c.retomar_em IS NULL
-        AND NOT (c.atendimento = 'humano' AND c.atendente_id IS NULL)
+        AND c.atendimento <> 'humano' AND c.atendente_id IS NULL
         AND m.tipo <> 'encerramento'
-        AND ((m.direcao = 'enviada' AND m.situacao <> 'pendente' AND (m.origem IS NULL OR m.origem LIKE 'bot:%'))
-             OR (m.direcao = 'recebida' AND c.atendente_id IS NOT NULL AND m.tipo = 'texto'))
+        AND m.direcao = 'enviada' AND m.situacao <> 'pendente' AND (m.origem IS NULL OR m.origem LIKE 'bot:%')
         AND m.data_hora <= NOW() - INTERVAL ? MINUTE
         AND m.data_hora > NOW() - INTERVAL ? MINUTE
         AND EXISTS (SELECT 1 FROM whatsapp_mensagens r
@@ -55,8 +53,7 @@ export async function verificarInatividade(): Promise<{ aguardando: number }> {
         for (const c of await candidatas(Number(r.empresa_id), minutos)) {
           try {
             await mudarAtendimento(r.empresa_id, c.telefone, 'humano');
-            const quem = c.direcao === 'recebida' ? 'conversa parada' : 'cliente não respondeu';
-            await marcarEvento(r.empresa_id, c.telefone, `Aguardando: ${quem} há ${minutos} min${c.atendente_id ? ' (atendente liberado)' : ''}`, null);
+            await marcarEvento(r.empresa_id, c.telefone, `Aguardando: cliente não respondeu há ${minutos} min`, null);
             aguardando++;
           } catch (err: any) {
             console.error(`Inatividade (${c.telefone}): ${err.message}`);

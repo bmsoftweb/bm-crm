@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.187 — 2026-11-04
+
+- WhatsApp: a conversa assumida pelo técnico (ou recebida numa transferência) fica com ele, por mais tempo que passe sem resposta; só sai dele ao encerrar, pausar ou transferir. Saiu de Configurações › Chatbot o "Liberar o atendente depois de (minutos)", e o "Passar para aguardando sem interação" vale só para conversas com o bot.
+
 ## 0.0.186 — 2026-10-30
 
 - Menos consumo na Vercel: a função passa a rodar em São Paulo (gru1), perto do banco (rodava em Washington e cada consulta atravessava o continente).

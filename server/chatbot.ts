@@ -254,8 +254,8 @@ export async function testarChatbot(empresaId: string): Promise<string> {
 
 /**
  * Com quem está a conversa agora. Humano: aguardando (sem atendente) ou em atendimento (atendente_id,
- * atendido_em). Passados X minutos sem mensagem de atendente: quem estava atendendo é liberado e a
- * conversa volta a aguardar. Aguardando não volta ao bot pelo tempo: um técnico atende ou encerra.
+ * atendido_em). O tempo não tira a conversa de ninguém: quem assumiu (ou recebeu na transferência) fica com
+ * ela até encerrar, pausar ou transferir; aguardando também não volta ao bot sozinha.
  */
 export async function atendimentoAtual(empresaId: string | number, telefone: string, minutosDevolver: number): Promise<'bot' | 'humano'> {
   await pool.query('INSERT IGNORE INTO whatsapp_conversas (empresa_id, telefone) VALUES (?, ?)', [empresaId, telefone]);
@@ -266,35 +266,12 @@ export async function atendimentoAtual(empresaId: string | number, telefone: str
                                   AND w.origem IS NULL AND w.disparo_id IS NULL) AS mudou_depois,
             (SELECT MAX(w.data_hora) FROM whatsapp_mensagens w
               WHERE w.empresa_id = c.empresa_id AND w.telefone = c.telefone AND w.direcao = 'enviada'
-                AND w.origem IS NULL AND w.disparo_id IS NULL) > NOW() - INTERVAL ? MINUTE AS humano_recente,
-            c.atendente_id, (SELECT u.nome FROM usuarios u WHERE u.id = c.atendente_id) AS atendente_nome,
-            DATE_FORMAT(GREATEST(COALESCE(IF(c.atendente_id IS NULL, c.humano_desde, c.atendido_em), '1000-01-01'),
-                     COALESCE((SELECT MAX(w.data_hora) FROM whatsapp_mensagens w
-                                WHERE w.empresa_id = c.empresa_id AND w.telefone = c.telefone AND w.direcao = 'enviada'
-                                  AND w.origem IS NULL AND w.disparo_id IS NULL), '1000-01-01')) + INTERVAL ? MINUTE, '%Y-%m-%d %H:%i:%s') AS esgotou_em
+                AND w.origem IS NULL AND w.disparo_id IS NULL) > NOW() - INTERVAL ? MINUTE AS humano_recente
        FROM whatsapp_conversas c WHERE c.empresa_id = ? AND c.telefone = ?`,
-    [minutosDevolver, minutosDevolver, empresaId, telefone],
+    [minutosDevolver, empresaId, telefone],
   );
   const c = rows[0];
-  if (c.atendimento === 'humano') {
-    const [agora] = await pool.query<any[]>("SELECT DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s') AS agora");
-    if (c.esgotou_em > agora[0].agora) return 'humano';
-    if (c.atendente_id) {
-      // Pegou e parou de responder: libera para outro atendente (volta a aguardar desde agora)
-      await pool.query(
-        'UPDATE whatsapp_conversas SET atendente_id = NULL, atendido_em = NULL, humano_desde = NOW(), atualizado_em = NOW() WHERE empresa_id = ? AND telefone = ?',
-        [empresaId, telefone],
-      );
-      // Quem ficou devendo a resposta: a última mensagem antes de esgotar foi do cliente (atendente não respondeu) ou do atendente (cliente não respondeu)
-      const [ult] = await pool.query<any[]>(
-        "SELECT direcao FROM whatsapp_mensagens WHERE empresa_id = ? AND telefone = ? AND tipo <> 'evento' AND data_hora <= ? ORDER BY data_hora DESC, id DESC LIMIT 1",
-        [empresaId, telefone, c.esgotou_em],
-      );
-      const quem = ult[0]?.direcao === 'recebida' ? (c.atendente_nome ?? 'o atendente') : 'Cliente';
-      await marcarEvento(empresaId, telefone, `Atendimento liberado pelo tempo: ${quem} não respondeu`, null, c.esgotou_em);
-    }
-    return 'humano';
-  }
+  if (c.atendimento === 'humano') return 'humano';
   // Com o bot, mas um atendente respondeu (tela ou celular) depois disso: passa a ser dele
   if (Number(c.humano_recente) && !Number(c.mudou_depois)) {
     await pool.query("UPDATE whatsapp_conversas SET atendimento = 'humano', humano_desde = NOW(), atualizado_em = NOW() WHERE empresa_id = ? AND telefone = ?", [empresaId, telefone]);

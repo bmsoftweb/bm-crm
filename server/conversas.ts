@@ -485,7 +485,7 @@ export function createConversasRouter(): Router {
         [`${TRANSFERIDO_PARA}%`, res.locals.empresaId, res.locals.usuario.id, res.locals.usuario.id],
       );
       // Conversas minhas em que o cliente espera a minha resposta há X minutos (Configurações › Chatbot): a tela toca
-      // a campainha uma vez por mensagem. "ok, obrigado" não espera nada (o cron passa para aguardando: server/inatividade.ts)
+      // a campainha uma vez por mensagem ("ok, obrigado" não espera nada). A conversa continua com o técnico: o tempo não a tira dele
       const minutos = minutosInatividade((await lerConfig(String(res.locals.empresaId), 'whatsapp', 'chatbot')) as any);
       const [e] = minutos
         ? await pool.query<any[]>(

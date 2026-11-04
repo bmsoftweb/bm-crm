@@ -103,14 +103,9 @@ export const ConfigChatbot: React.FC<Props> = ({ somenteLeitura, onToast }) => {
             <span className={HINT_CLASS}>Como o assistente se apresenta ao cliente no WhatsApp</span>
           </div>
           <div className={FIELD_CLASS}>
-            <label htmlFor="bot-minutos" className={LABEL_CLASS}>Liberar o atendente depois de (minutos)</label>
-            <NumberField id="bot-minutos" value={String(v.minutos_devolver)} onChange={(t) => alterar({ minutos_devolver: Number(t) || 0 })} scale={0} className={campo} />
-            <span className={HINT_CLASS}>Atendente que assumiu e ficou esse tempo sem responder: a conversa volta para a fila (aguardando). Aguardando não volta ao bot sozinha: um técnico atende ou encerra</span>
-          </div>
-          <div className={FIELD_CLASS}>
             <label htmlFor="bot-inatividade" className={LABEL_CLASS}>Passar para aguardando sem interação após (minutos)</label>
             <NumberField id="bot-inatividade" value={String(v.minutos_inatividade)} onChange={(t) => alterar({ minutos_inatividade: Number(t) || 0 })} scale={0} className={campo} />
-            <span className={HINT_CLASS}>Cliente sem responder ao bot ou ao técnico: a conversa vai para aguardando, sem mensagem ao cliente. O app nunca encerra sozinho: só alguém da equipe, pelo Encerrar. 0 = desligado</span>
+            <span className={HINT_CLASS}>Cliente sem responder ao bot: a conversa vai para aguardando, sem mensagem ao cliente. Conversa com técnico (assumida ou transferida) fica com ele até encerrar, pausar ou transferir; o tempo não a tira dele. 0 = desligado</span>
           </div>
         </div>
 
