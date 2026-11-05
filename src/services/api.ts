@@ -1094,6 +1094,22 @@ export const fetchLigacao = (id: number): Promise<{ situacao: 'chamando' | 'aten
   get(`/api/ligacoes/${id}`);
 export const atenderLigacao = (id: number, resposta: string) => enviar('POST', `/api/ligacoes/${id}/atender`, { resposta });
 export const encerrarLigacao = (id: number) => enviar('POST', `/api/ligacoes/${id}/encerrar`);
+/** Gravação da ligação com o cliente: direto para o Blob (sem o limite de 4,5 MB da Vercel); o servidor manda analisar */
+export async function enviarGravacaoLigacao(ligacaoId: number, audio: Blob, segundos: number): Promise<void> {
+  const { upload } = await import('@vercel/blob/client');
+  const tipo = audio.type.split(';')[0];
+  const blob = await upload(`ligacoes/${ligacaoId}-gravacao.${tipo === 'audio/mp4' ? 'mp4' : 'webm'}`, audio, {
+    access: 'public',
+    handleUploadUrl: '/api/ligacoes/gravacao/upload',
+    clientPayload: JSON.stringify({ ligacao_id: ligacaoId }),
+    contentType: tipo,
+    headers: headers(),
+    multipart: audio.size > 5 * 1024 * 1024,
+  });
+  await enviar('POST', `/api/ligacoes/${ligacaoId}/gravacao`, { url: blob.url, segundos });
+}
+/** Player e transcrição da nota da ligação (url vazia: passou dos 90 dias) */
+export const fetchGravacaoLigacao = (id: number): Promise<{ url: string | null; segundos: number | null; transcricao: string | null }> => get(`/api/ligacoes/${id}/gravacao`);
 export const ligarParaCliente = (chamadoId: number, oferta: string): Promise<{ id: number }> => enviar('POST', `/api/chamados/${chamadoId}/ligar`, { oferta });
 export const fetchChamados = (filtro: FiltroChamados, q = ''): Promise<ChamadoResumo[]> =>
   get(`/api/chamados?filtro=${filtro}${q ? `&q=${encodeURIComponent(q)}` : ''}`);

@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.191 — 2026-11-05
+
+- Ligação com o cliente gravada: o navegador do técnico grava as duas vozes ("● Gravando" no cartão; o cliente vê o aviso de que a ligação é gravada) e, ao desligar, o áudio vai para o Vercel Blob. O Gemini ouve, transcreve e resume: o resumo vira nota interna no chamado, com o player e a transcrição, e a transcrição passa pela análise de pendências (vira tarefa o que ficou em aberto). Usa a chave do Gemini de Configurações › Chatbot mesmo com outra IA escolhida (o Claude e o DeepSeek não ouvem áudio).
+- Gravações apagadas 30 dias depois da ligação (verificação 2x por dia); ficam o resumo e a transcrição (extras/ligacoes_gravacao.sql).
+
 ## 0.0.190 — 2026-11-05
 
 - Ligação do técnico para o cliente pelo chat do site: botão "Ligar" no chamado que veio do site (só para quem atende). No chat do cliente (widget, página /suporte ou BM-ClientChat) toca e aparece o cartão para atender ou recusar; o widget abre o painel, pisca o título e notifica, e o BM-ClientChat traz a janela para frente. Só o técnico liga: o cliente apenas atende. O widget passa a liberar o microfone no quadro do chat (extras/ligacoes_cliente.sql: coluna chamado_id em ligacoes).

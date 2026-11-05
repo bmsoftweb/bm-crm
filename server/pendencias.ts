@@ -1,8 +1,9 @@
 import { waitUntil } from '@vercel/functions';
 import { pool } from './db.js';
 import { aposGravar } from './regras.js';
-import { conversarIa, lerChatbot, marcarEvento, temChave } from './chatbot.js';
-import { gravarMensagem as mensagemChamado } from './chamados.js';
+import { conversarIa, lerChatbot, marcarEvento, ouvirAudio, temChave } from './chatbot.js';
+import { gravarMensagem as mensagemChamado, NOTA_LIGACAO } from './chamados.js';
+import { baixarAnexo } from './anexos.js';
 import { verificarFim } from './atividadeBot.js';
 import { notificar } from './notificacoes.js';
 
@@ -233,6 +234,62 @@ export function analisarChamado(chamadoId: number) {
       conclusao: String(c[0].conclusao ?? '').trim() || null,
       vinculos: { chamado_id: chamadoId },
       anotar: (t) => mensagemChamado({ chamado_id: chamadoId, autor: 'sistema', texto: t }),
+    };
+  });
+}
+
+/**
+ * Ligação gravada do técnico com o cliente (src/components/Telefone.tsx): o Gemini ouve, transcreve e resume. O resumo
+ * vira nota interna no chamado (com o player, src/components/Chamados.tsx) e a transcrição passa pela análise de
+ * pendências como uma conversa. Falhou a análise: a nota diz por quê (a gravação fica para ouvir)
+ */
+export function analisarLigacao(ligacaoId: number) {
+  emSegundoPlano(`ligação ${ligacaoId}`, async () => {
+    const [l] = await pool.query<any[]>(
+      `SELECT l.id, l.empresa_id, l.chamado_id, l.de_usuario_id, l.gravacao_url, u.nome AS tecnico, c.numero, c.pessoa_id,
+              COALESCE(p.nome, c.contato_nome, 'Cliente') AS cliente, e.nome AS empresa
+         FROM ligacoes l JOIN chamados c ON c.id = l.chamado_id JOIN usuarios u ON u.id = l.de_usuario_id
+         JOIN empresas e ON e.id = l.empresa_id LEFT JOIN pessoas p ON p.id = c.pessoa_id
+        WHERE l.id = ?`,
+      [ligacaoId],
+    );
+    const x = l[0];
+    if (!x?.gravacao_url) return null;
+    const nota = (texto: string) =>
+      mensagemChamado({ chamado_id: x.chamado_id, usuario_id: x.de_usuario_id, autor: 'equipe', interna: true, texto: `${NOTA_LIGACAO}${ligacaoId}]]\n${texto}` });
+    const atendente = `Atendente (${x.tecnico})`;
+    let r: { transcricao?: unknown; resumo?: unknown };
+    try {
+      const cfg = await lerChatbot(x.empresa_id);
+      if (!cfg) throw new Error('configure a IA em Configurações › Chatbot (a análise usa a chave do Gemini).');
+      const texto = await ouvirAudio(
+        cfg,
+        await baixarAnexo(x.gravacao_url),
+        x.gravacao_url.endsWith('.mp4') ? 'audio/mp4' : 'audio/webm',
+        `Esta é a gravação de uma ligação de suporte da empresa ${x.empresa} entre o técnico ${x.tecnico} e o cliente ${x.cliente}.
+Responda só com JSON, sem texto em volta: {"transcricao": "...", "resumo": "..."}
+- transcricao: a conversa inteira em português, uma fala por linha, começando com "Cliente: " ou "${atendente}: ". Sem fala audível: vazio.
+- resumo: até 5 frases: o assunto, o que foi feito ou resolvido e o que ficou pendente (e com quem).
+Não invente nada que não foi dito na ligação.`,
+      );
+      r = JSON.parse(/\{[\s\S]*\}/.exec(texto)?.[0] ?? '{}');
+    } catch (err: any) {
+      await nota(`Ligação gravada, sem resumo: ${err.message}`);
+      return null;
+    }
+    const transcricao = String(r.transcricao ?? '').trim();
+    const resumo = String(r.resumo ?? '').trim() || 'Nenhuma conversa audível na gravação.';
+    await pool.query('UPDATE ligacoes SET transcricao = ?, resumo = ? WHERE id = ?', [transcricao || null, resumo, ligacaoId]);
+    await nota(resumo);
+    if (!transcricao) return null;
+    return {
+      empresaId: x.empresa_id,
+      pessoaId: x.pessoa_id,
+      origem: `ligação com o cliente, chamado nº ${x.numero}`,
+      conversa: transcricao,
+      atendente: x.tecnico,
+      vinculos: { chamado_id: x.chamado_id },
+      anotar: (t) => mensagemChamado({ chamado_id: x.chamado_id, autor: 'sistema', texto: t }),
     };
   });
 }

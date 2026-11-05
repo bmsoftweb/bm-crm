@@ -26,7 +26,7 @@ import { createAceiteRouter } from './aceite.js';
 import { createSuporteRouter } from './suporte.js';
 import { createFotosRouter } from './fotos.js';
 import { createAnexosRouter } from './anexos.js';
-import { createChamadosRouter } from './chamados.js';
+import { apagarGravacoesAntigas, createChamadosRouter } from './chamados.js';
 import { createNotificacoesRouter } from './notificacoes.js';
 import { createConsultasRouter } from './consultas.js';
 import { createOsRouter } from './os.js';
@@ -247,7 +247,11 @@ export function createApp() {
       return { ...resto, inatividade, atividadesBot, respostasPesquisa, agendaGoogle };
     }),
   );
-  app.get('/api/cron/contratos', cron(rotinaContratos));
+  // De hora em hora: a rotina dos contratos; 2x por dia (0h e 12h do servidor), as gravações de ligação com mais de 30 dias
+  app.get('/api/cron/contratos', cron(async () => ({
+    ...(await rotinaContratos()),
+    gravacoes_apagadas: new Date().getHours() % 12 === 0 ? await apagarGravacoesAntigas() : 'a cada 12 h',
+  })));
 
   // ==========================================================
   // Daqui para baixo, toda rota /api exige um token válido

@@ -583,7 +583,7 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
 
   return (
     <>
-      <Telefone chegando={encerrado ? null : c.ligacao ?? null} onAviso={setErro} canal={canalLigacao} />
+      <Telefone chegando={encerrado ? null : c.ligacao ?? null} onAviso={setErro} canal={canalLigacao} aviso="Esta ligação é gravada para o registro do atendimento." />
       <div className="px-4 py-2 bg-white border-b border-stone-200 text-xs shrink-0 relative">
         {!encerrado && (
           <button

@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { del } from '@vercel/blob';
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { pool } from './db.js';
 import { chamarBmdesk } from './bmdesk.js';
 import { podeAcessar } from './permissoes.js';
@@ -31,6 +33,24 @@ export const CUTUCAR = '[[cutucar]]';
 
 /** Ligação entre técnicos tocando sem atender por mais que isto (segundos): perdida */
 export const TOQUE_SEG = 60;
+/** Começo da nota interna com o resumo da ligação gravada: "[[ligacao:<id>]]" + resumo (a tela mostra o player) */
+export const NOTA_LIGACAO = '[[ligacao:';
+/** Gravação de ligação no Blob: ligacoes/<id da ligação>-<sufixo aleatório>.<webm|mp4> */
+const URL_GRAVACAO = /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\/ligacoes\/(\d+)-[^\s"'<>?/]+\.(webm|mp4)$/i;
+/** Dias que a gravação fica guardada (depois ficam só a transcrição e o resumo) */
+const DIAS_GRAVACAO = 30;
+
+/** Apaga do Blob as gravações com mais de 30 dias (2x por dia); devolve quantas */
+export async function apagarGravacoesAntigas(): Promise<number> {
+  const [r] = await pool.query<any[]>(
+    `SELECT id, gravacao_url FROM ligacoes WHERE gravacao_url IS NOT NULL AND COALESCE(atendida_em, criado_em) < NOW() - INTERVAL ${DIAS_GRAVACAO} DAY LIMIT 200`,
+  );
+  for (const g of r) {
+    await del(g.gravacao_url);
+    await pool.query('UPDATE ligacoes SET gravacao_url = NULL WHERE id = ?', [g.id]);
+  }
+  return r.length;
+}
 
 function erro(status: number, msg: string) {
   return Object.assign(new Error(msg), { status });
@@ -350,6 +370,54 @@ export function createChamadosRouter(): Router {
     if (!oferta.startsWith('v=0')) throw erro(400, 'Convite da ligação inválido.');
     const [ins] = await pool.query<any>('INSERT INTO ligacoes (empresa_id, de_usuario_id, chamado_id, oferta) VALUES (?, ?, ?, ?)', [emp(res), eu(res), c.id, oferta]);
     res.json({ id: ins.insertId });
+  }));
+
+  /**
+   * Gravação da ligação com o cliente: o navegador do técnico manda o áudio direto para o Blob (sem o limite de 4,5 MB
+   * da Vercel); aqui só se libera o envio, para quem fez a ligação, no caminho dela
+   */
+  router.post('/ligacoes/gravacao/upload', rota(async (req, res) => {
+    const r = await handleUpload({
+      request: req,
+      body: req.body as HandleUploadBody,
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
+        const id = Number(JSON.parse(clientPayload || '{}').ligacao_id);
+        const [l] = await pool.query<any[]>('SELECT 1 FROM ligacoes WHERE id = ? AND empresa_id = ? AND de_usuario_id = ? AND chamado_id IS NOT NULL', [
+          id,
+          emp(res),
+          eu(res),
+        ]);
+        if (!l.length || !pathname.startsWith(`ligacoes/${id}-`)) throw erro(400, 'Gravação inválida.');
+        return { maximumSizeInBytes: 20 * 1024 * 1024, allowedContentTypes: ['audio/webm', 'audio/mp4'], addRandomSuffix: true };
+      },
+    });
+    res.json(r);
+  }));
+
+  /** Gravação enviada: guarda o endereço e o Gemini analisa em segundo plano (resumo na nota interna, pendências) */
+  router.post('/ligacoes/:id/gravacao', rota(async (req, res) => {
+    const url = String(req.body?.url ?? '');
+    if (URL_GRAVACAO.exec(url)?.[1] !== String(Number(req.params.id))) throw erro(400, 'Endereço da gravação inválido.');
+    const segundos = Math.max(0, Math.trunc(Number(req.body?.segundos) || 0));
+    const [r] = await pool.query<any>(
+      `UPDATE ligacoes SET gravacao_url = ?, gravacao_segundos = ?
+        WHERE id = ? AND empresa_id = ? AND de_usuario_id = ? AND chamado_id IS NOT NULL AND gravacao_url IS NULL`,
+      [url, segundos, req.params.id, emp(res), eu(res)],
+    );
+    if (!r.affectedRows) throw erro(404, 'Ligação não encontrada.');
+    // Import dinâmico: pendencias.ts usa este módulo
+    (await import('./pendencias.js')).analisarLigacao(Number(req.params.id));
+    res.json({ success: true });
+  }));
+
+  /** Player e transcrição da nota da ligação; gravação com mais de 30 dias: url vazia */
+  router.get('/ligacoes/:id/gravacao', rota(async (req, res) => {
+    const [r] = await pool.query<any[]>('SELECT gravacao_url AS url, gravacao_segundos AS segundos, transcricao FROM ligacoes WHERE id = ? AND empresa_id = ?', [
+      req.params.id,
+      emp(res),
+    ]);
+    if (!r.length) throw erro(404, 'Ligação não encontrada.');
+    res.json(r[0]);
   }));
 
   /** Quem ligou acompanha: chamando, atendida (com a resposta), recusada, perdida (passou o tempo) ou encerrada */

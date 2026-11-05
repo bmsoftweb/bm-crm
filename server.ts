@@ -5,6 +5,7 @@ import { createServer as createViteServer } from 'vite';
 import { createApp } from './server/app.js';
 import { iniciarEnvioWhatsApp } from './server/whatsapp.js';
 import { iniciarRotinaContratos } from './server/contratos.js';
+import { apagarGravacoesAntigas } from './server/chamados.js';
 import { iniciarAutomaticas } from './server/automaticas.js';
 import { iniciarJornadas } from './server/jornada.js';
 import { iniciarInatividade } from './server/inatividade.js';
@@ -45,6 +46,8 @@ async function startServer() {
     iniciarRespostasPesquisa();
     iniciarRotinaContratos();
     iniciarAgendaGoogle();
+    // Gravações de ligação com mais de 30 dias, 2x por dia (na Vercel: cron /api/cron/contratos)
+    setInterval(() => apagarGravacoesAntigas().catch((err) => console.error('Gravações: falha ao apagar as antigas:', err.message)), 12 * 60 * 60_000);
   });
 }
 

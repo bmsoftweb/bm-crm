@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Phone, PhoneIncoming, PhoneOff } from 'lucide-react';
-import { atenderLigacao, encerrarLigacao, fetchLigacao, ligarPara, ligarParaCliente } from '../services/api';
+import { atenderLigacao, encerrarLigacao, enviarGravacaoLigacao, fetchLigacao, ligarPara, ligarParaCliente } from '../services/api';
 import { tocarAviso } from '../utils/som';
 
 /**
@@ -11,6 +11,8 @@ import { tocarAviso } from '../utils/som';
  * e o outro lado desliga junto.
  * O técnico também liga para o cliente de um chamado do site (botão Ligar do chamado): no chat do cliente
  * (src/components/SuportePublico.tsx) este mesmo cartão toca, com o `canal` público, e ele só atende.
+ * Ligação com cliente é sempre gravada no navegador do técnico (as duas vozes num arquivo): ao desligar, sobe para o
+ * Blob e o Gemini resume (nota interna no chamado e pendências, server/pendencias.ts). O cliente vê o aviso da gravação.
  */
 const ICE: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 const EVENTO = 'crmweb:ligar';
@@ -27,7 +29,11 @@ export interface CanalLigacao {
 }
 const CANAL_TECNICO: CanalLigacao = { atender: atenderLigacao, encerrar: encerrarLigacao };
 
-type Estado = { fase: 'chamando' | 'tocando' | 'falando'; id: number | null; nome: string; oferta?: string; inicio?: number };
+/** chamado: ligação do técnico para o cliente desse chamado (gravada) */
+type Estado = { fase: 'chamando' | 'tocando' | 'falando'; id: number | null; nome: string; oferta?: string; inicio?: number; chamado?: number };
+
+/** Formato da gravação: WebM (Chrome, Edge, Firefox) ou MP4 (Safari) */
+const FORMATO_GRAVACAO = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t));
 
 /** Espera juntar os caminhos de rede (no máximo 3 s: os que vieram bastam) */
 const esperarIce = (pc: RTCPeerConnection) =>
@@ -46,11 +52,13 @@ const duracao = (ms: number) => {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 };
 
-export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: string } | null; onAviso: (msg: string) => void; canal?: CanalLigacao }> = ({
-  chegando,
-  onAviso,
-  canal = CANAL_TECNICO,
-}) => {
+export const Telefone: React.FC<{
+  chegando: { id: number; de: string; oferta: string } | null;
+  onAviso: (msg: string) => void;
+  canal?: CanalLigacao;
+  /** Linha a mais no cartão de quem recebe (o cliente: "esta ligação é gravada") */
+  aviso?: string;
+}> = ({ chegando, onAviso, canal = CANAL_TECNICO, aviso }) => {
   const [estado, setEstado] = useState<Estado | null>(null);
   const [atendendo, setAtendendo] = useState(false);
   const [agora, setAgora] = useState(Date.now());
@@ -60,11 +68,17 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
   avisoRef.current = onAviso;
   const conexao = useRef<{ pc: RTCPeerConnection; mic: MediaStream } | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
+  /** Voz do outro lado (para a gravação) */
+  const remoto = useRef<MediaStream | null>(null);
+  const gravacao = useRef<MediaRecorder | null>(null);
 
   /** Fecha microfone e conexão aqui (o outro lado vê o canal fechar) */
   const desligarLocal = (msg?: string) => {
     const c = conexao.current;
     conexao.current = null;
+    // Para a gravação antes de fechar o microfone (o envio sai no onstop)
+    if (gravacao.current?.state === 'recording') gravacao.current.stop();
+    gravacao.current = null;
     c?.mic.getTracks().forEach((t) => t.stop());
     c?.pc.close();
     setEstado(null);
@@ -82,6 +96,7 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
     const pc = new RTCPeerConnection({ iceServers: ICE });
     mic.getTracks().forEach((t) => pc.addTrack(t, mic));
     pc.ontrack = (e) => {
+      remoto.current = e.streams[0];
       if (audio.current) audio.current.srcObject = e.streams[0];
     };
     pc.onconnectionstatechange = () => {
@@ -102,7 +117,7 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
     const aoLigar = async (e: Event) => {
       if (estadoRef.current) return avisoRef.current('Termine a ligação atual antes de fazer outra.');
       const { id: para, chamado, nome } = (e as CustomEvent<{ id?: number; chamado?: number; nome: string }>).detail;
-      setEstado({ fase: 'chamando', id: null, nome });
+      setEstado({ fase: 'chamando', id: null, nome, chamado });
       try {
         const pc = await conectar();
         vigiar(pc, pc.createDataChannel('ramal'));
@@ -112,7 +127,7 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
         const sdp = pc.localDescription!.sdp;
         const { id } = chamado ? await ligarParaCliente(chamado, sdp) : await ligarPara(para!, sdp);
         if (conexao.current?.pc !== pc) return void encerrarLigacao(id).catch(() => {});
-        setEstado({ fase: 'chamando', id, nome });
+        setEstado({ fase: 'chamando', id, nome, chamado });
       } catch (err) {
         desligarLocal(mensagem(err));
       }
@@ -124,14 +139,14 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
   // Quem liga: espera atenderem (ou recusarem, ou passar o tempo)
   useEffect(() => {
     if (estado?.fase !== 'chamando' || !estado.id) return;
-    const { id, nome } = estado;
+    const { id, nome, chamado } = estado;
     const i = setInterval(async () => {
       try {
         const r = await fetchLigacao(id);
         if (estadoRef.current?.id !== id || estadoRef.current.fase !== 'chamando') return;
         if (r.situacao === 'atendida' && r.resposta) {
           await conexao.current?.pc.setRemoteDescription({ type: 'answer', sdp: r.resposta });
-          setEstado({ fase: 'falando', id, nome, inicio: Date.now() });
+          setEstado({ fase: 'falando', id, nome, chamado, inicio: Date.now() });
         } else if (r.situacao !== 'chamando') {
           desligarLocal(r.situacao === 'recusada' ? `${nome} não pode atender agora.` : r.situacao === 'perdida' ? `${nome} não atendeu.` : undefined);
         }
@@ -157,6 +172,31 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
     const i = setInterval(() => tocarAviso('telefone'), 3000);
     return () => clearInterval(i);
   }, [estado?.fase]);
+
+  // Ligação com cliente atendida: grava as duas vozes; ao parar, envia e o servidor manda analisar
+  useEffect(() => {
+    const c = conexao.current;
+    if (estado?.fase !== 'falando' || !estado.chamado || !estado.id || !c || !remoto.current || !FORMATO_GRAVACAO) return;
+    const ligacaoId = estado.id;
+    const inicio = Date.now();
+    const ac = new AudioContext();
+    const mistura = ac.createMediaStreamDestination();
+    ac.createMediaStreamSource(c.mic).connect(mistura);
+    ac.createMediaStreamSource(remoto.current).connect(mistura);
+    const rec = new MediaRecorder(mistura.stream, { mimeType: FORMATO_GRAVACAO, audioBitsPerSecond: 32_000 });
+    const partes: Blob[] = [];
+    rec.ondataavailable = (e) => e.data.size && partes.push(e.data);
+    rec.onstop = () => {
+      void ac.close();
+      const segundos = Math.round((Date.now() - inicio) / 1000);
+      if (segundos < 3 || !partes.length) return;
+      enviarGravacaoLigacao(ligacaoId, new Blob(partes, { type: FORMATO_GRAVACAO }), segundos)
+        .then(() => avisoRef.current('Ligação gravada: o resumo vai aparecer como nota interna no chamado em instantes.'))
+        .catch((err) => avisoRef.current(`Não foi possível guardar a gravação da ligação: ${err.message}`));
+    };
+    rec.start(10_000);
+    gravacao.current = rec;
+  }, [estado?.fase, estado?.id]);
 
   // Relógio da ligação
   useEffect(() => {
@@ -200,7 +240,9 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
               <div className="text-sm font-semibold text-stone-800 dark:text-stone-100 truncate">{estado.nome}</div>
               <div className="text-xs text-stone-500 dark:text-stone-400">
                 {estado.fase === 'chamando' ? 'Chamando…' : estado.fase === 'tocando' ? (atendendo ? 'Conectando…' : 'Ligando para você') : `Em ligação · ${duracao(agora - (estado.inicio ?? agora))}`}
+                {estado.chamado && estado.fase === 'falando' && <span className="ml-1.5 text-rose-600 dark:text-rose-400 font-semibold">● Gravando</span>}
               </div>
+              {aviso && <div className="text-[11px] text-stone-400 mt-0.5">{aviso}</div>}
             </div>
           </div>
           <div className="flex gap-2 mt-3">

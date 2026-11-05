@@ -24,6 +24,7 @@ import {
   fetchChamados, fetchTecnicosChamados,
   fetchFilaChamados,
   cutucarCliente,
+  fetchGravacaoLigacao,
   pausarChamado,
   fetchOptions,
   FiltroChamados,
@@ -55,6 +56,45 @@ import { repetirConsulta } from '../utils/intervalo';
 
 /** Mensagem "Tela remota" (a mesma de server/chamados.ts) */
 const TELA_REMOTA = '[[anydesk]]';
+/** Nota interna da ligação gravada com o cliente: "[[ligacao:<id>]]" + resumo do Gemini (server/pendencias.ts) */
+const NOTA_LIGACAO = /^\[\[ligacao:(\d+)\]\]\n?/;
+
+/** Resumo da ligação com o cliente; o player e a transcrição carregam ao abrir (gravação apagada depois de 30 dias) */
+const NotaLigacao: React.FC<{ id: number; resumo: string; por: string | null; quando: string }> = ({ id, resumo, por, quando }) => {
+  const [g, setG] = useState<{ url: string | null; transcricao: string | null } | 'carregando' | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const abrir = () => {
+    if (g) return setG(null);
+    setG('carregando');
+    fetchGravacaoLigacao(id)
+      .then(setG)
+      .catch((e) => {
+        setG(null);
+        setErro(e.message);
+      });
+  };
+  return (
+    <div className="self-end max-w-[80%] rounded-xl px-3 py-2 text-xs bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-stone-800 dark:text-stone-100">
+      <div className="text-[10px] font-semibold mb-0.5 text-emerald-700 dark:text-emerald-300">
+        <Lock className="w-3 h-3 inline mr-1 -mt-0.5" />
+        Nota interna • <Phone className="w-3 h-3 inline mx-0.5 -mt-0.5" /> Ligação de {por || 'Equipe'} com o cliente
+      </div>
+      <div className="whitespace-pre-wrap">{resumo}</div>
+      <button type="button" onClick={abrir} className="mt-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:underline cursor-pointer">
+        {g ? 'Fechar gravação' : 'Ouvir a gravação e ver a transcrição'}
+      </button>
+      {g === 'carregando' && <Loader2 className="w-3.5 h-3.5 mt-1 animate-spin text-stone-400" />}
+      {g && g !== 'carregando' && (
+        <div className="mt-1.5 space-y-1.5">
+          {g.url ? <audio controls src={g.url} className="w-full h-8" /> : <div className="text-stone-500">Gravação apagada (fica guardada por 30 dias).</div>}
+          {g.transcricao && <div className="whitespace-pre-wrap max-h-60 overflow-y-auto rounded-lg bg-white/70 dark:bg-stone-900/60 p-2 text-[11px]">{g.transcricao}</div>}
+        </div>
+      )}
+      {erro && <div className="mt-1 text-rose-700 dark:text-rose-300">{erro}</div>}
+      <div className="text-[10px] mt-1 text-right text-stone-400">{formatDateTimeBR(quando)}</div>
+    </div>
+  );
+};
 /** Mensagem "Cutucar" (a mesma de server/chamados.ts) */
 const CUTUCAR = '[[cutucar]]';
 /** Número do AnyDesk que o cliente mandou pelo chat do site (server/suporte.ts) */
@@ -1334,6 +1374,8 @@ const ChamadoAberto: React.FC<{
             <div key={m.id} className="self-end text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-full px-3 py-1 inline-flex items-center gap-1.5">
               <MonitorSmartphone className="w-3.5 h-3.5" /> {m.usuario_nome || 'Equipe'} pediu a tela remota (BMSoft Suporte) • {formatDateTimeBR(m.criado_em)}
             </div>
+          ) : NOTA_LIGACAO.test(m.texto) ? (
+            <NotaLigacao key={m.id} id={Number(NOTA_LIGACAO.exec(m.texto)![1])} resumo={m.texto.replace(NOTA_LIGACAO, '')} por={m.usuario_nome} quando={m.criado_em} />
           ) : m.autor === 'sistema' ? (
             <div key={m.id} className="self-center text-[11px] text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-900 rounded-full px-3 py-1">
               {m.texto} • {formatDateTimeBR(m.criado_em)}

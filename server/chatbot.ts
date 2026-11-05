@@ -198,6 +198,22 @@ function clienteGemini(cfg: ConfigChatbot) {
   });
 }
 
+/**
+ * Ouve um áudio (ligação gravada) e devolve a resposta em texto (JSON). Sempre pelo Gemini, com a chave dele gravada
+ * mesmo que a IA escolhida seja outra: o Claude e o DeepSeek não recebem áudio. Até 100 s de espera (ligação longa)
+ */
+export async function ouvirAudio(cfg: ConfigChatbot, audio: Buffer, mimeType: string, instrucoes: string): Promise<string> {
+  const gemini = { ...cfg, ia: 'gemini' } as ConfigChatbot;
+  if (!chaveCifrada(gemini)) throw new Error(`grave a chave do Gemini em ${ONDE} (o Claude e o DeepSeek não ouvem áudio).`);
+  const ia = new GoogleGenAI({ apiKey: chaveDa(gemini), httpOptions: { timeout: 100_000, retryOptions: { attempts: 2, initialDelay: 2, maxDelay: 10 } } });
+  const r = await ia.models.generateContent({
+    model: iaDe(cfg) === 'gemini' ? modeloDe(cfg) : MODELOS_GEMINI[0].value,
+    contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: audio.toString('base64') } }, { text: instrucoes }] }],
+    config: { responseMimeType: 'application/json' },
+  });
+  return (r.text ?? '').trim();
+}
+
 type ParamsClaude = Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>;
 
 /** Claude ou DeepSeek: as duas falam o formato da API do Claude */
