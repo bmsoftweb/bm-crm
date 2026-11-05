@@ -55,6 +55,7 @@ import { gruposDoMenu, podeAcessar, podeImportar, type ItemMenu } from './utils/
 import { ThemeMode, getInitialTheme, applyTheme } from './utils/theme';
 import { Sessao, lerSessao, salvarSessao, limparSessao, atualizarSessao } from './utils/session';
 import { repetirConsulta } from './utils/intervalo';
+import { Telefone } from './components/Telefone';
 
 export default function App() {
   // ----------------------------------------------------------
@@ -99,6 +100,8 @@ export default function App() {
   const [naoVistas, setNaoVistas] = useState(0);
   /** Chamados aguardando na fila (etiqueta do menu) e o chamado a abrir em Chamados Ativos */
   const [filaChamados, setFilaChamados] = useState(0);
+  /** Ligação de outro técnico tocando para mim (vem na contagem dos chamados) */
+  const [ligacaoChegando, setLigacaoChegando] = useState<{ id: number; de: string; oferta: string } | null>(null);
   const [chamadoAbrir, setChamadoAbrir] = useState<number | null>(null);
   /** Botão direito na atividade da agenda: confirmação do "Gerar OS" */
   const [gerarOSDe, setGerarOSDe] = useState<RegistroCrud | null>(null);
@@ -165,6 +168,7 @@ export default function App() {
     fetchContagemChamados()
       .then((r) => {
         setFilaChamados(r.fila);
+        setLigacaoChegando(r.ligacao ?? null);
         if (recemEntrou.current) {
           recemEntrou.current = false;
           // Só se ainda está na tela inicial (não tira o usuário de onde ele já foi)
@@ -806,6 +810,7 @@ export default function App() {
   return (
     <div className="h-screen overflow-hidden bg-stone-100/70 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex font-sans antialiased selection:bg-blue-600 selection:text-white">
       {conversaBotId && <ConversaBot atividadeId={conversaBotId} onFechar={() => setConversaBotId(null)} />}
+      {sessao && veChamados && <Telefone chegando={ligacaoChegando} onAviso={showToast} />}
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-[70] bg-stone-900 text-white text-xs font-semibold py-3 px-4 rounded-xl shadow-2xl border border-stone-800 flex items-center gap-2.5">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />

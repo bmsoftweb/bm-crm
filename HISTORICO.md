@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.188 — 2026-11-05
+
+- Ligação entre técnicos, como um ramal: telefone ao lado de cada técnico em "Técnicos agora" (Chamados Ativos e Conversas). Na tela do outro toca e aparece o cartão para atender ou recusar (60 s sem atender = perdida); atendendo, os dois conversam pelo microfone, com o tempo da ligação, até um deles desligar. O áudio vai direto entre os navegadores (WebRTC); o servidor só guarda o convite e a resposta (tabela ligacoes, extras/criar_tabela_ligacoes.sql).
+
 ## 0.0.187 — 2026-11-04
 
 - WhatsApp: a conversa assumida pelo técnico (ou recebida numa transferência) fica com ele, por mais tempo que passe sem resposta; só sai dele ao encerrar, pausar ou transferir. Saiu de Configurações › Chatbot o "Liberar o atendente depois de (minutos)", e o "Passar para aguardando sem interação" vale só para conversas com o bot.

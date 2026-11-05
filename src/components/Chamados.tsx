@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
-import { AlertTriangle, ArrowRightLeft, Bell, CheckCircle2, ChevronDown, ChevronUp, Circle, Clock, ClipboardList, Hand, History, X, Inbox, Loader2, Lock, MessageCircle, Monitor, MonitorSmartphone, Pause, Pencil, Plus, Search, Send, StickyNote, UserRound, Headset } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Bell, CheckCircle2, ChevronDown, ChevronUp, Circle, Clock, ClipboardList, Hand, History, X, Inbox, Loader2, Lock, MessageCircle, Monitor, MonitorSmartphone, Pause, Pencil, Phone, Plus, Search, Send, StickyNote, UserRound, Headset } from 'lucide-react';
 import {
   acessarComputador,
   apelidarComputador,
@@ -38,6 +38,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { CHAVE_TELA_REMOTA } from './TelaRemota';
 import { AvisoErro } from './AvisoErro';
 import { Toggle } from './Toggle';
+import { ligar } from './Telefone';
 import { BotaoTemplates } from './BotaoTemplates';
 import { lerSessao } from '../utils/session';
 import { useGrudarNoFim } from '../utils/grudarNoFim';
@@ -418,7 +419,7 @@ export const ChamadosFila: React.FC<FilaProps> = ({ refreshToken, onAbrir, onMud
 
 /**
  * Pé da lista (Chamados Ativos e Conversas do WhatsApp): cada técnico e quantos atendimentos faz agora,
- * chamados (azul) e conversas do WhatsApp (verde). Relê a cada 15 s
+ * chamados (azul) e conversas do WhatsApp (verde). Relê a cada 15 s. O telefone liga para o técnico (src/components/Telefone.tsx)
  */
 const CHAVE_TECNICOS_RECOLHIDO = 'crmweb_tecnicos_recolhido';
 
@@ -442,6 +443,7 @@ export const TecnicosAgora: React.FC = () => {
   const [tecnicos, setTecnicos] = useState<{ id: number; nome: string; chamados: number; whatsapp: number }[]>([]);
   const [fila, setFila] = useState<{ chamados: number; whatsapp: number } | null>(null);
   const [hoje, setHoje] = useState<{ chamados: number; whatsapp: number } | null>(null);
+  const [eu, setEu] = useState<number | null>(null);
   useEffect(() => {
     const ler = () =>
       !document.hidden &&
@@ -450,6 +452,7 @@ export const TecnicosAgora: React.FC = () => {
           setTecnicos(r.tecnicos);
           setFila(r.fila);
           setHoje(r.hoje);
+          setEu(r.eu);
         })
         .catch(() => {});
     ler();
@@ -496,7 +499,19 @@ export const TecnicosAgora: React.FC = () => {
       {!recolhido && <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Técnicos agora</div>}
       {!recolhido && tecnicos.map((t) => (
         <div key={t.id} className="flex items-center gap-2 py-0.5 text-xs">
-          <UserRound className="w-3 h-3 shrink-0 text-stone-400" />
+          {t.id === eu ? (
+            <UserRound className="w-3 h-3 shrink-0 text-stone-400" />
+          ) : (
+            <button
+              type="button"
+              onClick={() => ligar(t.id, t.nome)}
+              title={`Ligar para ${t.nome}`}
+              aria-label={`Ligar para ${t.nome}`}
+              className="shrink-0 text-stone-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer"
+            >
+              <Phone className="w-3 h-3" />
+            </button>
+          )}
           <span className={`min-w-0 flex-1 truncate ${t.chamados || t.whatsapp ? 'font-semibold text-stone-800 dark:text-stone-100' : 'text-stone-400'}`}>{t.nome}</span>
           <span
             title={`${t.chamados} chamado(s) em atendimento`}

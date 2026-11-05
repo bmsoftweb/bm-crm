@@ -1072,6 +1072,8 @@ export const perguntarConsulta = (pergunta: string, historico: { de: 'pessoa' | 
 export const fetchNotificacoesDesligadas = (usuarioId: number): Promise<{ desligadas: string[] }> => get(`/api/usuarios/${usuarioId}/notificacoes`);
 export const salvarNotificacoesDesligadas = (usuarioId: number, desligadas: string[]) => enviar('PUT', `/api/usuarios/${usuarioId}/notificacoes`, { desligadas });
 export const fetchContagemChamados = (): Promise<{
+  /** Ligação de outro técnico tocando para o usuário (oferta WebRTC de quem liga) */
+  ligacao: { id: number; de: string; oferta: string } | null;
   fila: number;
   /** Chamado da fila esperando há mais de 10 minutos (o mais antigo): buzina */
   atrasado: { id: number; numero: number; nome: string | null; espera_min: number } | null;
@@ -1086,11 +1088,19 @@ export const fetchContagemChamados = (): Promise<{
   /** Último chamado transferido para o departamento do usuário por outra pessoa (id do evento) */
   transferido_departamento: { id: number; chamado_id: number; numero: number; nome: string | null; de: string | null; departamento: string } | null;
 }> => get('/api/chamados/contagem');
+/** Ligação entre técnicos (ramal, src/components/Telefone.tsx) */
+export const ligarPara = (para_usuario_id: number, oferta: string): Promise<{ id: number }> => enviar('POST', '/api/ligacoes', { para_usuario_id, oferta });
+export const fetchLigacao = (id: number): Promise<{ situacao: 'chamando' | 'atendida' | 'recusada' | 'perdida' | 'encerrada'; resposta: string | null }> =>
+  get(`/api/ligacoes/${id}`);
+export const atenderLigacao = (id: number, resposta: string) => enviar('POST', `/api/ligacoes/${id}/atender`, { resposta });
+export const encerrarLigacao = (id: number) => enviar('POST', `/api/ligacoes/${id}/encerrar`);
 export const fetchChamados = (filtro: FiltroChamados, q = ''): Promise<ChamadoResumo[]> =>
   get(`/api/chamados?filtro=${filtro}${q ? `&q=${encodeURIComponent(q)}` : ''}`);
 /** Técnicos e quantos atendimentos fazem agora (chamados abertos com ele e conversas do WhatsApp) */
 export const fetchTecnicosChamados = (): Promise<{
   tecnicos: { id: number; nome: string; chamados: number; whatsapp: number }[];
+  /** Id de quem consulta (sem o telefone na linha dele) */
+  eu: number;
   /** Na fila agora: chamados e conversas do WhatsApp aguardando atendente */
   fila: { chamados: number; whatsapp: number };
   /** Atendimentos hoje: chamados abertos e atendimentos do WhatsApp iniciados hoje */

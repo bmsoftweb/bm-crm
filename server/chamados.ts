@@ -29,6 +29,9 @@ export const TELA_REMOTA = '[[anydesk]]';
 /** Texto da mensagem "Cutucar": o chat do site toca um som e treme para chamar a atenção do cliente */
 export const CUTUCAR = '[[cutucar]]';
 
+/** Ligação entre técnicos tocando sem atender por mais que isto (segundos): perdida */
+const TOQUE_SEG = 60;
+
 function erro(status: number, msg: string) {
   return Object.assign(new Error(msg), { status });
 }
@@ -204,6 +207,8 @@ export function createChamadosRouter(): Router {
     );
     res.json({
       tecnicos: r.map((t) => ({ id: t.id, nome: t.nome, chamados: Number(t.chamados), whatsapp: Number(t.whatsapp) })),
+      // Quem consulta: sem o telefone na linha dele
+      eu: eu(res),
       fila: { chamados: Number(f.chamados), whatsapp: Number(f.whatsapp) },
       // Atendimentos hoje: chamados abertos e atendimentos do WhatsApp iniciados hoje
       hoje: { chamados: Number(f.chamados_hoje), whatsapp: Number(f.whatsapp_hoje) },
@@ -297,7 +302,21 @@ export function createChamadosRouter(): Router {
         ORDER BY c.criado_em, c.id LIMIT 1`,
       [emp(res)],
     );
+    // Ligação de outro técnico tocando para mim (sem a tabela ligacoes: nunca toca)
+    let ligacao = null;
+    try {
+      const [l] = await pool.query<any[]>(
+        `SELECT l.id, u.nome AS de, l.oferta FROM ligacoes l JOIN usuarios u ON u.id = l.de_usuario_id
+          WHERE l.empresa_id = ? AND l.para_usuario_id = ? AND l.situacao = 'chamando' AND l.criado_em >= NOW() - INTERVAL ${TOQUE_SEG} SECOND
+          ORDER BY l.id DESC LIMIT 1`,
+        [emp(res), eu(res)],
+      );
+      ligacao = l[0] ?? null;
+    } catch {
+      // sem a tabela ligacoes (extras/criar_tabela_ligacoes.sql)
+    }
     res.json({
+      ligacao,
       fila: Number(r[0].n),
       atrasado: a[0] ? { ...a[0], espera_min: Number(a[0].espera_min) } : null,
       transferido: t[0] ?? null,
@@ -307,6 +326,57 @@ export function createChamadosRouter(): Router {
       suporte: /^suporte/i.test(String(r[0].departamento || '').trim()),
       mensagem: m[0] ?? null,
     });
+  }));
+
+  // Ligação entre técnicos (ramal): o áudio vai direto entre os navegadores (WebRTC); aqui só o convite de quem
+  // liga (oferta) e a resposta de quem atende. Quem é chamado vê o convite na contagem; quem liga consulta até atenderem.
+
+  router.post('/ligacoes', rota(async (req, res) => {
+    const para = Number(req.body?.para_usuario_id);
+    const oferta = String(req.body?.oferta ?? '');
+    if (!para || para === eu(res)) throw erro(400, 'Escolha outro técnico para ligar.');
+    if (!oferta.startsWith('v=0')) throw erro(400, 'Convite da ligação inválido.');
+    const [u] = await pool.query<any[]>('SELECT 1 FROM usuarios WHERE id = ? AND empresa_id = ? AND ativo = 1', [para, emp(res)]);
+    if (!u.length) throw erro(404, 'Técnico não encontrado.');
+    const [ins] = await pool.query<any>('INSERT INTO ligacoes (empresa_id, de_usuario_id, para_usuario_id, oferta) VALUES (?, ?, ?, ?)', [emp(res), eu(res), para, oferta]);
+    res.json({ id: ins.insertId });
+  }));
+
+  /** Quem ligou acompanha: chamando, atendida (com a resposta), recusada, perdida (passou o tempo) ou encerrada */
+  router.get('/ligacoes/:id', rota(async (req, res) => {
+    await pool.query(
+      `UPDATE ligacoes SET situacao = 'perdida', encerrada_em = NOW() WHERE id = ? AND situacao = 'chamando' AND criado_em < NOW() - INTERVAL ${TOQUE_SEG} SECOND`,
+      [req.params.id],
+    );
+    const [r] = await pool.query<any[]>('SELECT situacao, resposta FROM ligacoes WHERE id = ? AND empresa_id = ? AND ? IN (de_usuario_id, para_usuario_id)', [
+      req.params.id,
+      emp(res),
+      eu(res),
+    ]);
+    if (!r.length) throw erro(404, 'Ligação não encontrada.');
+    res.json(r[0]);
+  }));
+
+  router.post('/ligacoes/:id/atender', rota(async (req, res) => {
+    const resposta = String(req.body?.resposta ?? '');
+    if (!resposta.startsWith('v=0')) throw erro(400, 'Resposta da ligação inválida.');
+    const [r] = await pool.query<any>(
+      `UPDATE ligacoes SET situacao = 'atendida', resposta = ?, atendida_em = NOW()
+        WHERE id = ? AND empresa_id = ? AND para_usuario_id = ? AND situacao = 'chamando' AND criado_em >= NOW() - INTERVAL ${TOQUE_SEG} SECOND`,
+      [resposta, req.params.id, emp(res), eu(res)],
+    );
+    if (!r.affectedRows) throw erro(409, 'Quem ligou já desligou.');
+    res.json({ success: true });
+  }));
+
+  /** Desligar (qualquer um dos dois); quem foi chamado desligando antes de atender = recusada */
+  router.post('/ligacoes/:id/encerrar', rota(async (req, res) => {
+    await pool.query(
+      `UPDATE ligacoes SET situacao = IF(situacao = 'chamando' AND para_usuario_id = ?, 'recusada', 'encerrada'), encerrada_em = NOW()
+        WHERE id = ? AND empresa_id = ? AND ? IN (de_usuario_id, para_usuario_id) AND situacao IN ('chamando', 'atendida')`,
+      [eu(res), req.params.id, emp(res), eu(res)],
+    );
+    res.json({ success: true });
   }));
 
   /** Busca de cliente para o Novo chamado (a lista de pessoas passa do limite dos combos) */
