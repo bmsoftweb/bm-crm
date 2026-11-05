@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.189 — 2026-11-05
+
+- "Técnicos agora" (Chamados Ativos e Conversas): mostra todos os usuários ativos com acesso à Fila de Chamados ou a Chamados Ativos, mesmo sem atendimento (antes, só quem atendeu chamado nos últimos 30 dias ou estava numa conversa do WhatsApp); assim todos podem receber ligação.
+
 ## 0.0.188 — 2026-11-05
 
 - Ligação entre técnicos, como um ramal: telefone ao lado de cada técnico em "Técnicos agora" (Chamados Ativos e Conversas). Na tela do outro toca e aparece o cartão para atender ou recusar (60 s sem atender = perdida); atendendo, os dois conversam pelo microfone, com o tempo da ligação, até um deles desligar. O áudio vai direto entre os navegadores (WebRTC); o servidor só guarda o convite e a resposta (tabela ligacoes, extras/criar_tabela_ligacoes.sql).

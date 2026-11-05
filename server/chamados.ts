@@ -182,18 +182,15 @@ export function createChamadosRouter(): Router {
   /** Chamados Ativos: filtro rápido (meus, todos, aguardando, andamento, encerrados) e busca; na ordem de chegada (Encerrados: o último encerrado primeiro) */
   /**
    * Técnicos e quantos atendimentos fazem agora: chamados com ele (abertos) e conversas do WhatsApp em atendimento.
-   * Entram os usuários ativos que atendem agora ou atenderam chamado nos últimos 30 dias
+   * Entram os usuários ativos com acesso à Fila de Chamados ou a Chamados Ativos (mesmo sem atender nada: podem receber ligação)
    */
   router.get('/chamados/tecnicos', rota(async (_req, res) => {
     const [r] = await pool.query<any[]>(
-      `SELECT u.id, u.nome,
+      `SELECT u.id, u.nome, u.tipo, u.permissoes,
               (SELECT COUNT(*) FROM chamados c WHERE c.empresa_id = u.empresa_id AND c.atendente_id = u.id AND c.status NOT IN ${ENCERRADOS}) AS chamados,
               (SELECT COUNT(*) FROM whatsapp_conversas w WHERE w.empresa_id = u.empresa_id AND w.atendente_id = u.id) AS whatsapp
          FROM usuarios u
         WHERE u.empresa_id = ? AND u.ativo = 1
-          AND (EXISTS (SELECT 1 FROM chamados c WHERE c.empresa_id = u.empresa_id AND c.atendente_id = u.id
-                        AND (c.status NOT IN ${ENCERRADOS} OR c.assumido_em >= NOW() - INTERVAL 30 DAY))
-               OR EXISTS (SELECT 1 FROM whatsapp_conversas w WHERE w.empresa_id = u.empresa_id AND w.atendente_id = u.id))
         ORDER BY u.nome`,
       [emp(res)],
     );
@@ -206,7 +203,7 @@ export function createChamadosRouter(): Router {
       [emp(res), emp(res), emp(res), emp(res)],
     );
     res.json({
-      tecnicos: r.map((t) => ({ id: t.id, nome: t.nome, chamados: Number(t.chamados), whatsapp: Number(t.whatsapp) })),
+      tecnicos: r.filter((t) => podeAcessar(t, 'chamados_fila') || podeAcessar(t, 'chamados_ativos')).map((t) => ({ id: t.id, nome: t.nome, chamados: Number(t.chamados), whatsapp: Number(t.whatsapp) })),
       // Quem consulta: sem o telefone na linha dele
       eu: eu(res),
       fila: { chamados: Number(f.chamados), whatsapp: Number(f.whatsapp) },
