@@ -489,10 +489,10 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
     };
   }, [url]);
 
-  // Atualiza a cada 4 s (resposta da equipe, posição na fila); com a aba em segundo plano, a cada 30 s
+  // Atualiza a cada 8 s (resposta da equipe, posição na fila); com a aba em segundo plano, a cada 30 s
   useEffect(() => {
     carregar();
-    return repetirConsulta(carregar, 4000);
+    return repetirConsulta(carregar, 8000);
   }, [carregar]);
   // Ligação do técnico: o cliente atende e desliga pelas rotas públicas do chamado
   const canalLigacao = useMemo<CanalLigacao>(

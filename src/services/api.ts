@@ -912,6 +912,8 @@ export interface ChamadoResumo {
   sla_prazo: string | null;
   espera_min: number;
   sla_vencido: boolean;
+  /** Houve ligação atendida com o cliente (telefone do chat do site) */
+  ligou?: boolean;
   ultima: string | null;
   /** Só na fila */
   posicao?: number;
@@ -1110,6 +1112,7 @@ export async function enviarGravacaoLigacao(ligacaoId: number, audio: Blob, segu
 }
 /** Player e transcrição da nota da ligação (url vazia: passou dos 90 dias) */
 export const fetchGravacaoLigacao = (id: number): Promise<{ url: string | null; segundos: number | null; transcricao: string | null }> => get(`/api/ligacoes/${id}/gravacao`);
+export const analisarLigacaoDeNovo = (id: number) => enviar('POST', `/api/ligacoes/${id}/analisar`);
 export const ligarParaCliente = (chamadoId: number, oferta: string): Promise<{ id: number }> => enviar('POST', `/api/chamados/${chamadoId}/ligar`, { oferta });
 export const fetchChamados = (filtro: FiltroChamados, q = ''): Promise<ChamadoResumo[]> =>
   get(`/api/chamados?filtro=${filtro}${q ? `&q=${encodeURIComponent(q)}` : ''}`);

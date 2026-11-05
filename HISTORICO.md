@@ -2,6 +2,12 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.192 — 2026-11-05
+
+- Análise da ligação gravada mais resistente: se o modelo do Gemini estiver sobrecarregado, tenta o próximo, sempre antes do limite de tempo da Vercel. Se ainda assim falhar, a nota do chamado mostra o motivo e o botão "Analisar de novo".
+- Ícone de telefone na lista de chamados (fila e Chamados Ativos) quando houve ligação atendida com o cliente.
+- Menos consumo na Vercel: função com 1 GB de memória e consultas automáticas das telas com o dobro do intervalo (fila de chamados 10 s, widget do cliente 8 s, conversa do WhatsApp 10 s, lista de conversas 20 s).
+
 ## 0.0.191 — 2026-11-05
 
 - Ligação com o cliente gravada: o navegador do técnico grava as duas vozes ("● Gravando" no cartão; o cliente vê o aviso de que a ligação é gravada) e, ao desligar, o áudio vai para o Vercel Blob. O Gemini ouve, transcreve e resume: o resumo vira nota interna no chamado, com o player e a transcrição, e a transcrição passa pela análise de pendências (vira tarefa o que ficou em aberto). Usa a chave do Gemini de Configurações › Chatbot mesmo com outra IA escolhida (o Claude e o DeepSeek não ouvem áudio).

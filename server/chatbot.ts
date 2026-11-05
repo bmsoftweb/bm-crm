@@ -200,18 +200,33 @@ function clienteGemini(cfg: ConfigChatbot) {
 
 /**
  * Ouve um áudio (ligação gravada) e devolve a resposta em texto (JSON). Sempre pelo Gemini, com a chave dele gravada
- * mesmo que a IA escolhida seja outra: o Claude e o DeepSeek não recebem áudio. Até 100 s de espera (ligação longa)
+ * mesmo que a IA escolhida seja outra: o Claude e o DeepSeek não recebem áudio. Modelo sobrecarregado (503), no limite
+ * de uso (429) ou demorando: passa para o próximo Gemini da lista. Tudo em até ~90 s (a função na Vercel tem 120 s)
  */
 export async function ouvirAudio(cfg: ConfigChatbot, audio: Buffer, mimeType: string, instrucoes: string): Promise<string> {
   const gemini = { ...cfg, ia: 'gemini' } as ConfigChatbot;
   if (!chaveCifrada(gemini)) throw new Error(`grave a chave do Gemini em ${ONDE} (o Claude e o DeepSeek não ouvem áudio).`);
-  const ia = new GoogleGenAI({ apiKey: chaveDa(gemini), httpOptions: { timeout: 100_000, retryOptions: { attempts: 2, initialDelay: 2, maxDelay: 10 } } });
-  const r = await ia.models.generateContent({
-    model: iaDe(cfg) === 'gemini' ? modeloDe(cfg) : MODELOS_GEMINI[0].value,
-    contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: audio.toString('base64') } }, { text: instrucoes }] }],
-    config: { responseMimeType: 'application/json' },
-  });
-  return (r.text ?? '').trim();
+  const ia = new GoogleGenAI({ apiKey: chaveDa(gemini), httpOptions: { timeout: 40_000, retryOptions: { attempts: 1 } } });
+  const primeiro = iaDe(cfg) === 'gemini' ? modeloDe(cfg) : MODELOS_GEMINI[0].value;
+  const modelos = [primeiro, ...MODELOS_GEMINI.map((m) => m.value).filter((m) => m !== primeiro)];
+  const fim = Date.now() + 90_000;
+  let ultimo: any = null;
+  for (const model of modelos) {
+    if (Date.now() > fim - 20_000) break;
+    try {
+      const r = await ia.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: audio.toString('base64') } }, { text: instrucoes }] }],
+        config: { responseMimeType: 'application/json', abortSignal: AbortSignal.timeout(Math.min(40_000, fim - Date.now())) },
+      });
+      return (r.text ?? '').trim();
+    } catch (err: any) {
+      ultimo = err;
+      // Chave errada, áudio recusado...: os outros modelos dariam o mesmo erro
+      if (!/\b(503|429|500|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand)\b|abort|timeout|timed out/i.test(String(err?.message ?? err))) throw err;
+    }
+  }
+  throw new Error(`o Gemini está sobrecarregado agora (${String(ultimo?.message ?? ultimo).slice(0, 120)}).`);
 }
 
 type ParamsClaude = Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>;

@@ -332,7 +332,7 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
   // Lista: ao abrir, ao buscar (com uma pausa na digitação) e a cada 10 s
   useEffect(() => {
     const t = setTimeout(carregarLista, busca ? 300 : 0);
-    const i = setInterval(() => !document.hidden && carregarLista(), 10_000);
+    const i = setInterval(() => !document.hidden && carregarLista(), 20_000);
     return () => {
       clearTimeout(t);
       clearInterval(i);
@@ -356,13 +356,13 @@ export const ConversasView: React.FC<Props> = ({ refreshToken, onVisto, pedido, 
     [onVisto],
   );
 
-  // Conversa aberta: ao abrir e a cada 5 s
+  // Conversa aberta: ao abrir e a cada 10 s
   useEffect(() => {
     if (!aberta) return;
     setConversa(null);
     qtdRef.current = 0;
     carregarConversa(aberta);
-    const i = setInterval(() => !document.hidden && carregarConversa(aberta), 5_000);
+    const i = setInterval(() => !document.hidden && carregarConversa(aberta), 10_000);
     return () => clearInterval(i);
   }, [aberta, carregarConversa, refreshToken]);
 

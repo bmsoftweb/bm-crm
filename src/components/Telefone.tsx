@@ -7,7 +7,7 @@ import { tocarAviso } from '../utils/som';
  * Ligação entre técnicos, como um ramal: o telefone de "Técnicos agora" chama; na tela do outro toca e ele atende.
  * O áudio vai direto entre os navegadores (WebRTC). O servidor guarda só o convite (oferta) e a resposta, cada um
  * já com todos os caminhos de rede (sem troca de candidatos depois): quem é chamado vê o convite na contagem dos
- * chamados (a cada 5 s), quem liga consulta a ligação a cada 2 s até atenderem. Desligar fecha o canal de dados,
+ * chamados (a cada 10 s), quem liga consulta a ligação a cada 2 s até atenderem. Desligar fecha o canal de dados,
  * e o outro lado desliga junto.
  * O técnico também liga para o cliente de um chamado do site (botão Ligar do chamado): no chat do cliente
  * (src/components/SuportePublico.tsx) este mesmo cartão toca, com o `canal` público, e ele só atende.

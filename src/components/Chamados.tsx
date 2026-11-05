@@ -25,6 +25,7 @@ import {
   fetchFilaChamados,
   cutucarCliente,
   fetchGravacaoLigacao,
+  analisarLigacaoDeNovo,
   pausarChamado,
   fetchOptions,
   FiltroChamados,
@@ -63,6 +64,16 @@ const NOTA_LIGACAO = /^\[\[ligacao:(\d+)\]\]\n?/;
 const NotaLigacao: React.FC<{ id: number; resumo: string; por: string | null; quando: string }> = ({ id, resumo, por, quando }) => {
   const [g, setG] = useState<{ url: string | null; transcricao: string | null } | 'carregando' | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [pedido, setPedido] = useState(false);
+  /** A análise falhou (a nota começa assim, server/pendencias.ts): dá para pedir de novo */
+  const falhou = resumo.startsWith('Ligação gravada, sem resumo');
+  const deNovo = () => {
+    setPedido(true);
+    analisarLigacaoDeNovo(id).catch((e) => {
+      setPedido(false);
+      setErro(e.message);
+    });
+  };
   const abrir = () => {
     if (g) return setG(null);
     setG('carregando');
@@ -83,6 +94,11 @@ const NotaLigacao: React.FC<{ id: number; resumo: string; por: string | null; qu
       <button type="button" onClick={abrir} className="mt-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:underline cursor-pointer">
         {g ? 'Fechar gravação' : 'Ouvir a gravação e ver a transcrição'}
       </button>
+      {falhou && (
+        <button type="button" onClick={deNovo} disabled={pedido} className="mt-1.5 ml-3 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:underline cursor-pointer disabled:opacity-50 disabled:no-underline">
+          {pedido ? 'Analisando: o resumo vai aparecer numa nota nova' : 'Analisar de novo'}
+        </button>
+      )}
       {g === 'carregando' && <Loader2 className="w-3.5 h-3.5 mt-1 animate-spin text-stone-400" />}
       {g && g !== 'carregando' && (
         <div className="mt-1.5 space-y-1.5">
@@ -182,6 +198,11 @@ const Atendente: React.FC<{ c: ChamadoResumo }> = ({ c }) => (
       <span className="text-stone-400 italic">sem atendente</span>
     )}
   </div>
+);
+const Ligou: React.FC = () => (
+  <span title="Houve ligação com o cliente (gravação e resumo nas notas do chamado)">
+    <Phone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+  </span>
 );
 const Sla: React.FC = () => (
   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap">
@@ -410,6 +431,7 @@ export const ChamadosFila: React.FC<FilaProps> = ({ refreshToken, onAbrir, onMud
                     <td className={td}>
                       <div className="font-semibold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
                         {nomeChamado(c)}
+                        {c.ligou && <Ligou />}
                         {c.status === 'pausado' && <Status s="pausado" />}
                       </div>
                       <div className="text-[11px] text-stone-500 dark:text-stone-400">
@@ -733,6 +755,7 @@ export const ChamadosAtivos: React.FC<AtivosProps> = ({ refreshToken, abrir, onM
                 <div className="flex items-center gap-2">
                   <SenhaFila c={c} />
                   <span className="text-[11px] font-mono text-stone-400">nº {c.numero}</span>
+                  {c.ligou && <Ligou />}
                   <span className="ml-auto">
                     <Status s={c.status} />
                   </span>

@@ -218,8 +218,8 @@ export default function App() {
   useEffect(() => {
     if (!sessao || !veChamados) return;
     atualizarFilaChamados();
-    // A cada 5 s: o aviso de mensagem do cliente não pode demorar (é uma consulta pequena); em segundo plano, 30 s
-    return repetirConsulta(atualizarFilaChamados, 5_000);
+    // A cada 10 s: o aviso de mensagem do cliente não pode demorar (é uma consulta pequena); em segundo plano, 30 s
+    return repetirConsulta(atualizarFilaChamados, 10_000);
   }, [sessao, veChamados, atualizarFilaChamados]);
 
   /** Atividades pendentes que executo ou do meu departamento, já conhecidas (null = ainda não carregou: sem aviso na abertura) */

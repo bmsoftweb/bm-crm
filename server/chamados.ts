@@ -93,7 +93,8 @@ const SELECT = `
          TIMESTAMPDIFF(MINUTE, c.criado_em, NOW()) AS espera_min,
          (c.sla_prazo IS NOT NULL AND c.sla_prazo < NOW() AND c.status NOT IN ${ENCERRADOS}) AS sla_vencido,
          (SELECT IF(m.texto = '' AND m.imagem IS NOT NULL, '📷 Imagem', m.texto) FROM chamado_mensagens m WHERE m.chamado_id = c.id AND m.autor <> 'sistema' ORDER BY m.id DESC LIMIT 1) AS ultima,
-         ${NR_FILA} AS nr_fila
+         ${NR_FILA} AS nr_fila,
+         EXISTS(SELECT 1 FROM ligacoes l WHERE l.chamado_id = c.id AND l.atendida_em IS NOT NULL) AS ligou
     FROM chamados c
     LEFT JOIN pessoas p ON p.id = c.pessoa_id
     LEFT JOIN chamado_categorias cat ON cat.id = c.categoria_id
@@ -101,7 +102,7 @@ const SELECT = `
     LEFT JOIN departamentos d ON d.id = c.departamento_id
     LEFT JOIN usuarios tp ON tp.id = p.tecnico_padrao_id`;
 
-const numeros = (r: any) => ({ ...r, espera_min: Number(r.espera_min), sla_vencido: Boolean(Number(r.sla_vencido)), nr_fila: r.nr_fila == null ? null : Number(r.nr_fila) });
+const numeros = (r: any) => ({ ...r, espera_min: Number(r.espera_min), sla_vencido: Boolean(Number(r.sla_vencido)), ligou: Boolean(Number(r.ligou)), nr_fila: r.nr_fila == null ? null : Number(r.nr_fila) });
 
 // ------------------------------------------------------------
 // Seções: cada vez que alguém pega o chamado (assumir, abrir já atendendo, receber por transferência) abre uma
@@ -406,6 +407,14 @@ export function createChamadosRouter(): Router {
     );
     if (!r.affectedRows) throw erro(404, 'Ligação não encontrada.');
     // Import dinâmico: pendencias.ts usa este módulo
+    (await import('./pendencias.js')).analisarLigacao(Number(req.params.id));
+    res.json({ success: true });
+  }));
+
+  /** Análise que falhou (Gemini fora, sem chave): analisa de novo; a nota nova sai no chamado */
+  router.post('/ligacoes/:id/analisar', rota(async (req, res) => {
+    const [r] = await pool.query<any[]>('SELECT 1 FROM ligacoes WHERE id = ? AND empresa_id = ? AND gravacao_url IS NOT NULL AND resumo IS NULL', [req.params.id, emp(res)]);
+    if (!r.length) throw erro(400, 'Esta ligação já foi analisada ou a gravação foi apagada.');
     (await import('./pendencias.js')).analisarLigacao(Number(req.params.id));
     res.json({ success: true });
   }));
