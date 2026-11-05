@@ -1094,6 +1094,7 @@ export const fetchLigacao = (id: number): Promise<{ situacao: 'chamando' | 'aten
   get(`/api/ligacoes/${id}`);
 export const atenderLigacao = (id: number, resposta: string) => enviar('POST', `/api/ligacoes/${id}/atender`, { resposta });
 export const encerrarLigacao = (id: number) => enviar('POST', `/api/ligacoes/${id}/encerrar`);
+export const ligarParaCliente = (chamadoId: number, oferta: string): Promise<{ id: number }> => enviar('POST', `/api/chamados/${chamadoId}/ligar`, { oferta });
 export const fetchChamados = (filtro: FiltroChamados, q = ''): Promise<ChamadoResumo[]> =>
   get(`/api/chamados?filtro=${filtro}${q ? `&q=${encodeURIComponent(q)}` : ''}`);
 /** Técnicos e quantos atendimentos fazem agora (chamados abertos com ele e conversas do WhatsApp) */

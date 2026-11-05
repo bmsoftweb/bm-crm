@@ -30,7 +30,7 @@ export const TELA_REMOTA = '[[anydesk]]';
 export const CUTUCAR = '[[cutucar]]';
 
 /** Ligação entre técnicos tocando sem atender por mais que isto (segundos): perdida */
-const TOQUE_SEG = 60;
+export const TOQUE_SEG = 60;
 
 function erro(status: number, msg: string) {
   return Object.assign(new Error(msg), { status });
@@ -336,6 +336,19 @@ export function createChamadosRouter(): Router {
     const [u] = await pool.query<any[]>('SELECT 1 FROM usuarios WHERE id = ? AND empresa_id = ? AND ativo = 1', [para, emp(res)]);
     if (!u.length) throw erro(404, 'Técnico não encontrado.');
     const [ins] = await pool.query<any>('INSERT INTO ligacoes (empresa_id, de_usuario_id, para_usuario_id, oferta) VALUES (?, ?, ?, ?)', [emp(res), eu(res), para, oferta]);
+    res.json({ id: ins.insertId });
+  }));
+
+  /** Ligar para o cliente no chat do site (server/suporte.ts toca lá): só o técnico que atende o chamado liga */
+  router.post('/chamados/:id/ligar', rota(async (req, res) => {
+    const c = await chamadoDaEmpresa(req.params.id, emp(res));
+    conferirDono(c, res);
+    if (Number(c.atendente_id) !== eu(res)) throw erro(400, 'Assuma o chamado antes de ligar para o cliente.');
+    if (c.canal !== 'web') throw erro(400, 'A ligação toca no chat do site: este chamado não veio pelo site.');
+    if (['encerrado', 'cancelado'].includes(c.status)) throw erro(400, 'Chamado encerrado.');
+    const oferta = String(req.body?.oferta ?? '');
+    if (!oferta.startsWith('v=0')) throw erro(400, 'Convite da ligação inválido.');
+    const [ins] = await pool.query<any>('INSERT INTO ligacoes (empresa_id, de_usuario_id, chamado_id, oferta) VALUES (?, ?, ?, ?)', [emp(res), eu(res), c.id, oferta]);
     res.json({ id: ins.insertId });
   }));
 

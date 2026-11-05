@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.190 — 2026-11-05
+
+- Ligação do técnico para o cliente pelo chat do site: botão "Ligar" no chamado que veio do site (só para quem atende). No chat do cliente (widget, página /suporte ou BM-ClientChat) toca e aparece o cartão para atender ou recusar; o widget abre o painel, pisca o título e notifica, e o BM-ClientChat traz a janela para frente. Só o técnico liga: o cliente apenas atende. O widget passa a liberar o microfone no quadro do chat (extras/ligacoes_cliente.sql: coluna chamado_id em ligacoes).
+
 ## 0.0.189 — 2026-11-05
 
 - "Técnicos agora" (Chamados Ativos e Conversas): mostra todos os usuários ativos com acesso à Fila de Chamados ou a Chamados Ativos, mesmo sem atendimento (antes, só quem atendeu chamado nos últimos 30 dias ou estava numa conversa do WhatsApp); assim todos podem receber ligação.

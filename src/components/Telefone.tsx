@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Phone, PhoneIncoming, PhoneOff } from 'lucide-react';
-import { atenderLigacao, encerrarLigacao, fetchLigacao, ligarPara } from '../services/api';
+import { atenderLigacao, encerrarLigacao, fetchLigacao, ligarPara, ligarParaCliente } from '../services/api';
 import { tocarAviso } from '../utils/som';
 
 /**
@@ -9,12 +9,23 @@ import { tocarAviso } from '../utils/som';
  * já com todos os caminhos de rede (sem troca de candidatos depois): quem é chamado vê o convite na contagem dos
  * chamados (a cada 5 s), quem liga consulta a ligação a cada 2 s até atenderem. Desligar fecha o canal de dados,
  * e o outro lado desliga junto.
+ * O técnico também liga para o cliente de um chamado do site (botão Ligar do chamado): no chat do cliente
+ * (src/components/SuportePublico.tsx) este mesmo cartão toca, com o `canal` público, e ele só atende.
  */
 const ICE: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 const EVENTO = 'crmweb:ligar';
 
 /** Chamado pelo telefone de "Técnicos agora" (src/components/Chamados.tsx) */
 export const ligar = (id: number, nome: string) => window.dispatchEvent(new CustomEvent(EVENTO, { detail: { id, nome } }));
+/** Botão Ligar do chamado do site: toca no chat do cliente */
+export const ligarCliente = (chamado: number, nome: string) => window.dispatchEvent(new CustomEvent(EVENTO, { detail: { chamado, nome } }));
+
+/** Como quem recebe atende e desliga: o técnico pelas rotas logadas; o cliente do chat pelas públicas do chamado */
+export interface CanalLigacao {
+  atender: (id: number, resposta: string) => Promise<unknown>;
+  encerrar: (id: number) => Promise<unknown>;
+}
+const CANAL_TECNICO: CanalLigacao = { atender: atenderLigacao, encerrar: encerrarLigacao };
 
 type Estado = { fase: 'chamando' | 'tocando' | 'falando'; id: number | null; nome: string; oferta?: string; inicio?: number };
 
@@ -35,7 +46,11 @@ const duracao = (ms: number) => {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 };
 
-export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: string } | null; onAviso: (msg: string) => void }> = ({ chegando, onAviso }) => {
+export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: string } | null; onAviso: (msg: string) => void; canal?: CanalLigacao }> = ({
+  chegando,
+  onAviso,
+  canal = CANAL_TECNICO,
+}) => {
   const [estado, setEstado] = useState<Estado | null>(null);
   const [atendendo, setAtendendo] = useState(false);
   const [agora, setAgora] = useState(Date.now());
@@ -58,7 +73,7 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
   };
   const desligar = (msg?: string) => {
     const id = estadoRef.current?.id;
-    if (id) encerrarLigacao(id).catch(() => {});
+    if (id) canal.encerrar(id).catch(() => {});
     desligarLocal(msg);
   };
 
@@ -86,7 +101,7 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
   useEffect(() => {
     const aoLigar = async (e: Event) => {
       if (estadoRef.current) return avisoRef.current('Termine a ligação atual antes de fazer outra.');
-      const { id: para, nome } = (e as CustomEvent<{ id: number; nome: string }>).detail;
+      const { id: para, chamado, nome } = (e as CustomEvent<{ id?: number; chamado?: number; nome: string }>).detail;
       setEstado({ fase: 'chamando', id: null, nome });
       try {
         const pc = await conectar();
@@ -94,7 +109,8 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
         await pc.setLocalDescription(await pc.createOffer());
         await esperarIce(pc);
         if (conexao.current?.pc !== pc) return; // desligou enquanto preparava
-        const { id } = await ligarPara(para, pc.localDescription!.sdp);
+        const sdp = pc.localDescription!.sdp;
+        const { id } = chamado ? await ligarParaCliente(chamado, sdp) : await ligarPara(para!, sdp);
         if (conexao.current?.pc !== pc) return void encerrarLigacao(id).catch(() => {});
         setEstado({ fase: 'chamando', id, nome });
       } catch (err) {
@@ -130,7 +146,7 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
   useEffect(() => {
     const s = estadoRef.current;
     if (chegando && !s) setEstado({ fase: 'tocando', id: chegando.id, nome: chegando.de, oferta: chegando.oferta });
-    else if (chegando && s && s.id !== chegando.id) encerrarLigacao(chegando.id).catch(() => {});
+    else if (chegando && s && s.id !== chegando.id) canal.encerrar(chegando.id).catch(() => {});
     else if (!chegando && s?.fase === 'tocando' && !atendendo) setEstado(null);
   }, [chegando?.id]);
 
@@ -159,7 +175,7 @@ export const Telefone: React.FC<{ chegando: { id: number; de: string; oferta: st
       await pc.setRemoteDescription({ type: 'offer', sdp: s.oferta });
       await pc.setLocalDescription(await pc.createAnswer());
       await esperarIce(pc);
-      await atenderLigacao(s.id, pc.localDescription!.sdp);
+      await canal.atender(s.id, pc.localDescription!.sdp);
       setEstado({ fase: 'falando', id: s.id, nome: s.nome, inicio: Date.now() });
       setAtendendo(false);
     } catch (err) {

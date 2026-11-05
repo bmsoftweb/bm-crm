@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import express, { Router, Request, Response } from 'express';
 import { pool } from './db.js';
 import { chamarBmdesk } from './bmdesk.js';
-import { fecharSecao, gravarMensagem, ImagemMensagem, lerImagem, NR_FILA } from './chamados.js';
+import { fecharSecao, gravarMensagem, ImagemMensagem, lerImagem, NR_FILA, TOQUE_SEG } from './chamados.js';
 import { registrarLead } from './chatbot.js';
 import { donoDoTelefone, telefoneWhatsApp } from './whatsapp.js';
 import { notificar } from './notificacoes.js';
@@ -358,7 +358,21 @@ export function createSuporteRouter(): Router {
         assistente = { sistema: id ? (sistemas.find((s) => s.id === id)?.nome ?? 'escolhido') : null };
       }
     }
+    // Técnico ligando para o cliente (src/components/Telefone.tsx); sem a coluna chamado_id em ligacoes: nunca toca
+    let ligacao = null;
+    try {
+      const [l] = await pool.query<any[]>(
+        `SELECT l.id, u.nome AS de, l.oferta FROM ligacoes l JOIN usuarios u ON u.id = l.de_usuario_id
+          WHERE l.chamado_id = ? AND l.situacao = 'chamando' AND l.criado_em >= NOW() - INTERVAL ${TOQUE_SEG} SECOND
+          ORDER BY l.id DESC LIMIT 1`,
+        [c.id],
+      );
+      ligacao = l[0] ?? null;
+    } catch {
+      // banco sem extras/ligacoes_cliente.sql
+    }
     res.json({
+      ligacao,
       numero: c.numero,
       titulo: c.titulo,
       status: c.status,
@@ -441,6 +455,31 @@ export function createSuporteRouter(): Router {
    * Cliente encerra pelo chat: com atendente, o chamado fica encerrado (e o cliente avalia); sem
    * ninguém ter assumido, fica cancelado (desistiu da fila)
    */
+  /** O cliente atende a ligação do técnico (só atende: ligar é só do técnico, server/chamados.ts) */
+  router.post('/api/publico/suporte/chamado/:token/ligacao/:id/atender', rota(async (req, res) => {
+    const c = await doToken(req.params.token);
+    const resposta = String(req.body?.resposta ?? '');
+    if (!resposta.startsWith('v=0')) throw erro(400, 'Resposta da ligação inválida.');
+    const [r] = await pool.query<any>(
+      `UPDATE ligacoes SET situacao = 'atendida', resposta = ?, atendida_em = NOW()
+        WHERE id = ? AND chamado_id = ? AND situacao = 'chamando' AND criado_em >= NOW() - INTERVAL ${TOQUE_SEG} SECOND`,
+      [resposta, req.params.id, c.id],
+    );
+    if (!r.affectedRows) throw erro(409, 'O técnico já desligou.');
+    res.json({ success: true });
+  }));
+
+  /** O cliente recusa (ainda tocando) ou desliga */
+  router.post('/api/publico/suporte/chamado/:token/ligacao/:id/encerrar', rota(async (req, res) => {
+    const c = await doToken(req.params.token);
+    await pool.query(
+      `UPDATE ligacoes SET situacao = IF(situacao = 'chamando', 'recusada', 'encerrada'), encerrada_em = NOW()
+        WHERE id = ? AND chamado_id = ? AND situacao IN ('chamando', 'atendida')`,
+      [req.params.id, c.id],
+    );
+    res.json({ success: true });
+  }));
+
   router.post('/api/publico/suporte/chamado/:token/encerrar', rota(async (req, res) => {
     const c = await doToken(req.params.token);
     if (['encerrado', 'cancelado'].includes(c.status)) throw erro(409, 'Este atendimento já foi encerrado.');

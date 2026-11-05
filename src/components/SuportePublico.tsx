@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SelectAuto } from './SelectAuto';
 import { Bell, Bot, CheckCircle2, Download, Headset, Loader2, MonitorSmartphone, Send, Star, X } from 'lucide-react';
 import { erroCelular, formatDateTimeBR } from '../utils/formatters';
@@ -6,6 +6,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { BotaoClipe, imagemColada, PreviaImagem } from './AnexarImagem';
 import { destravarSom, tocarAviso } from '../utils/som';
 import { repetirConsulta } from '../utils/intervalo';
+import { Telefone, type CanalLigacao } from './Telefone';
 
 /**
  * Página pública /suporte?e=<empresa> (dentro do painel do widget.js, no site do cliente): abre o
@@ -22,6 +23,8 @@ interface Chamado {
   avaliado: boolean;
   /** Assistente (bm-help) enquanto ninguém assumiu; sistema null = o cliente ainda não escolheu */
   assistente: { sistema: string | null } | null;
+  /** Técnico ligando para o cliente (só o técnico liga; aqui só se atende) */
+  ligacao: { id: number; de: string; oferta: string } | null;
   mensagens: { id: number; autor: 'cliente' | 'equipe' | 'assistente'; texto: string; criado_em: string; usuario_nome: string | null; tem_imagem?: number | boolean }[];
 }
 
@@ -491,6 +494,23 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
     carregar();
     return repetirConsulta(carregar, 4000);
   }, [carregar]);
+  // Ligação do técnico: o cliente atende e desliga pelas rotas públicas do chamado
+  const canalLigacao = useMemo<CanalLigacao>(
+    () => ({ atender: (id, resposta) => api(`${url}/ligacao/${id}/atender`, { resposta }), encerrar: (id) => api(`${url}/ligacao/${id}/encerrar`, {}) }),
+    [url],
+  );
+  // Tocando: o site abre o painel, treme, pisca o título e notifica (widget.js); o BM-ClientChat traz a janela para frente
+  const ligacaoId = c?.ligacao?.id;
+  useEffect(() => {
+    if (!ligacaoId || !c?.ligacao) return;
+    const aviso = { de: c.ligacao.de, texto: 'Está ligando para você. Atenda pelo chat do suporte.' };
+    try {
+      window.parent.postMessage({ crmweb: 'ligacao', ...aviso }, '*');
+    } catch {
+      // página aberta fora do widget
+    }
+    avisarApp({ crmweb: 'cutucar', ...aviso });
+  }, [ligacaoId]);
   // Cancelado, ou encerrado e já avaliado: não há mais nada aqui, vai direto para abrir um novo
   useEffect(() => {
     if (c?.status === 'cancelado') onNovoRef.current('Atendimento anterior cancelado.');
@@ -563,6 +583,7 @@ const Conversa: React.FC<{ token: string; onNovo: (aviso?: string) => void }> = 
 
   return (
     <>
+      <Telefone chegando={encerrado ? null : c.ligacao ?? null} onAviso={setErro} canal={canalLigacao} />
       <div className="px-4 py-2 bg-white border-b border-stone-200 text-xs shrink-0 relative">
         {!encerrado && (
           <button

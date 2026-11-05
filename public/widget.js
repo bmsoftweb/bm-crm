@@ -116,6 +116,8 @@
       quadro = document.createElement('iframe');
       quadro.src = url;
       quadro.title = 'Suporte';
+      // O técnico pode ligar para o cliente pelo chat: sem isto o navegador não libera o microfone dentro do quadro
+      quadro.allow = 'microphone';
       quadro.style.cssText = 'width:100%;height:100%;border:0;';
       painel.appendChild(quadro);
     }
@@ -218,10 +220,11 @@
       return;
     }
     var cutucou = e.data.crmweb === 'cutucar';
+    var ligacao = e.data.crmweb === 'ligacao';
     abrirPainel();
-    if (cutucou) tremer();
+    if (cutucou || ligacao) tremer();
     if (document.hidden || !document.hasFocus()) {
-      piscarTitulo(cutucou ? '🔔 O técnico precisa de sua atenção' : '💬 Nova mensagem do suporte');
+      piscarTitulo(ligacao ? '📞 O suporte está ligando' : cutucou ? '🔔 O técnico precisa de sua atenção' : '💬 Nova mensagem do suporte');
       notificar('Suporte: ' + (e.data.de || 'nova mensagem'), e.data.texto || '');
     }
   });

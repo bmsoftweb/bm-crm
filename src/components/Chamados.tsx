@@ -38,7 +38,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { CHAVE_TELA_REMOTA } from './TelaRemota';
 import { AvisoErro } from './AvisoErro';
 import { Toggle } from './Toggle';
-import { ligar } from './Telefone';
+import { ligar, ligarCliente } from './Telefone';
 import { BotaoTemplates } from './BotaoTemplates';
 import { lerSessao } from '../utils/session';
 import { useGrudarNoFim } from '../utils/grudarNoFim';
@@ -881,6 +881,14 @@ const ChamadoAberto: React.FC<{
         className={`${botao} border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40`}
       >
         <MonitorSmartphone className="w-3.5 h-3.5" /> Tela Remota
+      </button>
+      <button
+        type="button"
+        onClick={() => ligarCliente(c.id, c.pessoa_nome || c.contato_nome || 'Cliente')}
+        title="Liga para o cliente pelo chat do site: toca lá e ele atende pelo microfone do computador (o cliente não consegue ligar)"
+        className={`${botao} border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40`}
+      >
+        <Phone className="w-3.5 h-3.5" /> Ligar
       </button>
     </>
   );
