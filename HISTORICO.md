@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.194 — 2026-11-06
+
+- Coluna "Não respondidos" na lista de Campanhas.
+- Grade dos não respondidos (todas as campanhas) em cima da lista de Campanhas, só quando houver: campanha, cliente, celular, quando respondeu e o botão para abrir a conversa.
+
 ## 0.0.193 — 2026-11-06
 
 - Disparos numa aba da tela de Campanhas (abas MDI: trocar de aba não perde filtros, página nem rolagem); Disparos saiu do menu e segue o acesso de Campanhas. Na lista, enviar o disparo e ver a conversa.

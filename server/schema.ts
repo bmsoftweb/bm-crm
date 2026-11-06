@@ -301,6 +301,16 @@ const SITUACOES_CAMPANHA = [
   { value: 'cancelada', label: 'Cancelada' },
 ];
 
+/**
+ * Disparo (alias a) que a pessoa respondeu e alguém da equipe escreveu depois: mensagem com usuário (IA, bot e avisos
+ * de atendimento não contam). O número da conversa pode estar com ou sem o 9
+ */
+const equipeRespondeu = (a: string) => `EXISTS (SELECT 1 FROM whatsapp_mensagens w
+    WHERE w.empresa_id = (SELECT c.empresa_id FROM campanhas c WHERE c.id = ${a}.campanha_id)
+      AND w.telefone IN (${a}.destino, CONCAT(LEFT(${a}.destino, 4), RIGHT(${a}.destino, 8)), CONCAT(LEFT(${a}.destino, 4), '9', RIGHT(${a}.destino, 8)))
+      AND w.direcao = 'enviada' AND w.usuario_id IS NOT NULL AND w.tipo NOT IN ('evento', 'encerramento', 'apagada')
+      AND w.data_hora >= ${a}.respondido_em)`;
+
 const SITUACOES_DISPARO = [
   { value: 'pendente', label: 'Pendente' },
   { value: 'enviado', label: 'Enviado' },
@@ -2086,6 +2096,15 @@ export const RESOURCES: ResourceDef[] = [
         sql: '(SELECT COUNT(*) FROM campanha_disparos d WHERE d.campanha_id = t.id AND d.respondido_em IS NOT NULL)',
       },
       {
+        name: 'qtd_nao_respondidos',
+        label: 'Não respondidos',
+        type: 'number',
+        readOnly: true,
+        listed: true,
+        width: 'xs',
+        sql: `(SELECT COUNT(*) FROM campanha_disparos d WHERE d.campanha_id = t.id AND d.canal = 'whatsapp' AND d.respondido_em IS NOT NULL AND NOT ${equipeRespondeu('d')})`,
+      },
+      {
         name: 'qtd_leads',
         label: 'Leads',
         type: 'number',
@@ -2191,15 +2210,8 @@ export const RESOURCES: ResourceDef[] = [
         listed: true,
         filterable: true,
         options: SITUACOES_DISPARO,
-        // WhatsApp que a pessoa respondeu: "Respondido" se alguém da equipe (mensagem com usuário; IA e bot não contam)
-        // escreveu depois da resposta, senão "Não respondido". O número da conversa pode estar com ou sem o 9
-        sql: `IF(t.canal = 'whatsapp' AND t.respondido_em IS NOT NULL,
-                IF(EXISTS (SELECT 1 FROM whatsapp_mensagens w
-                            WHERE w.empresa_id = (SELECT c.empresa_id FROM campanhas c WHERE c.id = t.campanha_id)
-                              AND w.telefone IN (t.destino, CONCAT(LEFT(t.destino, 4), RIGHT(t.destino, 8)), CONCAT(LEFT(t.destino, 4), '9', RIGHT(t.destino, 8)))
-                              AND w.direcao = 'enviada' AND w.usuario_id IS NOT NULL AND w.tipo NOT IN ('evento', 'encerramento', 'apagada')
-                              AND w.data_hora >= t.respondido_em), 'respondido', 'nao_respondido'),
-                t.situacao)`,
+        // WhatsApp que a pessoa respondeu: "Respondido" se alguém da equipe escreveu depois, senão "Não respondido"
+        sql: `IF(t.canal = 'whatsapp' AND t.respondido_em IS NOT NULL, IF(${equipeRespondeu('t')}, 'respondido', 'nao_respondido'), t.situacao)`,
       },
       { name: 'agendado_para', label: 'Agendado para', type: 'datetime', listed: true, filterable: true },
       { name: 'enviado_em', label: 'Enviado em', type: 'datetime', listed: true },

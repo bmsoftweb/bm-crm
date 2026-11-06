@@ -31,6 +31,7 @@ import { BotaoReverter } from './components/BotaoReverter';
 import { BotaoImprimir } from './components/BotaoImprimir';
 import { AcaoCampanha, BotaoEnviarDisparo } from './components/AcoesCampanha';
 import { AbasMDI } from './components/AbasMDI';
+import { NaoRespondidos } from './components/NaoRespondidos';
 import { BotaoEnviar } from './components/BotaoEnviar';
 import { BotaoLinkAceite } from './components/BotaoLinkAceite';
 import { BotaoNovaVersao } from './components/BotaoNovaVersao';
@@ -531,7 +532,16 @@ export default function App() {
     tela === 'campanhas' && resources.some((r) => r.name === 'campanha_disparos') ? (
       <AbasMDI
         abas={[
-          { id: 'campanhas', titulo: 'Campanhas', conteudo: conteudoBase('campanhas') },
+          {
+            id: 'campanhas',
+            titulo: 'Campanhas',
+            conteudo: (
+              <>
+                <NaoRespondidos refreshToken={refreshToken + (voltas.campanhas ?? 0)} onConversa={(telefone) => pedirConversa({ telefone })} />
+                {conteudoBase('campanhas')}
+              </>
+            ),
+          },
           { id: 'campanha_disparos', titulo: 'Disparos', conteudo: conteudoBase('campanha_disparos') },
         ]}
         onVoltar={(id) => setVoltas((v) => ({ ...v, [id]: (v[id] ?? 0) + 1 }))}
