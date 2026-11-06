@@ -30,6 +30,7 @@ import { BotaoClonar } from './components/BotaoClonar';
 import { BotaoReverter } from './components/BotaoReverter';
 import { BotaoImprimir } from './components/BotaoImprimir';
 import { AcaoCampanha, BotaoEnviarDisparo } from './components/AcoesCampanha';
+import { AbasMDI } from './components/AbasMDI';
 import { BotaoEnviar } from './components/BotaoEnviar';
 import { BotaoLinkAceite } from './components/BotaoLinkAceite';
 import { BotaoNovaVersao } from './components/BotaoNovaVersao';
@@ -525,7 +526,31 @@ export default function App() {
     : TITULOS[activeTab] || ['BM-CRM', ''];
 
   /** Conteúdo de uma tela; as telas abertas recentemente ficam montadas (escondidas) para voltar no ponto em que parou */
-  const conteudoTela = (tela: string) => {
+  const conteudoTela = (tela: string) =>
+    // Campanhas: os Disparos numa aba MDI da própria tela (fora do menu)
+    tela === 'campanhas' && resources.some((r) => r.name === 'campanha_disparos') ? (
+      <AbasMDI
+        abas={[
+          { id: 'campanhas', titulo: 'Campanhas', conteudo: conteudoBase('campanhas') },
+          { id: 'campanha_disparos', titulo: 'Disparos', conteudo: conteudoBase('campanha_disparos') },
+        ]}
+        onVoltar={(id) => setVoltas((v) => ({ ...v, [id]: (v[id] ?? 0) + 1 }))}
+      />
+    ) : (
+      conteudoBase(tela)
+    );
+
+  /** Enviar agora e Ver conversa: na lista dos Disparos e no detalhe da campanha */
+  const acoesDisparo = (row: RegistroCrud, recarregar: () => void) => (
+    <>
+      <BotaoEnviarDisparo registro={row} onEnviado={recarregar} onToast={showToast} />
+      {row.canal === 'whatsapp' && (
+        <BotaoWhatsApp temNumero={Boolean(row.destino)} titulo="Ver conversa" onAbrir={() => pedirConversa({ telefone: row.destino as string })} />
+      )}
+    </>
+  );
+
+  const conteudoBase = (tela: string) => {
     const activeTab = tela;
     const activeResource = resources.find((r) => r.name === tela) || null;
     return (
@@ -713,6 +738,8 @@ export default function App() {
                   ? (row, { recarregar }) => <ContratoDocumentos registro={row} onRecarregar={recarregar} onToast={showToast} />
                 : activeResource.name === 'campanhas'
                   ? (row, { recarregar }) => <AcaoCampanha registro={row} onRecarregar={recarregar} onToast={showToast} />
+                : activeResource.name === 'campanha_disparos'
+                  ? (row, { recarregar }) => acoesDisparo(row, recarregar)
                   : activeResource.name === 'pessoas'
                     ? (row) => <BotaoWhatsApp temNumero={Boolean(row.whatsapp || row.telefone)} onAbrir={() => pedirConversa({ pessoaId: row.id as string })} />
                     : activeResource.name === 'usuarios'
@@ -771,12 +798,7 @@ export default function App() {
               recurso === 'pessoas_contatos' ? (
                 <BotaoWhatsApp temNumero={Boolean(row.whatsapp || row.celular || row.telefone)} onAbrir={() => pedirConversa({ contatoId: row.id as string })} />
               ) : recurso === 'campanha_disparos' ? (
-                <>
-                  <BotaoEnviarDisparo registro={row} onEnviado={recarregar} onToast={showToast} />
-                  {row.canal === 'whatsapp' && (
-                    <BotaoWhatsApp temNumero={Boolean(row.destino)} titulo="Ver conversa" onAbrir={() => pedirConversa({ telefone: row.destino as string })} />
-                  )}
-                </>
+                acoesDisparo(row, recarregar)
               ) : null
             }
           />

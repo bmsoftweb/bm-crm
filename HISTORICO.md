@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.193 — 2026-11-06
+
+- Disparos numa aba da tela de Campanhas (abas MDI: trocar de aba não perde filtros, página nem rolagem); Disparos saiu do menu e segue o acesso de Campanhas. Na lista, enviar o disparo e ver a conversa.
+- Situação do disparo "Não respondido" (a pessoa respondeu e ninguém da equipe escreveu depois) e "Respondido"; IA, bot e avisos de atendimento não contam como resposta.
+
 ## 0.0.192 — 2026-11-05
 
 - Análise da ligação gravada mais resistente: se o modelo do Gemini estiver sobrecarregado, tenta o próximo, sempre antes do limite de tempo da Vercel. Se ainda assim falhar, a nota do chamado mostra o motivo e o botão "Analisar de novo".

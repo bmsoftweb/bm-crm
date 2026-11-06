@@ -160,6 +160,8 @@ export const STATUS_COLORS: Record<string, string> = {
   enviado: AZUL,
   entregue: VERDE,
   lido: ROXO,
+  respondido: VERDE,
+  nao_respondido: ROSA,
   // Origem das atividades
   google: ROXO,
 };

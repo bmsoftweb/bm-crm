@@ -272,7 +272,8 @@ export function createCrudRouter() {
       const resource = resolveResource(req);
       // Lista do menu: só com permissão. Painel de detalhe (filter_field) e combos seguem liberados,
       // para as telas que o usuário acessa continuarem mostrando os dados ligados
-      if (!req.query.filter_field) exigirAcesso(res, resource.name, resource.label);
+      // Disparos é aba da tela de Campanhas: vale o acesso a Campanhas
+      if (!req.query.filter_field) exigirAcesso(res, resource.name === 'campanha_disparos' ? 'campanhas' : resource.name, resource.label);
 
       const page = Math.max(1, Number(req.query.page) || 1);
       const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 25));

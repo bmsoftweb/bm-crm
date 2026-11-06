@@ -308,6 +308,9 @@ const SITUACOES_DISPARO = [
   { value: 'lido', label: 'Lido' },
   { value: 'falhou', label: 'Falhou' },
   { value: 'cancelado', label: 'Cancelado' },
+  // Calculadas (não gravadas): a pessoa respondeu e alguém da equipe respondeu depois, ou ainda não
+  { value: 'respondido', label: 'Respondido' },
+  { value: 'nao_respondido', label: 'Não respondido' },
 ];
 
 const TIPOS_CONTRATO = [
@@ -2165,6 +2168,8 @@ export const RESOURCES: ResourceDef[] = [
     description: 'Mensagens das campanhas, uma por pessoa, com o destino e a situação do envio',
     icon: 'Send',
     group: 'marketing',
+    // Aba da tela de Campanhas (abas MDI), não opção do menu: o acesso é o de Campanhas (server/crud.ts)
+    oculto: true,
     pk: ['id'],
     autoIncrement: true,
     labelField: 'nome',
@@ -2179,7 +2184,23 @@ export const RESOURCES: ResourceDef[] = [
       { name: 'nome', label: 'Cliente', type: 'text', listed: true, searchable: true },
       { name: 'canal', label: 'Enviar por', type: 'enum', listed: true, filterable: true, options: CANAIS_DISPARO, width: 'xs' },
       { name: 'destino', label: 'Celular / e-mail', type: 'text', listed: true, searchable: true },
-      { name: 'situacao', label: 'Situação', type: 'enum', listed: true, filterable: true, options: SITUACOES_DISPARO },
+      {
+        name: 'situacao',
+        label: 'Situação',
+        type: 'enum',
+        listed: true,
+        filterable: true,
+        options: SITUACOES_DISPARO,
+        // WhatsApp que a pessoa respondeu: "Respondido" se alguém da equipe (mensagem com usuário; IA e bot não contam)
+        // escreveu depois da resposta, senão "Não respondido". O número da conversa pode estar com ou sem o 9
+        sql: `IF(t.canal = 'whatsapp' AND t.respondido_em IS NOT NULL,
+                IF(EXISTS (SELECT 1 FROM whatsapp_mensagens w
+                            WHERE w.empresa_id = (SELECT c.empresa_id FROM campanhas c WHERE c.id = t.campanha_id)
+                              AND w.telefone IN (t.destino, CONCAT(LEFT(t.destino, 4), RIGHT(t.destino, 8)), CONCAT(LEFT(t.destino, 4), '9', RIGHT(t.destino, 8)))
+                              AND w.direcao = 'enviada' AND w.usuario_id IS NOT NULL AND w.tipo NOT IN ('evento', 'encerramento', 'apagada')
+                              AND w.data_hora >= t.respondido_em), 'respondido', 'nao_respondido'),
+                t.situacao)`,
+      },
       { name: 'agendado_para', label: 'Agendado para', type: 'datetime', listed: true, filterable: true },
       { name: 'enviado_em', label: 'Enviado em', type: 'datetime', listed: true },
       { name: 'entregue_em', label: 'Entregue em', type: 'datetime' },
