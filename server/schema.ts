@@ -2011,7 +2011,6 @@ export const RESOURCES: ResourceDef[] = [
     canCreate: true,
     canUpdate: true,
     canDelete: true,
-    details: [{ resource: 'campanha_disparos', foreignKey: 'campanha_id', label: 'Disparos' }],
     fields: [
       ID,
       { name: 'nome', label: 'Nome', type: 'text', required: true, listed: true, searchable: true, maxLength: 150 },

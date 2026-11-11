@@ -30,7 +30,6 @@ import { BotaoClonar } from './components/BotaoClonar';
 import { BotaoReverter } from './components/BotaoReverter';
 import { BotaoImprimir } from './components/BotaoImprimir';
 import { AcaoCampanha, BotaoEnviarDisparo } from './components/AcoesCampanha';
-import { AbasMDI } from './components/AbasMDI';
 import { NaoRespondidos } from './components/NaoRespondidos';
 import { BotaoEnviar } from './components/BotaoEnviar';
 import { BotaoLinkAceite } from './components/BotaoLinkAceite';
@@ -528,29 +527,17 @@ export default function App() {
 
   /** Conteúdo de uma tela; as telas abertas recentemente ficam montadas (escondidas) para voltar no ponto em que parou */
   const conteudoTela = (tela: string) =>
-    // Campanhas: os Disparos numa aba MDI da própria tela (fora do menu)
-    tela === 'campanhas' && resources.some((r) => r.name === 'campanha_disparos') ? (
-      <AbasMDI
-        abas={[
-          {
-            id: 'campanhas',
-            titulo: 'Campanhas',
-            conteudo: (
-              <>
-                <NaoRespondidos refreshToken={refreshToken + (voltas.campanhas ?? 0)} onConversa={(telefone) => pedirConversa({ telefone })} />
-                {conteudoBase('campanhas')}
-              </>
-            ),
-          },
-          { id: 'campanha_disparos', titulo: 'Disparos', conteudo: conteudoBase('campanha_disparos') },
-        ]}
-        onVoltar={(id) => setVoltas((v) => ({ ...v, [id]: (v[id] ?? 0) + 1 }))}
-      />
+    // Campanhas: os não respondidos em cima da lista (só quando houver)
+    tela === 'campanhas' ? (
+      <>
+        <NaoRespondidos refreshToken={refreshToken + (voltas.campanhas ?? 0)} onConversa={(telefone) => pedirConversa({ telefone })} />
+        {conteudoBase('campanhas')}
+      </>
     ) : (
       conteudoBase(tela)
     );
 
-  /** Enviar agora e Ver conversa: na lista dos Disparos e no detalhe da campanha */
+  /** Enviar agora e Ver conversa: na lista dos Disparos */
   const acoesDisparo = (row: RegistroCrud, recarregar: () => void) => (
     <>
       <BotaoEnviarDisparo registro={row} onEnviado={recarregar} onToast={showToast} />
@@ -747,7 +734,14 @@ export default function App() {
                 : activeResource.name === 'contratos'
                   ? (row, { recarregar }) => <ContratoDocumentos registro={row} onRecarregar={recarregar} onToast={showToast} />
                 : activeResource.name === 'campanhas'
-                  ? (row, { recarregar }) => <AcaoCampanha registro={row} onRecarregar={recarregar} onToast={showToast} />
+                  ? (row, { recarregar }) => (
+                      <AcaoCampanha
+                        registro={row}
+                        onRecarregar={recarregar}
+                        onToast={showToast}
+                        onDisparos={() => navegarFiltrado('campanha_disparos', [{ field: 'campanha_id', op: 'eq', value: String(row.id) }])}
+                      />
+                    )
                 : activeResource.name === 'campanha_disparos'
                   ? (row, { recarregar }) => acoesDisparo(row, recarregar)
                   : activeResource.name === 'pessoas'
@@ -804,11 +798,9 @@ export default function App() {
                             )
                         : undefined
             }
-            acoesDetalhe={(recurso, row, { recarregar }) =>
+            acoesDetalhe={(recurso, row) =>
               recurso === 'pessoas_contatos' ? (
                 <BotaoWhatsApp temNumero={Boolean(row.whatsapp || row.celular || row.telefone)} onAbrir={() => pedirConversa({ contatoId: row.id as string })} />
-              ) : recurso === 'campanha_disparos' ? (
-                acoesDisparo(row, recarregar)
               ) : null
             }
           />
@@ -851,7 +843,8 @@ export default function App() {
       )}
 
       <Sidebar
-        activeTab={activeTab}
+        // Disparos é aba MDI de Campanhas (fora do menu): Campanhas continua marcada e volta para ela
+        activeTab={activeTab === 'campanha_disparos' ? 'campanhas' : activeTab}
         setActiveTab={navegar}
         resources={resources}
         recordCounts={recordCounts}

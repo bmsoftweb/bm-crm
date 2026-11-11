@@ -952,7 +952,7 @@ export async function conectarWhatsApp(empresaId: string, conta: ContaWhats = 'p
   if (dizConectado()) {
     if ((await conectadoNoProvedor(c)).conectado) return { conectado: true };
     if (c.provedor === 'evolution') {
-      await desconectarWhatsApp(empresaId).catch(() => {});
+      await desconectarWhatsApp(empresaId, conta).catch(() => {});
       r = await pedirQr();
     }
   }
@@ -981,7 +981,13 @@ export async function midiaDaMensagem(empresaId: string | number, waId: string, 
 export async function desconectarWhatsApp(empresaId: string, conta: ContaWhats = 'provedor'): Promise<void> {
   const c = await credenciais(empresaId, conta);
   const { url, headers } = endereco(c, { zapi: 'disconnect', evolution: 'instance/logout' });
-  await requisitar(url, { method: c.provedor === 'zapi' ? 'GET' : 'DELETE', headers });
+  try {
+    await requisitar(url, { method: c.provedor === 'zapi' ? 'GET' : 'DELETE', headers });
+  } catch (err: any) {
+    // Já desconectado (ex.: logout feito no painel da Evolution): ela recusa com "Connection Closed", e o
+    // fetchInstances (2.3.7) segue dizendo "open"; o próximo Conectar pede o QR Code
+    if (!/Connection Closed/i.test(String(err?.message))) throw err;
+  }
 }
 
 const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));

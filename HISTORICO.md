@@ -2,6 +2,12 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.195 — 2026-11-11
+
+- Campanhas: os Disparos saíram do detalhe embaixo da lista e abrem pela opção "Disparos" no menu "..." da campanha, já filtrados por ela (aba MDI escondida; Campanhas continua marcada no menu para voltar).
+- WhatsApp: Desconectar não dá mais erro quando o número já saiu pela Evolution ("Connection Closed").
+- WhatsApp: ao reconectar o número das campanhas com a Evolution travada, o logout era feito no número principal; agora é no das campanhas.
+
 ## 0.0.194 — 2026-11-06
 
 - Coluna "Não respondidos" na lista de Campanhas.

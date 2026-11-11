@@ -19,10 +19,12 @@ interface Props {
   registro: RegistroCrud;
   onRecarregar: () => void;
   onToast: (msg: string) => void;
+  /** Abre os Disparos desta campanha (aba MDI) */
+  onDisparos: () => void;
 }
 
 /** Ações da linha da campanha: pré-visualizar a mensagem com o público, gerar os disparos e iniciar o envio */
-export const AcaoCampanha: React.FC<Props> = ({ registro, onRecarregar, onToast }) => {
+export const AcaoCampanha: React.FC<Props> = ({ registro, onRecarregar, onToast, onDisparos }) => {
   const [ocupado, setOcupado] = useState(false);
   const [confirmando, setConfirmando] = useState<'gerar' | 'iniciar' | 'encerrar' | null>(null);
   const [previa, setPrevia] = useState<PreviaCampanha | null>(null);
@@ -44,6 +46,7 @@ export const AcaoCampanha: React.FC<Props> = ({ registro, onRecarregar, onToast 
   return (
     <>
       <BotaoAcao icone={Eye} titulo="Pré-visualizar" descricao="Mostra o tamanho do público e a mensagem pronta para as primeiras pessoas" carregando={ocupado} onClick={verPrevia} />
+      <BotaoAcao icone={Send} titulo="Disparos" descricao="Abre as mensagens desta campanha, uma por pessoa, com a situação do envio" onClick={onDisparos} />
       <BotaoAcao icone={ListPlus} titulo="Gerar disparos" descricao="Cria uma mensagem por pessoa do público, sem enviar" onClick={() => setConfirmando('gerar')} />
       <BotaoAcao icone={Play} titulo="Iniciar envio campanha" descricao="Liga o envio dos disparos pendentes" onClick={() => setConfirmando('iniciar')} />
       <BotaoAcao icone={CircleStop} titulo="Encerrar" descricao="Conclui a campanha: os disparos que ainda não saíram são cancelados" onClick={() => setConfirmando('encerrar')} />
