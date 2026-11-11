@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.196 — 2026-11-11
+
+- WhatsApp: Desconectar volta a avisar quando a Evolution responde "Connection Closed" (o logout não aconteceu e ela reconecta o mesmo número), com o passo a passo para desconectar pelo celular. A 0.0.195 tratava esse caso como desconectado.
+
 ## 0.0.195 — 2026-11-11
 
 - Campanhas: os Disparos saíram do detalhe embaixo da lista e abrem pela opção "Disparos" no menu "..." da campanha, já filtrados por ela (aba MDI escondida; Campanhas continua marcada no menu para voltar).

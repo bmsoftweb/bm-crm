@@ -984,9 +984,14 @@ export async function desconectarWhatsApp(empresaId: string, conta: ContaWhats =
   try {
     await requisitar(url, { method: c.provedor === 'zapi' ? 'GET' : 'DELETE', headers });
   } catch (err: any) {
-    // Já desconectado (ex.: logout feito no painel da Evolution): ela recusa com "Connection Closed", e o
-    // fetchInstances (2.3.7) segue dizendo "open"; o próximo Conectar pede o QR Code
+    // "Connection Closed": o logout NÃO aconteceu (a conexão estava caída). A sessão continua guardada na
+    // instância e a Evolution reconecta sozinha o mesmo número; só sai removendo o aparelho no celular
     if (!/Connection Closed/i.test(String(err?.message))) throw err;
+    throw new ErroProvedor(
+      'WhatsApp: a Evolution não conseguiu desconectar (conexão caída) e vai reconectar o mesmo número. ' +
+        'Para desconectar, no celular desse número: WhatsApp › Aparelhos conectados › toque na conexão › Desconectar. ' +
+        'Depois use Conectar WhatsApp para ler o QR Code do número novo.',
+    );
   }
 }
 
