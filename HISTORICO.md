@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.198 — 2026-11-11
+
+- WhatsApp: a situação do número confere a conexão de verdade (consulta ao WhatsApp), em vez de confiar no "open" da Evolution 2.3.7, que segue dizendo conectado (e o número antigo) depois de um logout ou com a conexão caída.
+- WhatsApp: Desconectar com o logout já registrado na Evolution (401) não dá mais erro; Conectar com a Evolution presa em "conectado" reinicia a instância e pede o QR Code de novo, e explica o que fazer se ainda assim não vier.
+
 ## 0.0.197 — 2026-11-11
 
 - WhatsApp: Desconectar com a instância da Evolution travada ("Connection Closed") reinicia a instância e tenta o logout de novo por até 20 s; só avisa se continuar caída.

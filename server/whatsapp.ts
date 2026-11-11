@@ -908,9 +908,34 @@ export async function ativarRecebimento(empresaId: string, origem: string, conta
   return webhook;
 }
 
+/** Instância da Evolution como o instance/fetchInstances devolve */
+async function instanciaEvolution(c: Credenciais): Promise<any> {
+  const url = `${c.url}/instance/fetchInstances?instanceName=${encodeURIComponent(c.instancia)}`;
+  const r: any = await (await requisitar(url, { headers: { apikey: c.token } })).json().catch(() => null);
+  const inst = Array.isArray(r) ? r.find((i: any) => (i?.name ?? i?.instance?.instanceName) === c.instancia) : null;
+  if (!inst) throw new ErroProvedor(`WhatsApp: instância "${c.instancia}" não encontrada na Evolution.`);
+  return inst;
+}
+
 /**
- * Se o número está conectado. Evolution: pelo connectionStatus de instance/fetchInstances;
- * o instance/connectionState (2.3.7) continua dizendo "open" depois de um logout.
+ * A conexão da instância responde de verdade: consulta um número no WhatsApp (só leitura). Com ela caída a Evolution
+ * recusa com "Connection Closed" mesmo dizendo "open"; qualquer outra falha não conta como caída. Número aleatório:
+ * os já consultados (o próprio, inclusive) ela responde do cache, sem usar a conexão
+ */
+async function conexaoViva(c: Credenciais): Promise<boolean> {
+  const aleatorio = `5547${Math.floor(1e8 + Math.random() * 9e8)}`;
+  const r = await fetch(`${c.url}/chat/whatsappNumbers/${encodeURIComponent(c.instancia)}`, {
+    method: 'POST',
+    headers: { apikey: c.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ numbers: [aleatorio] }),
+    signal: AbortSignal.timeout(15_000),
+  }).catch(() => null);
+  return !(r && !r.ok && /Connection Closed/i.test(await r.text().catch(() => '')));
+}
+
+/**
+ * Se o número está conectado. Evolution: pelo connectionStatus de instance/fetchInstances, confirmado por uma consulta
+ * real; a 2.3.7 segue dizendo "open" (e o número antigo) depois de um logout ou com a conexão interna caída.
  */
 async function conectadoNoProvedor(c: Credenciais): Promise<{ conectado: boolean; numero?: string }> {
   if (c.provedor === 'zapi') {
@@ -918,13 +943,10 @@ async function conectadoNoProvedor(c: Credenciais): Promise<{ conectado: boolean
     const r: any = await (await requisitar(url, { headers })).json().catch(() => ({}));
     return { conectado: r?.connected === true };
   }
-  const url = `${c.url}/instance/fetchInstances?instanceName=${encodeURIComponent(c.instancia)}`;
-  const r: any = await (await requisitar(url, { headers: { apikey: c.token } })).json().catch(() => null);
-  const inst = Array.isArray(r) ? r.find((i: any) => (i?.name ?? i?.instance?.instanceName) === c.instancia) : null;
-  if (!inst) throw new ErroProvedor(`WhatsApp: instância "${c.instancia}" não encontrada na Evolution.`);
-  const conectado = (inst.connectionStatus ?? inst.instance?.status) === 'open';
+  const inst = await instanciaEvolution(c);
   // ownerJid: "5547999999999@s.whatsapp.net" (número do aparelho conectado)
   const numero = String(inst.ownerJid ?? inst.instance?.owner ?? '').split('@')[0].split(':')[0];
+  const conectado = (inst.connectionStatus ?? inst.instance?.status) === 'open' && (await conexaoViva(c));
   return { conectado, numero: conectado && numero ? numero : undefined };
 }
 
@@ -954,10 +976,22 @@ export async function conectarWhatsApp(empresaId: string, conta: ContaWhats = 'p
     if (c.provedor === 'evolution') {
       await desconectarWhatsApp(empresaId, conta).catch(() => {});
       r = await pedirQr();
+      // Ainda "open" sem conexão (2.3.7 presa na memória): reinicia a instância e pede de novo
+      if (dizConectado()) {
+        await reiniciarInstancia(c).catch(() => {});
+        await esperar(3000);
+        r = await pedirQr();
+      }
     }
   }
   const qr: string | undefined = c.provedor === 'zapi' ? r?.value : r?.base64;
   if (qr) return { conectado: false, qrcode: qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}` };
+  if (dizConectado()) {
+    throw new ErroProvedor(
+      `WhatsApp: a Evolution está presa em "conectado" sem conexão e não gera o QR Code. No painel da Evolution (manager), ` +
+        `apague a instância "${c.instancia}" e crie de novo com o mesmo nome; depois, aqui, use Ativar recebimento e Conectar WhatsApp.`,
+    );
+  }
   throw new ErroProvedor(`WhatsApp: o provedor não devolveu o QR Code (${JSON.stringify(r).slice(0, 150)}).`);
 }
 
@@ -977,6 +1011,12 @@ export async function midiaDaMensagem(empresaId: string | number, waId: string, 
   return { mimetype: String(r.mimetype || 'application/octet-stream').split(';')[0], dados: Buffer.from(r.base64, 'base64') };
 }
 
+/** "Restart" da instância na Evolution (o do painel dela): a sessão guardada continua */
+async function reiniciarInstancia(c: Credenciais): Promise<void> {
+  const url = `${c.url}/instance/restart/${encodeURIComponent(c.instancia)}`;
+  await requisitar(url, { method: 'POST', headers: { apikey: c.token } }).catch(() => requisitar(url, { method: 'PUT', headers: { apikey: c.token } }));
+}
+
 /** Desconecta o número (logout): para enviar de novo, é preciso ler outro QR Code */
 export async function desconectarWhatsApp(empresaId: string, conta: ContaWhats = 'provedor'): Promise<void> {
   const c = await credenciais(empresaId, conta);
@@ -989,10 +1029,9 @@ export async function desconectarWhatsApp(empresaId: string, conta: ContaWhats =
     // "Connection Closed": o logout NÃO aconteceu (a conexão interna da instância caiu e não volta sozinha).
     // Reinicia a instância (o "Restart" do painel da Evolution), espera a conexão abrir e tenta de novo
     if (!fechada(err) || c.provedor !== 'evolution') throw err;
-    const reiniciar = `${c.url}/instance/restart/${encodeURIComponent(c.instancia)}`;
-    await requisitar(reiniciar, { method: 'POST', headers: { apikey: c.token } }).catch(() =>
-      requisitar(reiniciar, { method: 'PUT', headers: { apikey: c.token } }),
-    );
+    // Logout já registrado pela Evolution (401, ex.: feito no painel dela): o número já saiu, só o "open" ficou
+    if (Number((await instanciaEvolution(c).catch(() => null))?.disconnectionReasonCode) === 401) return;
+    await reiniciarInstancia(c);
     for (let i = 0; i < 10; i++) {
       await esperar(2000);
       try {
