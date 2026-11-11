@@ -981,12 +981,28 @@ export async function midiaDaMensagem(empresaId: string | number, waId: string, 
 export async function desconectarWhatsApp(empresaId: string, conta: ContaWhats = 'provedor'): Promise<void> {
   const c = await credenciais(empresaId, conta);
   const { url, headers } = endereco(c, { zapi: 'disconnect', evolution: 'instance/logout' });
+  const logout = () => requisitar(url, { method: c.provedor === 'zapi' ? 'GET' : 'DELETE', headers });
+  const fechada = (err: any) => /Connection Closed/i.test(String(err?.message));
   try {
-    await requisitar(url, { method: c.provedor === 'zapi' ? 'GET' : 'DELETE', headers });
+    await logout();
   } catch (err: any) {
-    // "Connection Closed": o logout NÃO aconteceu (a conexão estava caída). A sessão continua guardada na
-    // instância e a Evolution reconecta sozinha o mesmo número; só sai removendo o aparelho no celular
-    if (!/Connection Closed/i.test(String(err?.message))) throw err;
+    // "Connection Closed": o logout NÃO aconteceu (a conexão interna da instância caiu e não volta sozinha).
+    // Reinicia a instância (o "Restart" do painel da Evolution), espera a conexão abrir e tenta de novo
+    if (!fechada(err) || c.provedor !== 'evolution') throw err;
+    const reiniciar = `${c.url}/instance/restart/${encodeURIComponent(c.instancia)}`;
+    await requisitar(reiniciar, { method: 'POST', headers: { apikey: c.token } }).catch(() =>
+      requisitar(reiniciar, { method: 'PUT', headers: { apikey: c.token } }),
+    );
+    for (let i = 0; i < 10; i++) {
+      await esperar(2000);
+      try {
+        await logout();
+        return;
+      } catch (e: any) {
+        if (!fechada(e)) throw e;
+      }
+    }
+    // Continua caída: a sessão segue guardada e a Evolution volta a conectar o mesmo número
     throw new ErroProvedor(
       'WhatsApp: a Evolution não conseguiu desconectar (conexão caída) e vai reconectar o mesmo número. ' +
         'Para desconectar, no celular desse número: WhatsApp › Aparelhos conectados › toque na conexão › Desconectar. ' +

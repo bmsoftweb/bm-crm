@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.197 — 2026-11-11
+
+- WhatsApp: Desconectar com a instância da Evolution travada ("Connection Closed") reinicia a instância e tenta o logout de novo por até 20 s; só avisa se continuar caída.
+
 ## 0.0.196 — 2026-11-11
 
 - WhatsApp: Desconectar volta a avisar quando a Evolution responde "Connection Closed" (o logout não aconteceu e ela reconecta o mesmo número), com o passo a passo para desconectar pelo celular. A 0.0.195 tratava esse caso como desconectado.
