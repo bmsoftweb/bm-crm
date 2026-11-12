@@ -74,7 +74,7 @@ const DIAS_ENTRE_PESQUISAS = 7;
 /**
  * Envia a pesquisa (se ligada), no máximo uma a cada DIAS_ENTRE_PESQUISAS por cliente. Pesquisa anterior do mesmo
  * número ainda sem resposta é descartada. atendente null = atendimento do bot/jornada (a pergunta usa o nome do bot);
- * do atendente, só sai se alguém da equipe escreveu, e a pergunta usa o último que escreveu.
+ * do atendente, só sai se alguém da equipe escreveu e o cliente também, e a pergunta usa o último que escreveu.
  */
 export async function enviarPesquisa(
   empresaId: string | number,
@@ -100,6 +100,12 @@ export async function enviarPesquisa(
       [emp, telefone, e[1]?.id ?? 0],
     );
     if (!u[0]) return;
+    // Sem interação (o cliente não escreveu nada no atendimento): não há o que avaliar
+    const [r] = await pool.query<any[]>(
+      "SELECT 1 FROM whatsapp_mensagens WHERE empresa_id = ? AND telefone = ? AND id > ? AND direcao = 'recebida' LIMIT 1",
+      [emp, telefone, e[1]?.id ?? 0],
+    );
+    if (!r[0]) return;
     atendente = { id: u[0].id, nome: u[0].nome };
   }
   const [p] = await pool.query<any[]>(`SELECT ${PESSOA_RECENTE()} AS pessoa_id FROM whatsapp_mensagens WHERE empresa_id = ? AND telefone = ?`, [emp, telefone]);

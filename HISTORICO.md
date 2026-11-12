@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.199 — 2026-11-12
+
+- Pesquisa de satisfação: não é enviada quando o cliente não escreveu nada no atendimento (só a equipe escreveu e encerrou).
+
 ## 0.0.198 — 2026-11-11
 
 - WhatsApp: a situação do número confere a conexão de verdade (consulta ao WhatsApp), em vez de confiar no "open" da Evolution 2.3.7, que segue dizendo conectado (e o número antigo) depois de um logout ou com a conexão caída.
