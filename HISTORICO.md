@@ -2,6 +2,12 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.200 — 2026-11-12
+
+- WhatsApp: a conversa fica com o técnico. Os 10 min sem resposta (que mandam para "Aguardando") valem só para mensagem do bot; mensagem de técnico, inclusive pelo celular, não conta.
+- WhatsApp: cliente que responde a uma mensagem do técnico volta para esse técnico (com aviso para ele), em vez de ir para a fila. Se o técnico respondeu pelo celular (sem usuário), continua indo para a fila.
+- WhatsApp: Conectar nunca faz logout; com a Evolution dizendo conectado e a conexão morta, reinicia a instância e pede o QR. A conferência da conexão tenta 3 vezes e usa um número fixo (sem cache).
+
 ## 0.0.199 — 2026-11-12
 
 - Pesquisa de satisfação: não é enviada quando o cliente não escreveu nada no atendimento (só a equipe escreveu e encerrou).

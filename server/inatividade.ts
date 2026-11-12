@@ -16,7 +16,10 @@ export const TEXTO_ENCERRAMENTO = 'Atendimento encerrado por falta de interaçã
 /** Mensagem mais velha que o prazo + esta janela não entra (servidor parado, conversa antiga) */
 const JANELA_MIN = 60;
 
-/** Conversas do bot paradas há X minutos: última mensagem do bot (já entregue), sem resposta do cliente */
+/**
+ * Conversas do bot paradas há X minutos: última mensagem do bot (já entregue), sem resposta do cliente. Mensagem de
+ * técnico (inclusive a mandada pelo celular, sem usuário) não conta: a conversa fica com ele
+ */
 async function candidatas(empresaId: number, minutos: number) {
   const [rows] = await pool.query<any[]>(
     `SELECT c.telefone
@@ -26,7 +29,7 @@ async function candidatas(empresaId: number, minutos: number) {
       WHERE c.empresa_id = ? AND c.retomar_em IS NULL
         AND c.atendimento <> 'humano' AND c.atendente_id IS NULL
         AND m.tipo <> 'encerramento'
-        AND m.direcao = 'enviada' AND m.situacao <> 'pendente' AND (m.origem IS NULL OR m.origem LIKE 'bot:%')
+        AND m.direcao = 'enviada' AND m.situacao <> 'pendente' AND m.origem LIKE 'bot:%'
         AND m.data_hora <= NOW() - INTERVAL ? MINUTE
         AND m.data_hora > NOW() - INTERVAL ? MINUTE
         AND EXISTS (SELECT 1 FROM whatsapp_mensagens r

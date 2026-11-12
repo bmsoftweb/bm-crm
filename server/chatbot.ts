@@ -1086,10 +1086,11 @@ async function paraFila(nova: MensagemNova, cfg: ConfigChatbot | null, motivo: s
  * O cliente respondeu a uma mensagem de técnico: a citada ou, sem citação, a última enviada a ele (sem contar o
  * aviso de inatividade e as linhas de evento/encerramento). Técnico = sem origem (não é bot, automática nem
  * campanha) e das últimas 48 h. Resposta ao bot, à campanha, a uma automática ou a técnico mais antigo segue o fluxo normal.
+ * Devolve o usuário que escreveu (null: mandada pelo celular, sem usuário) ou false se não é resposta a técnico.
  */
-async function respondeTecnico(nova: MensagemNova): Promise<boolean> {
+async function respondeTecnico(nova: MensagemNova): Promise<number | null | false> {
   const [r] = await pool.query<any[]>(
-    `SELECT m.id FROM whatsapp_mensagens m
+    `SELECT m.id, m.usuario_id FROM whatsapp_mensagens m
       WHERE m.id = COALESCE((SELECT n.resposta_de FROM whatsapp_mensagens n WHERE n.id = ?),
                             (SELECT MAX(z.id) FROM whatsapp_mensagens z
                               WHERE z.empresa_id = ? AND z.telefone = ? AND z.id < ? AND z.direcao = 'enviada'
@@ -1097,7 +1098,29 @@ async function respondeTecnico(nova: MensagemNova): Promise<boolean> {
         AND m.direcao = 'enviada' AND m.origem IS NULL AND m.disparo_id IS NULL AND m.data_hora > NOW() - INTERVAL 48 HOUR`,
     [nova.id, nova.empresaId, nova.telefone, nova.id],
   );
-  return r.length > 0;
+  return r.length ? (r[0].usuario_id ?? null) : false;
+}
+
+/**
+ * O cliente respondeu ao técnico: a conversa volta para ele (atendimento aberto e fixo com quem estava falando),
+ * com aviso. Técnico desconhecido (mensagem pelo celular) ou inativo: vai para a fila, como antes.
+ */
+async function voltarAoTecnico(nova: MensagemNova, cfg: ConfigChatbot | null, usuarioId: number | null): Promise<void> {
+  const [u] = usuarioId
+    ? await pool.query<any[]>('SELECT id, nome FROM usuarios WHERE id = ? AND empresa_id = ? AND ativo = 1', [usuarioId, nova.empresaId])
+    : [[]];
+  if (!u[0]) return paraFila(nova, cfg, 'Cliente respondeu a uma mensagem do técnico: foi para a fila');
+  if (await ehUsuario(nova.empresaId, nova.telefone)) return;
+  if ((await atendimentoAtual(nova.empresaId, nova.telefone, minutosDevolver(cfg))) !== 'bot') return;
+  await mudarAtendimento(nova.empresaId, nova.telefone, 'humano', u[0].id);
+  await marcarEvento(nova.empresaId, nova.telefone, `Cliente respondeu: voltou para ${u[0].nome}`, null);
+  const { notificar } = await import('./notificacoes.js');
+  await notificar(nova.empresaId, { usuarios: [u[0].id] }, {
+    tipo: 'transferencia',
+    titulo: 'Cliente respondeu no WhatsApp',
+    texto: `${nova.telefone} voltou para você`,
+    link: `conversas|${nova.telefone}`,
+  }).catch(() => {});
 }
 
 export async function responderComBot(nova: MensagemNova): Promise<void> {
@@ -1106,8 +1129,9 @@ export async function responderComBot(nova: MensagemNova): Promise<void> {
   const { responderAtividade } = await import('./atividadeBot.js');
   if (await responderAtividade(nova)) return;
   const cfg = await lerChatbot(nova.empresaId);
-  // Resposta a uma mensagem de técnico não passa pelo bot: vai direto para a fila
-  if (await respondeTecnico(nova)) return paraFila(nova, cfg, 'Cliente respondeu a uma mensagem do técnico: foi para a fila');
+  // Resposta a uma mensagem de técnico não passa pelo bot: volta para o técnico (ou para a fila, sem saber quem é)
+  const tecnico = await respondeTecnico(nova);
+  if (tecnico !== false) return voltarAoTecnico(nova, cfg, tecnico);
   // Quem atende é a Automação (Configurações › Automação) ligada para este número.
   // Import dinâmico: jornada.ts usa este módulo
   const { jornadaDoNumero, executarJornada } = await import('./jornada.js');

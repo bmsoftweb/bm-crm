@@ -919,18 +919,22 @@ async function instanciaEvolution(c: Credenciais): Promise<any> {
 
 /**
  * A conexão da instância responde de verdade: consulta um número no WhatsApp (só leitura). Com ela caída a Evolution
- * recusa com "Connection Closed" mesmo dizendo "open"; qualquer outra falha não conta como caída. Número aleatório:
- * os já consultados (o próprio, inclusive) ela responde do cache, sem usar a conexão
+ * recusa com "Connection Closed" mesmo dizendo "open"; qualquer outra falha não conta como caída. Número que não
+ * existe (ela só guarda em cache os que existem) e sempre o mesmo, para não parecer varredura de números. Só é
+ * "caída" se falhar 3 vezes seguidas: a conexão oscila por instantes e uma falha só não pode derrubar nada
  */
 async function conexaoViva(c: Credenciais): Promise<boolean> {
-  const aleatorio = `5547${Math.floor(1e8 + Math.random() * 9e8)}`;
-  const r = await fetch(`${c.url}/chat/whatsappNumbers/${encodeURIComponent(c.instancia)}`, {
-    method: 'POST',
-    headers: { apikey: c.token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ numbers: [aleatorio] }),
-    signal: AbortSignal.timeout(15_000),
-  }).catch(() => null);
-  return !(r && !r.ok && /Connection Closed/i.test(await r.text().catch(() => '')));
+  for (let i = 0; i < 3; i++) {
+    if (i) await esperar(2000);
+    const r = await fetch(`${c.url}/chat/whatsappNumbers/${encodeURIComponent(c.instancia)}`, {
+      method: 'POST',
+      headers: { apikey: c.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ numbers: ['5547999999999'] }),
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => null);
+    if (!(r && !r.ok && /Connection Closed/i.test(await r.text().catch(() => '')))) return true;
+  }
+  return false;
 }
 
 /**
@@ -970,18 +974,16 @@ export async function conectarWhatsApp(empresaId: string, conta: ContaWhats = 'p
   let r: any = await pedirQr();
   const dizConectado = () => r?.connected === true || (r?.instance?.state ?? r?.state) === 'open';
   // Sem QR porque o provedor diz que já está conectado: confirma pela situação confiável.
-  // Evolution 2.3.7 fica presa em "open" depois que o aparelho é removido; o logout destrava
+  // Evolution 2.3.7 fica presa em "open" sem conexão: reinicia a instância (a sessão guardada continua: se for
+  // válida, o número volta sozinho; se não, ela fecha e o QR vem). Nunca logout aqui: com a conexão só oscilando,
+  // ele derrubaria um número que estava funcionando
   if (dizConectado()) {
     if ((await conectadoNoProvedor(c)).conectado) return { conectado: true };
     if (c.provedor === 'evolution') {
-      await desconectarWhatsApp(empresaId, conta).catch(() => {});
+      await reiniciarInstancia(c).catch(() => {});
+      await esperar(5000);
       r = await pedirQr();
-      // Ainda "open" sem conexão (2.3.7 presa na memória): reinicia a instância e pede de novo
-      if (dizConectado()) {
-        await reiniciarInstancia(c).catch(() => {});
-        await esperar(3000);
-        r = await pedirQr();
-      }
+      if (dizConectado() && (await conectadoNoProvedor(c)).conectado) return { conectado: true };
     }
   }
   const qr: string | undefined = c.provedor === 'zapi' ? r?.value : r?.base64;
