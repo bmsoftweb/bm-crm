@@ -128,29 +128,37 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
   /** Inclusão rápida de negócio: título e etapa (1ª etapa do 1º funil, como padrão) */
   const [negocioRapido, setNegocioRapido] = useState<{ titulo: string; etapa_id: string } | null>(null);
   const [etapas, setEtapas] = useState<OpcaoRef[]>([]);
-  const abrirNegocioRapido = async () => {
-    const cliente = (opcoes.pessoas || []).find((o) => String(o.value) === String(cab.pessoa_id))?.label.replace(/ \(inativo\)$/, '');
+  /** Etapas de todos os funis (a 1ª é o padrão do negócio novo); lança se não houver nenhuma */
+  const carregarEtapas = async () => {
     let lista = etapas;
     if (!lista.length) {
-      try {
-        const funis = await fetchFunis();
-        lista = funis.flatMap((f) => f.etapas.map((e) => ({ value: String(e.id), label: `${f.nome} › ${e.nome}` })));
-        setEtapas(lista);
-      } catch (err: any) {
-        return setErro(err.message);
-      }
+      const funis = await fetchFunis();
+      lista = funis.flatMap((f) => f.etapas.map((e) => ({ value: String(e.id), label: `${f.nome} › ${e.nome}` })));
+      setEtapas(lista);
     }
-    if (!lista.length) return setErro('Cadastre um funil com etapas antes de incluir o negócio.');
-    setNegocioRapido({ titulo: [cliente, cab.titulo].filter(Boolean).join(' - ').slice(0, 255), etapa_id: String(lista[0].value) });
+    if (!lista.length) throw new Error('Cadastre um funil com etapas antes de incluir o negócio.');
+    return lista;
   };
-  const criarNegocioRapido = async () => {
-    if (!negocioRapido) return;
-    if (!negocioRapido.titulo.trim()) throw new Error('Informe o título do negócio.');
+  /** Título padrão do negócio novo: cliente + título da proposta */
+  const tituloNegocioPadrao = () => {
+    const cliente = (opcoes.pessoas || []).find((o) => String(o.value) === String(cab.pessoa_id))?.label.replace(/ \(inativo\)$/, '');
+    return [cliente, cab.titulo.trim()].filter(Boolean).join(' - ').slice(0, 255);
+  };
+  const abrirNegocioRapido = async () => {
+    try {
+      const lista = await carregarEtapas();
+      setNegocioRapido({ titulo: tituloNegocioPadrao(), etapa_id: String(lista[0].value) });
+    } catch (err: any) {
+      setErro(err.message);
+    }
+  };
+  /** Inclui o negócio aberto com o cliente da proposta, liga à tela e devolve o id */
+  const criarNegocio = async (titulo: string, etapa_id: string): Promise<string> => {
     const r = await createRecord('negocios', {
-      titulo: negocioRapido.titulo.trim(),
+      titulo,
       valor: tot.total || 0,
       moeda: 'BRL',
-      etapa_id: negocioRapido.etapa_id,
+      etapa_id,
       pessoa_id: cab.pessoa_id || null,
       status: 'aberto',
     });
@@ -158,6 +166,12 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
     const negocios = await fetchOptions('negocios', 'titulo');
     setOpcoes((o) => ({ ...o, negocios }));
     campo('negocio_id')(String(r.id));
+    return String(r.id);
+  };
+  const criarNegocioRapido = async () => {
+    if (!negocioRapido) return;
+    if (!negocioRapido.titulo.trim()) throw new Error('Informe o título do negócio.');
+    await criarNegocio(negocioRapido.titulo.trim(), negocioRapido.etapa_id);
     setNegocioRapido(null);
     onToast('Negócio incluído e ligado à proposta.');
   };
@@ -306,9 +320,17 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
 
   /** Grava e devolve o id; lança o erro para quem chamou */
   const gravar = async (): Promise<string> => {
+    // Proposta nova sem negócio: cria o negócio na hora (cliente + título, 1ª etapa do 1º funil)
+    let negocio = cab.negocio_id;
+    if (ehProposta && !id && !negocio) {
+      if (!cab.titulo.trim()) throw new Error('Informe o título da proposta.');
+      const lista = await carregarEtapas();
+      negocio = await criarNegocio(tituloNegocioPadrao(), String(lista[0].value));
+      onToast('Negócio incluído e ligado à proposta.');
+    }
     const payload = {
       titulo: cab.titulo,
-      negocio_id: cab.negocio_id || null,
+      negocio_id: negocio || null,
       pessoa_id: cab.pessoa_id || null,
       status: cab.status,
       validade_dias: cab.validade_dias,
@@ -478,13 +500,14 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
                 <div className="flex-1 min-w-0">
                 <SelectBusca
                   id="doc-negocio"
-                  required={ehProposta}
+                  // Proposta nova sem negócio: o salvar cria um (cliente + título)
+                  required={ehProposta && Boolean(id)}
                   // A proposta pertence ao negócio para sempre: versões e pedido dependem disso
                   disabled={ehProposta && Boolean(id || negocioId)}
                   value={cab.negocio_id}
                   options={opcoes.negocios || []}
                   onChange={campo('negocio_id')}
-                  vazioLabel={ehProposta ? '— Selecione —' : '— Sem negócio —'}
+                  vazioLabel={ehProposta ? (id ? '— Selecione —' : '— Criar ao salvar —') : '— Sem negócio —'}
                   className={`${INPUT_CLASS} w-full`}
                 />
                 </div>

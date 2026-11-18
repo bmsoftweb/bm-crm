@@ -28,21 +28,18 @@ html, body {
 }
 
 /* ==========================================
-   CAMPOS DE ENTRADA (padrão visual global)
+   CAMPOS DE ENTRADA (padrão visual global — mesmo do bm-estoque)
    ==========================================
-   Mesmo padrão do meuConsultorioWeb: campos de digitação não têm moldura, só uma
-   barra de 2px na borda esquerda indicando se o campo é obrigatório (amarelo) ou
-   opcional (verde). O sinal de "obrigatório" é o atributo HTML required do próprio
-   campo — um campo exigido apenas pela validação em JavaScript aparece como opcional
-   até receber o atributo.
-
-   Ficam de fora os controles que não são campos de digitação: caixas de seleção,
-   opções, seletor de cor, envio de arquivo, deslizante e botões. */
-:where(input, select, textarea):where(:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="hidden"])) {
-  border: 0 solid transparent !important;
+   Moldura de 1px com cantos arredondados; barra de 2px à esquerda: verde = opcional,
+   âmbar = obrigatório (atributo HTML required). Foco só escurece o fundo, sem anel.
+   .campo-botao = botão que faz papel de campo (ex.: abre um modal de escolha).
+   Ficam de fora caixas de seleção, opções, cor, arquivo, deslizante e botões. */
+:where(input, select, textarea):where(:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="hidden"])),
+:where(.campo-botao) {
+  border: 1px solid rgba(120, 113, 108, 0.35) !important;
   border-left-width: 2px !important;
   border-left-color: #10b981 !important; /* emerald-500 — campo opcional */
-  border-radius: 0 !important;
+  border-radius: 0.375rem !important;
 }
 
 :where(input, select, textarea):where(:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="hidden"])):where(:required) {
@@ -52,10 +49,10 @@ html, body {
 .dark input:where(:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="hidden"])),
 .dark select:where(:not([type="hidden"])),
 .dark textarea:where(:not([type="hidden"])) {
-  border: 0 solid transparent !important;
+  border: 1px solid rgba(120, 113, 108, 0.35) !important;
   border-left-width: 2px !important;
   border-left-color: #10b981 !important;
-  border-radius: 0 !important;
+  border-radius: 0.375rem !important;
 }
 
 .dark input:where(:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="hidden"])):where(:required),
@@ -64,13 +61,68 @@ html, body {
   border-left-color: #eab308 !important;
 }
 
-/* Campo em foco: nenhuma moldura/anel, só o fundo um pouco mais escuro. O escurecimento
-   usa uma camada translúcida por cima (background-image) para funcionar sobre qualquer
-   fundo que o campo já tenha. O box-shadow zerado remove os anéis "focus:ring-*". */
+/* Campo em foco: nenhuma moldura/anel, só o fundo um pouco mais escuro (camada translúcida
+   por cima, funciona sobre qualquer fundo). O box-shadow zerado remove os anéis "focus:ring-*". */
 :where(input, select, textarea):where(:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="hidden"])):focus {
   outline: none !important;
   box-shadow: none !important;
   background-image: linear-gradient(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.06)) !important;
+}
+
+/* Lista aberta do select com a mesma moldura arredondada (select customizável: Chrome/Edge 135+;
+   os outros navegadores ignoram e mostram a lista nativa) */
+@supports (appearance: base-select) {
+  select:not([multiple]),
+  select:not([multiple])::picker(select) {
+    appearance: base-select;
+  }
+  /* Texto e seta centralizados na altura, mesmo com classe "flex" no select (que zera o center padrão) */
+  select:not([multiple]) {
+    align-items: center;
+  }
+  select:not([multiple])::picker(select) {
+    border: 1px solid rgba(120, 113, 108, 0.35);
+    border-radius: 0.375rem;
+    margin-top: 2px;
+    padding: 4px 0;
+    background: #fff;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+  }
+  .dark select:not([multiple])::picker(select) {
+    background: #1c1917;
+  }
+  select:not([multiple]) option {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+  }
+  select:not([multiple]) option::checkmark {
+    display: none;
+  }
+  /* Seta do campo: chevron fino cinza no lugar do triângulo preto; gira quando a lista abre */
+  select:not([multiple])::picker-icon {
+    content: '';
+    width: 0.875rem;
+    height: 0.875rem;
+    background-color: #a8a29e; /* stone-400 */
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat center / contain;
+    transition: rotate 0.15s;
+  }
+  select:not([multiple]):open::picker-icon {
+    rotate: 180deg;
+  }
+  select:not([multiple]) option:hover,
+  select:not([multiple]) option:focus-visible {
+    background: #eff6ff;
+    outline: none;
+  }
+  select:not([multiple]) option:checked {
+    background: #2563eb;
+    color: #fff;
+  }
+  .dark select:not([multiple]) option:hover,
+  .dark select:not([multiple]) option:focus-visible {
+    background: rgba(23, 37, 84, 0.6);
+  }
 }
 
 /* Exceção: formulário do suporte pelo site (SuportePublico), em caixa arredondada com borda,

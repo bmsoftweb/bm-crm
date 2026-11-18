@@ -146,9 +146,11 @@ export const CamposPersonalizados: React.FC<Props> = ({ somenteLeitura, onToast 
             <fieldset
               key={i}
               disabled={somenteLeitura}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center px-3 py-2 m-0 border-0 border-t border-stone-100 dark:border-stone-800/60 first:border-t-0"
+              className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center px-3 py-2 ${c.nome ? 'lg:pb-6' : ''} m-0 border-0 border-t border-stone-100 dark:border-stone-800/60 first:border-t-0`}
             >
-              <div className="flex flex-col gap-1 lg:col-span-4">
+              {/* Na tela larga a anotação (nome) sai do fluxo, abaixo do campo: assim os controles da linha
+                  ficam alinhados pelo campo, não pelo bloco campo + anotação */}
+              <div className="relative flex flex-col gap-1 lg:col-span-4">
                 <label className={`${LABEL_CLASS} lg:hidden`}>Rótulo<span className="text-rose-500 ml-1">*</span></label>
                 <input
                   value={c.rotulo}
@@ -157,7 +159,7 @@ export const CamposPersonalizados: React.FC<Props> = ({ somenteLeitura, onToast 
                   placeholder="Ex.: Limite de crédito"
                   className={`${INPUT_CLASS} w-full`}
                 />
-                {c.nome && <span className={HINT_CLASS}>({c.nome})</span>}
+                {c.nome && <span className={`${HINT_CLASS} lg:absolute lg:left-0 lg:top-full lg:mt-1`}>({c.nome})</span>}
               </div>
 
               <div className="flex flex-col gap-1 lg:col-span-2">

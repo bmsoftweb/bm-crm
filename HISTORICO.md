@@ -2,6 +2,12 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.201 — 2026-11-18
+
+- Conversas: o player de áudio (e imagens, figurinhas, vídeos e documentos) volta a abrir. Como a Evolution não guarda mais as mensagens, o CRM guarda no Blob, cifrada, a mensagem de cada mídia que chega no aviso e entrega ela inteira à Evolution na hora de baixar. Mídias recebidas antes desta versão continuam sem abrir.
+- Propostas: proposta nova sem negócio cria o negócio na hora de gravar (cliente + título, 1ª etapa do 1º funil).
+- Campos: moldura de 1px com cantos arredondados e lista do select com a mesma moldura; nos campos personalizados, o nome interno fica abaixo do campo sem desalinhar a linha.
+
 ## 0.0.200 — 2026-11-12
 
 - WhatsApp: a conversa fica com o técnico. Os 10 min sem resposta (que mandam para "Aguardando") valem só para mensagem do bot; mensagem de técnico, inclusive pelo celular, não conta.
