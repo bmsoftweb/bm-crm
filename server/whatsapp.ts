@@ -1206,11 +1206,12 @@ export async function vigiarWhatsApp(): Promise<string[]> {
       } catch {
         return null;
       }
-      if (cfg?.provedor !== 'evolution') return null;
+      // Sem apikey o número não está em uso: não vigia, para não encher o sino
+      if (cfg?.provedor !== 'evolution' || !cfg.token_cifrado) return null;
       const conta = contaWhats(r.chave);
       const aviso = await vigiarInstancia(r.empresa_id, conta, cfg, Boolean(h.expediente)).catch((err) =>
         /HTTP 401/.test(err.message)
-          ? `a Evolution recusou a apikey: a instância não existe nesse servidor ou a apikey está errada. Confira em ${ONDE}.`
+          ? null // apikey recusada: a instância não existe nesse servidor (número fora de uso), não avisa
           : `não foi possível consultar a Evolution (${err.message.slice(0, 200)}).`,
       );
       if (!aviso) return null;

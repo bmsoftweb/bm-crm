@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.204 — 2026-11-19
+
+- WhatsApp: a vigia da Evolution não confere mais os números sem apikey cadastrada nem os que a Evolution recusa (instância que não existe no servidor), para não encher o sino com aviso de número fora de uso.
+
 ## 0.0.203 — 2026-11-18
 
 - WhatsApp: a vigia da Evolution só religa o webhook que sumiu ou foi desligado. Ligado a outro endereço (o mesmo número configurado em outra empresa ou em outro sistema), ela não mexe e avisa no sino, para dois sistemas não ficarem regravando o webhook um do outro.
