@@ -3,6 +3,7 @@ import { head, put } from '@vercel/blob';
 import { pool } from './db.js';
 import { lerConfig } from './config.js';
 import { cifrar, decifrar, textoConfig } from './segredo.js';
+import { notificar } from './notificacoes.js';
 
 /**
  * WhatsApp pela Z-API ou pela Evolution API.
@@ -902,6 +903,18 @@ export async function receberAvisoEvolution(token: string, corpo: any): Promise<
   return novas;
 }
 
+const EVENTOS_WEBHOOK = ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE'];
+const urlWebhook = (origem: string, token: string) => `${origem}/api/webhooks/evolution/${token}`;
+
+/** Cadastra (ou regrava) na Evolution o endereço do CRM que recebe os avisos da instância */
+async function cadastrarWebhook(c: Credenciais, url: string): Promise<void> {
+  await requisitar(`${c.url}/webhook/set/${encodeURIComponent(c.instancia)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: c.token },
+    body: JSON.stringify({ webhook: { enabled: true, url, byEvents: false, base64: false, events: EVENTOS_WEBHOOK } }),
+  });
+}
+
 /**
  * Liga o recebimento: cadastra na Evolution o endereço do CRM (origem = endereço público de
  * onde a tela foi aberta) para os avisos de mensagens novas e de entrega/leitura.
@@ -921,14 +934,7 @@ export async function ativarRecebimento(empresaId: string, origem: string, conta
   }
   const c = await credenciais(empresaId, conta);
   const token = cfg.webhook_token || crypto.randomBytes(24).toString('hex');
-  const url = `${base.origin}/api/webhooks/evolution/${token}`;
-  await requisitar(`${c.url}/webhook/set/${encodeURIComponent(c.instancia)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: c.token },
-    body: JSON.stringify({
-      webhook: { enabled: true, url, byEvents: false, base64: false, events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE'] },
-    }),
-  });
+  await cadastrarWebhook(c, urlWebhook(base.origin, token));
   const [agora] = await pool.query<any[]>("SELECT DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s') AS em");
   const webhook = { origem: base.origin, em: agora[0].em };
   await pool.query("UPDATE config SET valor = ? WHERE empresa_id = ? AND grupo = 'whatsapp' AND chave = ?", [
@@ -1170,4 +1176,106 @@ export function iniciarEnvioWhatsApp() {
   console.log('WhatsApp: envio automático das campanhas ligado (configuração por empresa, ou .env).');
   setInterval(ciclo, 60_000);
   ciclo();
+}
+
+/**
+ * Vigia da Evolution (a cada 10 min: cron /api/cron/whatsapp na Vercel, setInterval no server.ts). Para cada número
+ * Evolution configurado: confere se está conectado de verdade (o "open" da 2.3.7 mente), reinicia quando a conexão
+ * caiu, regrava o webhook quando ele sumiu (instância recriada no painel) e, no número padrão, desconfia do tráfego:
+ * enviadas sem nenhuma confirmação de entrega, ou expediente sem mensagem recebida. O que ela não resolve sozinha vira
+ * notificação para quem acessa Configurações (admins), no máximo uma igual a cada 6 h.
+ */
+export async function vigiarWhatsApp(): Promise<string[]> {
+  const [rows] = await pool.query<any[]>(
+    "SELECT empresa_id, chave, valor FROM config WHERE grupo = 'whatsapp' AND chave IN ('provedor', 'campanhas') AND empresa_id IS NOT NULL",
+  );
+  // Expediente (horário do banco = Brasília): seg a sex, das 10h às 18h (antes das 10h as 2 h para trás pegam a noite)
+  const [[h]] = await pool.query<any[]>('SELECT WEEKDAY(NOW()) < 5 AND HOUR(NOW()) BETWEEN 10 AND 17 AS expediente');
+  const avisos = await Promise.all(
+    rows.map(async (r) => {
+      let cfg: ConfigWhats | null = null;
+      try {
+        cfg = JSON.parse(r.valor);
+      } catch {
+        return null;
+      }
+      if (cfg?.provedor !== 'evolution') return null;
+      const conta = contaWhats(r.chave);
+      const aviso = await vigiarInstancia(r.empresa_id, conta, cfg, Boolean(h.expediente)).catch((err) =>
+        /HTTP 401/.test(err.message)
+          ? `a Evolution recusou a apikey: a instância não existe nesse servidor ou a apikey está errada. Confira em ${ONDE}.`
+          : `não foi possível consultar a Evolution (${err.message.slice(0, 200)}).`,
+      );
+      if (!aviso) return null;
+      await alertar(r.empresa_id, cfg.instancia, aviso);
+      return `${r.empresa_id}/${cfg.instancia}: ${aviso}`;
+    }),
+  );
+  return avisos.filter((a): a is string => Boolean(a));
+}
+
+const RECRIAR =
+  'Mande uma mensagem de teste para o número; se não aparecer no CRM, apague e crie de novo a instância no painel da Evolution (mesmo nome) e use Conectar WhatsApp.';
+
+/** O que há de errado com a instância (null = tudo certo); conexão caída e webhook sumido ela já tenta corrigir */
+async function vigiarInstancia(empresaId: number, conta: ContaWhats, cfg: ConfigWhats, expediente: boolean): Promise<string | null> {
+  const c = await credenciais(empresaId, conta);
+  const inst = await instanciaEvolution(c);
+  if ((inst.connectionStatus ?? inst.instance?.status) !== 'open') {
+    return `o número está desconectado do WhatsApp. Em ${ONDE}, use Conectar WhatsApp e leia o QR Code.`;
+  }
+  if (!(await conexaoViva(c))) {
+    await reiniciarInstancia(c).catch(() => {});
+    await esperar(10_000);
+    if (!(await conexaoViva(c))) return `a Evolution diz "conectado", mas a conexão caiu e o reinício automático não resolveu. Em ${ONDE}, use Conectar WhatsApp.`;
+  }
+  // Recebimento ativado: o webhook tem de estar lá, com o endereço e os eventos do CRM
+  if (!cfg.webhook_token || !cfg.webhook?.origem) return null;
+  const url = urlWebhook(cfg.webhook.origem, cfg.webhook_token);
+  const w: any = await (await requisitar(`${c.url}/webhook/find/${encodeURIComponent(c.instancia)}`, { headers: { apikey: c.token } })).json().catch(() => null);
+  if (!w?.enabled || w.url !== url || !EVENTOS_WEBHOOK.every((e) => w.events?.includes(e))) {
+    await cadastrarWebhook(c, url);
+    return 'o recebimento de mensagens estava desligado na Evolution e foi religado automaticamente. Mensagens que chegaram nesse intervalo não entraram no CRM.';
+  }
+  // ponytail: o tráfego é da empresa inteira (a tabela não guarda a conta), por isso só no número padrão
+  if (conta !== 'provedor') return null;
+  const [[t]] = await pool.query<any[]>(
+    `SELECT COUNT(IF(direcao = 'enviada' AND wa_id IS NOT NULL AND criado_em BETWEEN NOW() - INTERVAL 3 HOUR AND NOW() - INTERVAL 15 MINUTE, 1, NULL)) AS enviadas,
+            COUNT(DISTINCT IF(direcao = 'enviada' AND wa_id IS NOT NULL AND criado_em BETWEEN NOW() - INTERVAL 3 HOUR AND NOW() - INTERVAL 15 MINUTE, telefone, NULL)) AS destinos,
+            COUNT(IF(direcao = 'enviada' AND wa_id IS NOT NULL AND situacao IN ('entregue', 'lida') AND criado_em BETWEEN NOW() - INTERVAL 3 HOUR AND NOW() - INTERVAL 15 MINUTE, 1, NULL)) AS confirmadas,
+            COUNT(IF(direcao = 'recebida' AND criado_em >= NOW() - INTERVAL 2 HOUR, 1, NULL)) AS recebidas_2h,
+            COUNT(IF(direcao = 'recebida', 1, NULL)) AS recebidas_7d
+       FROM whatsapp_mensagens WHERE empresa_id = ? AND criado_em >= NOW() - INTERVAL 7 DAY`,
+    [empresaId],
+  );
+  return suspeitaDeRecebimento(t, expediente);
+}
+
+/**
+ * Sinais de que a instância envia mas não recebe (a sessão corrompida da 2.3.7 fica assim: "open", envia, e nenhum
+ * aviso chega). Confirmação de entrega vem pelo mesmo webhook das mensagens novas: 3+ enviadas para 2+ números sem
+ * nenhuma confirmada é o sinal forte. Expediente sem nada recebido só conta em empresa que recebe ~2 por hora.
+ */
+export function suspeitaDeRecebimento(
+  t: { enviadas: number; destinos: number; confirmadas: number; recebidas_2h: number; recebidas_7d: number },
+  expediente: boolean,
+): string | null {
+  if (Number(t.enviadas) >= 3 && Number(t.destinos) >= 2 && Number(t.confirmadas) === 0) {
+    return `as últimas mensagens enviadas não receberam confirmação de entrega: o número pode ter parado de receber mensagens. ${RECRIAR}`;
+  }
+  // ponytail: lim. fixo de 100 recebidas/semana; um almoço longo numa empresa movimentada pode dar alarme falso
+  if (expediente && Number(t.recebidas_2h) === 0 && Number(t.recebidas_7d) >= 100) {
+    return `nenhuma mensagem recebida nas últimas 2 horas de expediente: o número pode ter parado de receber mensagens. ${RECRIAR}`;
+  }
+  return null;
+}
+
+/** Notificação para quem acessa Configurações; o mesmo aviso só se repete depois de 6 h */
+async function alertar(empresaId: number, instancia: string, texto: string): Promise<void> {
+  const [ja] = await pool.query<any[]>(
+    "SELECT 1 FROM notificacoes WHERE empresa_id = ? AND tipo = 'whatsapp' AND texto = ? AND criada_em >= NOW() - INTERVAL 6 HOUR LIMIT 1",
+    [empresaId, texto.slice(0, 500)],
+  );
+  if (ja.length) return;
+  await notificar(empresaId, { tela: 'configuracoes' }, { tipo: 'whatsapp', titulo: `WhatsApp: verificar o número "${instancia}"`, texto, link: 'configuracoes' });
 }

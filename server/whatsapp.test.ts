@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { chaveTelefone, conteudoMensagem, escolherDono, telefoneWhatsApp, imagemDaCampanha } from './whatsapp.js';
+import { chaveTelefone, conteudoMensagem, escolherDono, telefoneWhatsApp, imagemDaCampanha, suspeitaDeRecebimento } from './whatsapp.js';
 
 assert.strictEqual(telefoneWhatsApp('(41) 99901-2223'), '5541999012223');
 assert.strictEqual(telefoneWhatsApp('(41)35238200'), '554135238200');
@@ -64,3 +64,12 @@ console.log('whatsapp: ok');
   for (const ok of ['47999998888', '5547999998888', '47912345678']) assert.strictEqual(erroCelular(ok), null, ok);
   for (const ruim of ['4733334444', '479999988', '00999999999', '20987654321', '11999999999', '47900000000']) assert.ok(erroCelular(ruim), ruim);
 }
+
+// Vigia: envia mas não recebe
+const ok = { enviadas: 5, destinos: 3, confirmadas: 2, recebidas_2h: 4, recebidas_7d: 300 };
+assert.strictEqual(suspeitaDeRecebimento(ok, true), null);
+assert.match(suspeitaDeRecebimento({ ...ok, confirmadas: 0 }, false) ?? '', /confirmação de entrega/);
+assert.strictEqual(suspeitaDeRecebimento({ ...ok, confirmadas: 0, destinos: 1 }, true), null); // um cliente só, com o celular desligado
+assert.match(suspeitaDeRecebimento({ ...ok, recebidas_2h: 0 }, true) ?? '', /2 horas de expediente/);
+assert.strictEqual(suspeitaDeRecebimento({ ...ok, recebidas_2h: 0 }, false), null); // fora do expediente
+assert.strictEqual(suspeitaDeRecebimento({ ...ok, recebidas_2h: 0, recebidas_7d: 40 }, true), null); // empresa de pouco movimento

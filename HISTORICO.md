@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.202 — 2026-11-18
+
+- WhatsApp: vigia da Evolution a cada 10 min. Para cada número Evolution confere se está conectado de verdade (reinicia sozinha quando a conexão caiu), se o webhook do recebimento está cadastrado (recadastra sozinha quando sumiu, ex.: instância recriada no painel) e, no número padrão, se ele parou de receber: enviadas sem nenhuma confirmação de entrega, ou expediente (seg a sex, 10h às 18h) sem mensagem recebida em empresa movimentada. O que não se resolve sozinho vira notificação no sino para os administradores (mesmo aviso no máximo a cada 6 h), com o passo a passo.
+
 ## 0.0.201 — 2026-11-18
 
 - Conversas: o player de áudio (e imagens, figurinhas, vídeos e documentos) volta a abrir. Como a Evolution não guarda mais as mensagens, o CRM guarda no Blob, cifrada, a mensagem de cada mídia que chega no aviso e entrega ela inteira à Evolution na hora de baixar. Mídias recebidas antes desta versão continuam sem abrir.

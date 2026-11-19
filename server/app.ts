@@ -16,7 +16,7 @@ import { createCampanhasRouter } from './campanhas.js';
 import { createConversasRouter } from './conversas.js';
 import { createJornadaRouter, retomarJornadas } from './jornada.js';
 import { createContratosRouter, createWebhookD4SignRouter, rotinaContratos } from './contratos.js';
-import { enviarPendentes, receberAvisoEvolution } from './whatsapp.js';
+import { enviarPendentes, receberAvisoEvolution, vigiarWhatsApp } from './whatsapp.js';
 import { enviarAutomaticas } from './automaticas.js';
 import { responderComBot } from './chatbot.js';
 import { verificarInatividade } from './inatividade.js';
@@ -230,13 +230,15 @@ export function createApp() {
       // e cada minuto da função conta no consumo da Vercel
       const decimo = new Date().getMinutes() % 10 === 0;
       // Bot das atividades também em paralelo: cada contato espera a IA
-      const [inatividade, atividadesBot, respostasPesquisa, agendaGoogle, resto] = await Promise.all([
+      const [inatividade, atividadesBot, respostasPesquisa, agendaGoogle, vigiaWhatsApp, resto] = await Promise.all([
         verificarInatividade(),
         rodarBotAtividades(45_000),
         // Respostas da pesquisa de satisfação por e-mail (IMAP), também em paralelo
         decimo ? lerRespostasPesquisa().catch((e) => `falhou: ${e.message}`) : 'a cada 10 min',
         // Google Agenda da empresa, nos dois sentidos (server/agendaGoogle.ts)
         decimo ? sincronizarAgendas(25_000).catch((e) => `falhou: ${e.message}`) : 'a cada 10 min',
+        // Vigia da Evolution: conexão, webhook e tráfego de cada número (server/whatsapp.ts)
+        decimo ? vigiarWhatsApp().catch((e) => `falhou: ${e.message}`) : 'a cada 10 min',
         (async () => ({
           campanhas: await enviarPendentes(50, 25_000),
           emails: await enviarEmailsCampanha(50, 20_000),
@@ -244,7 +246,7 @@ export function createApp() {
           jornadas: await retomarJornadas(20_000),
         }))(),
       ]);
-      return { ...resto, inatividade, atividadesBot, respostasPesquisa, agendaGoogle };
+      return { ...resto, inatividade, atividadesBot, respostasPesquisa, agendaGoogle, vigiaWhatsApp };
     }),
   );
   // De hora em hora: a rotina dos contratos; 2x por dia (0h e 12h do servidor), as gravações de ligação com mais de 30 dias

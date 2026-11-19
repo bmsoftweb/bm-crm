@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, CheckCheck, Circle, Globe, Headset, ArrowRightLeft, ClipboardList, Star } from 'lucide-react';
+import { Bell, CheckCheck, Circle, Globe, Headset, ArrowRightLeft, ClipboardList, Star, MessageCircleWarning } from 'lucide-react';
 import { fetchNotificacoes, marcarNotificacaoLida, marcarTodasLidas, Notificacao } from '../services/api';
 import { formatDateTimeBR } from '../utils/formatters';
 import { repetirConsulta } from '../utils/intervalo';
@@ -10,6 +10,7 @@ const ICONES: Record<string, React.ElementType> = {
   transferencia: ArrowRightLeft,
   tarefa: ClipboardList,
   avaliacao: Star,
+  whatsapp: MessageCircleWarning,
 };
 
 interface Props {

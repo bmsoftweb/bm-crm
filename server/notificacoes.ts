@@ -7,14 +7,15 @@ import { lerConfig } from './config.js';
  * Notificações dos usuários (tabela notificacoes): a campainha do cabeçalho mostra as do usuário logado, com lida/não
  * lida. Quem gera: visita no site (server/suporte.ts), chamado novo na fila (suporte.ts e chamados.ts), chamado ou
  * conversa do WhatsApp transferido para o usuário (chamados.ts e conversas.ts), tarefa criada pelas automações para ele
- * (pendencias.ts, jornada.ts, chatbot.ts, crud.ts/os.ts) e avaliação com nota baixa (pesquisa.ts).
+ * (pendencias.ts, jornada.ts, chatbot.ts, crud.ts/os.ts), avaliação com nota baixa (pesquisa.ts) e problema no número
+ * do WhatsApp (vigia da Evolution, whatsapp.ts).
  *
  * link: a tela que abre ao clicar (o id do menu: chamados_ativos, atividades...), com o que ela precisa depois de "|"
  * quando não é um id (ex.: "conversas|5547999998888"); registro_id: o chamado, a atividade, a OS...
  */
 
 export interface Notificacao {
-  tipo: 'visita_site' | 'chamado' | 'transferencia' | 'tarefa' | 'avaliacao';
+  tipo: 'visita_site' | 'chamado' | 'transferencia' | 'tarefa' | 'avaliacao' | 'whatsapp';
   titulo: string;
   texto?: string | null;
   link?: string | null;
