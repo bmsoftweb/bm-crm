@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.205 — 2026-11-19
+
+- Dicas (tooltips) no padrão BMsoft em todo o app: caixa escura com seta no lugar da dica nativa do navegador.
+- Clonar proposta cria a cópia sem negócio e leva o cliente (o do negócio, quando a proposta não tinha cliente).
+
 ## 0.0.204 — 2026-11-19
 
 - WhatsApp: a vigia da Evolution não confere mais os números sem apikey cadastrada nem os que a Evolution recusa (instância que não existe no servidor), para não encher o sino com aviso de número fora de uso.

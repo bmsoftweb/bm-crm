@@ -9,6 +9,7 @@ import './index.css';
 // App do técnico (PWA das Ordens de Serviço): carregado à parte, o CRM não baixa o Dexie
 const AppTecnico = lazy(() => import('./tecnico/AppTecnico'));
 import { instalarSelecaoAoFocar } from './utils/selecaoAoFocar';
+import { Dica } from './components/Dica';
 
 instalarSelecaoAoFocar();
 
@@ -44,5 +45,6 @@ createRoot(document.getElementById('root')!).render(
     ) : (
       <App />
     )}
+    <Dica />
   </StrictMode>,
 );

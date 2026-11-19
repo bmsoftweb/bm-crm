@@ -617,20 +617,24 @@ ${link}` : mensagem;
     res.json({ success: true, id: novoId });
   }));
 
-  /** Clonar: cópia da proposta como proposta nova (número próprio, v1, rascunho), no mesmo negócio */
+  /**
+   * Clonar: cópia da proposta como proposta nova (número próprio, v1, rascunho), sem negócio (o editar não
+   * troca o negócio de uma proposta que já tem um); o cliente vai junto, o do negócio se a proposta não tinha
+   */
   router.post('/crm/propostas/:id/clonar', rota(async (req, res) => {
     const emp = empresaDa(res);
     const origem = await lerDocumento('proposta', req.params.id, emp);
+    const pessoaId = origem.pessoa_id ?? (await vinculosDoNegocio(origem.negocio_id, emp).catch(() => ({ pessoa_id: null }))).pessoa_id;
     const novo = await transacao(async (conn) => {
       const numero = await proximoNumero(conn, 'propostas', 'numero_proposta', emp);
       const controle = controleDaVersao(await controleNovo(conn, emp), 1);
       const [nova] = await conn.query(
         `INSERT INTO propostas (controle, versao, numero_proposta, negocio_id, pessoa_id, empresa_id, titulo, status, valor_subtotal, valor_desconto,
                                 valor_total, validade_dias, data_validade, condicoes_pagamento, observacoes, impressao_resumida)
-         SELECT ?, 1, ?, negocio_id, pessoa_id, empresa_id, LEFT(CONCAT(titulo, ' (cópia)'), 255), 'rascunho', valor_subtotal, valor_desconto,
+         SELECT ?, 1, ?, NULL, ?, empresa_id, LEFT(CONCAT(titulo, ' (cópia)'), 255), 'rascunho', valor_subtotal, valor_desconto,
                 valor_total, validade_dias, DATE_ADD(CURDATE(), INTERVAL COALESCE(validade_dias, 0) DAY), condicoes_pagamento, observacoes, impressao_resumida
            FROM propostas WHERE id = ? AND empresa_id = ?`,
-        [controle, numero, origem.id, emp],
+        [controle, numero, pessoaId, origem.id, emp],
       );
       const id = Number(nova.insertId);
       await conn.query(
@@ -645,7 +649,7 @@ ${link}` : mensagem;
         [id, origem.id],
       );
       await registrarHistorico(conn, emp, {
-        negocio_id: origem.negocio_id, proposta_id: id, pessoa_id: origem.pessoa_id,
+        negocio_id: origem.negocio_id, proposta_id: id, pessoa_id: pessoaId,
         descricao: `Proposta ${refProposta(origem)} clonada como proposta ${refProposta({ controle, numero_proposta: numero, versao: 1 })}.`,
       });
       return { id, numero };
