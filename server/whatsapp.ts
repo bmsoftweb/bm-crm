@@ -905,6 +905,13 @@ export async function receberAvisoEvolution(token: string, corpo: any): Promise<
 
 const EVENTOS_WEBHOOK = ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE'];
 const urlWebhook = (origem: string, token: string) => `${origem}/api/webhooks/evolution/${token}`;
+const hostDe = (url: unknown) => {
+  try {
+    return new URL(String(url)).host;
+  } catch {
+    return '';
+  }
+};
 
 /** Cadastra (ou regrava) na Evolution o endereço do CRM que recebe os avisos da instância */
 async function cadastrarWebhook(c: Credenciais, url: string): Promise<void> {
@@ -1234,6 +1241,11 @@ async function vigiarInstancia(empresaId: number, conta: ContaWhats, cfg: Config
   const url = urlWebhook(cfg.webhook.origem, cfg.webhook_token);
   const w: any = await (await requisitar(`${c.url}/webhook/find/${encodeURIComponent(c.instancia)}`, { headers: { apikey: c.token } })).json().catch(() => null);
   if (!w?.enabled || w.url !== url || !EVENTOS_WEBHOOK.every((e) => w.events?.includes(e))) {
+    // Ligado a outro endereço (o mesmo número configurado em outra empresa ou em outro sistema): não toma para si,
+    // só avisa, senão os dois ficam regravando o webhook um do outro a cada 10 min. Só religa o que sumiu ou desligou
+    if (w?.enabled && w.url && w.url !== url) {
+      return `o recebimento desta instância está ligado a outra empresa ou outro sistema (${hostDe(w.url)}): o mesmo número está configurado em dois lugares. Confira em ${ONDE}.`;
+    }
     await cadastrarWebhook(c, url);
     return 'o recebimento de mensagens estava desligado na Evolution e foi religado automaticamente. Mensagens que chegaram nesse intervalo não entraram no CRM.';
   }
