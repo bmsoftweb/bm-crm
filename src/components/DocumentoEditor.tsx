@@ -502,8 +502,8 @@ export const DocumentoEditor: React.FC<DocumentoEditorProps> = ({
                   id="doc-negocio"
                   // Proposta nova sem negócio: o salvar cria um (cliente + título)
                   required={ehProposta && Boolean(id)}
-                  // A proposta pertence ao negócio para sempre: versões e pedido dependem disso
-                  disabled={ehProposta && Boolean(id || negocioId)}
+                  // Versões, pedido e contrato prendem a proposta ao negócio: só troca com uma versão só (ex.: cópia do Clonar)
+                  disabled={ehProposta && (id ? !doc?.troca_negocio : Boolean(negocioId))}
                   value={cab.negocio_id}
                   options={opcoes.negocios || []}
                   onChange={campo('negocio_id')}

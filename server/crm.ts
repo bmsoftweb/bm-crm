@@ -144,7 +144,18 @@ export async function lerDocumento(tipo: TipoDoc, id: string, empresaId: string)
        FROM ${tipo === 'proposta' ? 'proposta_parcelas' : 'pedido_parcelas'} WHERE ${d.fk} = ? ORDER BY numero`,
     [id],
   );
-  return { ...cab[0], itens, parcelas };
+  const extra = tipo === 'proposta' ? { troca_negocio: await trocaNegocio(cab[0], empresaId) } : {};
+  return { ...cab[0], itens, parcelas, ...extra };
+}
+
+/**
+ * O negócio da proposta só muda enquanto ela é a única versão do número e não foi aceita/fechada:
+ * versões, pedido e contrato ficam presos ao negócio (ex.: a cópia do Clonar, que nasce no negócio da original)
+ */
+async function trocaNegocio(p: { numero_proposta: number; status: string }, empresaId: string): Promise<boolean> {
+  if (['aceita', 'fechada'].includes(p.status)) return false;
+  const [r] = await pool.query<any[]>('SELECT COUNT(*) n FROM propostas WHERE numero_proposta = ? AND empresa_id = ?', [p.numero_proposta, empresaId]);
+  return Number(r[0].n) === 1;
 }
 
 async function gravarItens(conn: any, tipo: TipoDoc, id: Id, linhas: ReturnType<typeof calcularTotais>['linhas']) {
@@ -508,12 +519,19 @@ ${link}` : mensagem;
     const parcelas = conferirParcelas(b.parcelas, tot.total);
 
     let negocioId: string;
+    let negocioAntigo: string | null = null;
     if (idExistente) {
-      const [atual] = await pool.query<any[]>('SELECT negocio_id, status FROM propostas WHERE id = ? AND empresa_id = ?', [idExistente, emp]);
+      const [atual] = await pool.query<any[]>('SELECT negocio_id, status, numero_proposta FROM propostas WHERE id = ? AND empresa_id = ?', [idExistente, emp]);
       if (!atual.length) throw erro(404, 'Proposta não encontrada.');
       if (atual[0].status === 'aceita') throw new Error('Proposta aceita não pode mais ser alterada. Para uma nova negociação, use Clonar.');
       if (atual[0].status === 'fechada') throw new Error('Proposta fechada: outra versão desta proposta foi aceita. Ela não pode mais ser alterada.');
-      negocioId = atual[0].negocio_id;
+      negocioId = String(atual[0].negocio_id);
+      const pedido = String(b.negocio_id || '');
+      if (pedido && pedido !== negocioId) {
+        if (!(await trocaNegocio(atual[0], emp))) throw new Error('O negócio só pode ser trocado enquanto a proposta tem uma versão só.');
+        negocioAntigo = negocioId;
+        negocioId = pedido;
+      }
     } else {
       negocioId = String(b.negocio_id || '');
       if (!negocioId) throw new Error('Escolha o negócio da proposta.');
@@ -537,10 +555,15 @@ ${link}` : mensagem;
         await conn.query(
           `UPDATE propostas SET titulo = ?, pessoa_id = ?, empresa_id = ?, status = ?, valor_subtotal = ?, valor_desconto = ?,
                   valor_total = ?, validade_dias = ?, condicoes_pagamento = ?, observacoes = ?,
-                  data_validade = DATE_ADD(DATE(criado_em), INTERVAL ? DAY), controle = ?, impressao_resumida = ?
+                  data_validade = DATE_ADD(DATE(criado_em), INTERVAL ? DAY), controle = ?, impressao_resumida = ?, negocio_id = ?
             WHERE id = ? AND empresa_id = ?`,
-          [...cab, validadeDias, controle, resumida, propostaId, emp],
+          [...cab, validadeDias, controle, resumida, negocioId, propostaId, emp],
         );
+        if (negocioAntigo) {
+          await conn.query('UPDATE historico_interacoes SET negocio_id = ? WHERE proposta_id = ? AND empresa_id = ?', [negocioId, propostaId, emp]);
+          await sincronizarNegocio(negocioAntigo, conn);
+          await sincronizarNegocio(negocioId, conn);
+        }
       } else {
         // Proposta nova = número novo, começando na versão 1 (as versões são por número)
         const v = 1;
@@ -618,23 +641,22 @@ ${link}` : mensagem;
   }));
 
   /**
-   * Clonar: cópia da proposta como proposta nova (número próprio, v1, rascunho), sem negócio (o editar não
-   * troca o negócio de uma proposta que já tem um); o cliente vai junto, o do negócio se a proposta não tinha
+   * Clonar: cópia da proposta como proposta nova (número próprio, v1, rascunho), no mesmo negócio; o editar
+   * deixa trocar o negócio enquanto ela for a única versão do número (ver trocaNegocio)
    */
   router.post('/crm/propostas/:id/clonar', rota(async (req, res) => {
     const emp = empresaDa(res);
     const origem = await lerDocumento('proposta', req.params.id, emp);
-    const pessoaId = origem.pessoa_id ?? (await vinculosDoNegocio(origem.negocio_id, emp).catch(() => ({ pessoa_id: null }))).pessoa_id;
     const novo = await transacao(async (conn) => {
       const numero = await proximoNumero(conn, 'propostas', 'numero_proposta', emp);
       const controle = controleDaVersao(await controleNovo(conn, emp), 1);
       const [nova] = await conn.query(
         `INSERT INTO propostas (controle, versao, numero_proposta, negocio_id, pessoa_id, empresa_id, titulo, status, valor_subtotal, valor_desconto,
                                 valor_total, validade_dias, data_validade, condicoes_pagamento, observacoes, impressao_resumida)
-         SELECT ?, 1, ?, NULL, ?, empresa_id, LEFT(CONCAT(titulo, ' (cópia)'), 255), 'rascunho', valor_subtotal, valor_desconto,
+         SELECT ?, 1, ?, negocio_id, pessoa_id, empresa_id, LEFT(CONCAT(titulo, ' (cópia)'), 255), 'rascunho', valor_subtotal, valor_desconto,
                 valor_total, validade_dias, DATE_ADD(CURDATE(), INTERVAL COALESCE(validade_dias, 0) DAY), condicoes_pagamento, observacoes, impressao_resumida
            FROM propostas WHERE id = ? AND empresa_id = ?`,
-        [controle, numero, pessoaId, origem.id, emp],
+        [controle, numero, origem.id, emp],
       );
       const id = Number(nova.insertId);
       await conn.query(
@@ -649,7 +671,7 @@ ${link}` : mensagem;
         [id, origem.id],
       );
       await registrarHistorico(conn, emp, {
-        negocio_id: origem.negocio_id, proposta_id: id, pessoa_id: pessoaId,
+        negocio_id: origem.negocio_id, proposta_id: id, pessoa_id: origem.pessoa_id,
         descricao: `Proposta ${refProposta(origem)} clonada como proposta ${refProposta({ controle, numero_proposta: numero, versao: 1 })}.`,
       });
       return { id, numero };
