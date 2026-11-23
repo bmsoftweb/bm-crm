@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.208 — 2026-11-23
+
+- WhatsApp: o círculo da conversa agora abre a lista de clientes para trocar o cliente do número. O número sai do cadastro errado e vai para o escolhido (no WhatsApp dele, ou como contato se ele já tiver outro WhatsApp), e a conversa vai junto.
+
 ## 0.0.207 — 2026-11-23
 
 - WhatsApp: clicar no círculo com a inicial da conversa abre o cadastro ligado ao número (pessoa, contato ou lead) para corrigir cliente ligado errado; ao salvar, a conversa é religada pelo número (sem dono, fica "não cadastrado").
