@@ -288,6 +288,29 @@ export function createConversasRouter(): Router {
    * A conversa sai da fila como encerrada, sem pesquisa de satisfação e sem contar como atendimento; uma mensagem
    * nova do cliente volta a abrir um atendimento.
    */
+  /**
+   * Procura de novo o dono do número (depois de corrigir o cadastro ligado errado, ex.: o número estava no
+   * telefone de outro cliente) e passa todas as mensagens da conversa para ele; sem dono, ficam "não cadastrado"
+   */
+  router.post('/whatsapp/conversas/:telefone/religar', async (req: Request, res: Response) => {
+    try {
+      const telefone = req.params.telefone;
+      if (!TELEFONE.test(telefone)) return res.status(400).json({ error: 'Telefone inválido.' });
+      const emp = res.locals.empresaId;
+      const dono = await donoDoTelefone(emp, telefone);
+      await pool.query('UPDATE whatsapp_mensagens SET pessoa_id = ?, contato_id = ?, lead_id = ? WHERE empresa_id = ? AND telefone = ?', [
+        dono.pessoa_id,
+        dono.contato_id,
+        dono.pessoa_id ? null : (dono.lead_id ?? null),
+        emp,
+        telefone,
+      ]);
+      res.json({ success: true, pessoa_id: dono.pessoa_id, lead_id: dono.lead_id ?? null });
+    } catch (err: any) {
+      falha(res, err);
+    }
+  });
+
   router.post('/whatsapp/conversas/:telefone/descartar', async (req: Request, res: Response) => {
     try {
       const telefone = req.params.telefone;

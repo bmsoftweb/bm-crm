@@ -673,6 +673,8 @@ export const gerarMinutaContrato = (contratoId: Id, modeloId?: Id): Promise<{ id
 export interface ConversaResumo {
   telefone: string;
   pessoa_id: number | null;
+  /** Lead dono do número (quando não há pessoa) */
+  lead_id?: number | null;
   nome: string | null;
   /** Contato da pessoa dono do número (pessoas_contatos), com departamento ou cargo */
   contato_id: number | null;
@@ -824,6 +826,9 @@ export const fetchNaoVistas = (): Promise<{
 export const encerrarConversa = (telefone: string): Promise<{ success: boolean }> =>
   enviar('POST', `/api/whatsapp/conversas/${encodeURIComponent(telefone)}/encerrar`);
 /** Tira de Aguardando a mensagem que não pedia atendimento (sem pesquisa, não conta como atendimento) */
+/** Procura de novo o dono do número depois de corrigir o cadastro (server/conversas.ts) */
+export const religarConversa = (telefone: string): Promise<{ success: boolean; pessoa_id: number | null; lead_id: number | null }> =>
+  enviar('POST', `/api/whatsapp/conversas/${encodeURIComponent(telefone)}/religar`);
 export const descartarConversa = (telefone: string): Promise<{ success: boolean }> =>
   enviar('POST', `/api/whatsapp/conversas/${encodeURIComponent(telefone)}/descartar`);
 /** Template de mensagem (Cadastros › Templates) */
