@@ -22,8 +22,23 @@ assert.throws(() => normalizarCriterios([]), /ao menos um/);
   assert.throws(() => normalizarCriterios([{ regra: 'cod_integracao', operador: '>', valor: 'x' }]), /igual a, diferente de/);
 }
 const { where, params } = sqlCriterios(normalizarCriterios([{ regra: 'tipo', operador: '=', valor: "x' OR '1'='1" }]), 7);
-assert.strictEqual(where, 'p.empresa_id = ? AND p.tipo = ?');
+assert.strictEqual(where, 'p.empresa_id = ? AND (p.tipo = ?)');
 assert.deepStrictEqual(params, [7, "x' OR '1'='1"]);
+
+// E/OU entre os critérios (o E vale antes do OU); o "Público" não entra no SQL; regra só de pessoa é falsa no lead
+{
+  const crit = normalizarCriterios([
+    { regra: 'publico', operador: '=', valor: 'ambos' },
+    { regra: 'tem_email', operador: '=', valor: 1 },
+    { regra: 'qtd_pedidos', operador: '>', valor: 0, ligacao: 'e' },
+    { regra: 'tem_celular', operador: '=', valor: 1, ligacao: 'ou' },
+  ]);
+  const p = sqlCriterios(crit, 7).where;
+  assert.match(p, /^p\.empresa_id = \? AND \(\(p\.email .+\) = \? AND \(SELECT COUNT.+\) > \? OR \(REGEXP_REPLACE.+\) = \?\)$/);
+  const l = sqlCriterios(crit, 7, true);
+  assert.ok(l.where.includes(' AND 0 = 1 OR '));
+  assert.deepStrictEqual(l.params, [7, 1, 1]);
+}
 
 // Variáveis
 assert.deepStrictEqual(variaveisDoTexto('Olá {{nome}}', 'desde {{ ultima_compra }} {{nome}}'), ['nome', 'ultima_compra']);

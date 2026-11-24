@@ -149,6 +149,8 @@ export interface Criterio {
   regra: string;
   operador: Operador;
   valor: string | number;
+  /** Como liga com o critério anterior: "e" (o padrão) ou "ou"; o E vale antes do OU */
+  ligacao?: 'e' | 'ou';
 }
 
 /**
@@ -193,7 +195,7 @@ export function normalizarCriterios(bruto: unknown): Criterio[] {
     if (regra.valor === 'texto' && !OPERADORES_TEXTO.includes(operador)) {
       throw new Error(`Critério ${i + 1} (${regra.rotulo}): use igual a, diferente de, que contém ou começa com.`);
     }
-    return { regra: String(c.regra), operador, valor };
+    return { regra: String(c.regra), operador, valor, ...(c?.ligacao === 'ou' ? { ligacao: 'ou' as const } : {}) };
   });
 }
 
@@ -236,25 +238,29 @@ export async function fontesPublico(bruto: unknown, empresaId: string | number):
  * convertidos. Regra que só existe na pessoa (pedidos, negócios, tipo...) deixa os leads todos de fora.
  */
 export function sqlCriterios(criterios: Criterio[], empresaId: string | number, lead = false): { where: string; params: any[] } {
-  const partes = [lead ? 'p.empresa_id = ? AND p.convertido_em IS NULL' : 'p.empresa_id = ?'];
+  const base = lead ? 'p.empresa_id = ? AND p.convertido_em IS NULL' : 'p.empresa_id = ?';
   const params: any[] = [empresaId];
+  // Condições ligadas por E/OU; no SQL o AND já vale antes do OR, como na tela
+  let condicoes = '';
   for (const c of criterios) {
     const regra = regraDe(c.regra)!;
     if (regra.valor === 'publico') continue;
     const sql = !lead ? regra.sql : regra.lead === true ? regra.sql : regra.lead;
-    if (!sql) return { where: '0 = 1', params: [] };
     // Texto vazio conta como '': "diferente de X" pega também quem não tem o campo preenchido
     const expr = regra.valor === 'texto' ? `COALESCE(${sql}, '')` : sql;
-    if (c.operador === 'contem' || c.operador === 'comeca') {
+    let cond: string;
+    if (!sql) cond = '0 = 1'; // regra só de pessoa: o lead não atende
+    else if (c.operador === 'contem' || c.operador === 'comeca') {
       const literal = String(c.valor).replace(/[\\%_]/g, (x) => `\\${x}`);
-      partes.push(`${expr} LIKE ?`);
+      cond = `${expr} LIKE ?`;
       params.push(c.operador === 'contem' ? `%${literal}%` : `${literal}%`);
     } else {
-      partes.push(`${expr} ${c.operador} ?`);
+      cond = `${expr} ${c.operador} ?`;
       params.push(c.valor);
     }
+    condicoes += condicoes ? ` ${c.ligacao === 'ou' ? 'OR' : 'AND'} ${cond}` : cond;
   }
-  return { where: partes.join(' AND '), params };
+  return { where: condicoes ? `${base} AND (${condicoes})` : base, params };
 }
 
 // ------------------------------------------------------------

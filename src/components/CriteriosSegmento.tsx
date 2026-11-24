@@ -15,6 +15,8 @@ interface Criterio {
   regra: string;
   operador: string;
   valor: string | number;
+  /** Ligação com o critério anterior: "e" (o padrão) ou "ou" */
+  ligacao?: 'e' | 'ou';
 }
 
 interface Props {
@@ -159,7 +161,7 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
   const regraDe = (nome: string) => regras.find((r) => r.regra === nome);
   const alterar = (i: number, mudanca: Partial<Criterio>) => onChange(lista.map((c, j) => (j === i ? { ...c, ...mudanca } : c)));
   const adicionar = () => {
-    const r = regras[0];
+    const r = regras.find((x) => x.valor !== 'publico');
     if (r) onChange([...lista, { regra: r.regra, operador: '=', valor: valorInicial(r) }]);
   };
 
@@ -288,8 +290,32 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
         const r = regraDe(c.regra);
         const operadores =
           r?.valor === 'numero' ? OPERADORES_NUMERO : r?.valor === 'texto' ? OPERADORES_TEXTO : r?.valor === 'publico' ? OPERADORES_IGUALDADE.slice(0, 1) : OPERADORES_IGUALDADE;
+        // E/OU com o critério anterior: não vale no "Público" nem no primeiro critério de verdade
+        const ehPublico = (x: Criterio) => regraDe(x.regra)?.valor === 'publico';
+        const liga = !ehPublico(c) && lista.slice(0, i).some((x) => !ehPublico(x));
         return (
-          <div key={i} className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-2 items-center">
+          <div key={i} className="grid grid-cols-1 sm:grid-cols-[4.5rem_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-2 items-center">
+            {liga ? (
+              <div role="radiogroup" aria-label="Ligação com o critério anterior" className="flex self-stretch min-h-8 rounded-md border border-stone-200 dark:border-stone-700 overflow-hidden text-[11px] font-bold">
+                {(['e', 'ou'] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    role="radio"
+                    aria-checked={(c.ligacao ?? 'e') === l}
+                    onClick={() => alterar(i, { ligacao: l })}
+                    title={l === 'e' ? 'E: precisa atender a este critério e ao anterior' : 'OU: basta atender a este critério ou ao anterior'}
+                    className={`flex-1 cursor-pointer ${
+                      (c.ligacao ?? 'e') === l ? 'bg-blue-600 text-white' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800'
+                    }`}
+                  >
+                    {l.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="hidden sm:block" />
+            )}
             <SelectAuto
               value={c.regra}
               onChange={(e) => {

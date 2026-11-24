@@ -2031,7 +2031,7 @@ export const RESOURCES: ResourceDef[] = [
         hint: 'Multicanal: WhatsApp para quem tem celular, e-mail para os demais',
       },
       { name: 'situacao', label: 'Situação', type: 'enum', required: true, listed: true, filterable: true, options: SITUACOES_CAMPANHA, default: 'rascunho' },
-      { name: 'criterios', label: 'Público (critérios)', type: 'criterios', required: true, hint: 'A pessoa entra no público quando atende a todos os critérios' },
+      { name: 'criterios', label: 'Público (critérios)', type: 'criterios', required: true, hint: 'Critérios ligados por E (precisa atender aos dois) ou OU (basta um); o E vale antes do OU' },
       { name: 'publico_estimado', label: 'Público', type: 'number', readOnly: true, listed: true, width: 'xs', hint: 'Pessoas que atendem aos critérios (recalculado ao gravar e ao gerar os disparos)' },
       { name: 'assunto', label: 'Assunto', type: 'text', maxLength: 255, hint: 'Do e-mail; no WhatsApp vai em negrito no começo da mensagem' },
       {

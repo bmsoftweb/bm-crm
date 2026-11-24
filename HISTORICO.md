@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.211 — 2026-11-24
+
+- Campanhas: critérios ligados por E ou OU (o E vale antes do OU). No lead, regra só de pessoa conta como "não atende" só naquela condição. "Adicionar critério" não começa mais pelo "Público".
+
 ## 0.0.210 — 2026-11-24
 
 - Campanhas: critério "Público" (pessoas, leads da Prospecção ou os dois). Nos leads valem segmento, UF, cidade, dias desde o cadastro e os contatos; regra só de pessoa deixa os leads de fora. Disparo do lead sai com `lead_id`, e o SAIR também descadastra o lead.
