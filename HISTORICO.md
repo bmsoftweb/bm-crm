@@ -2,6 +2,11 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.210 — 2026-11-24
+
+- Campanhas: critério "Público" (pessoas, leads da Prospecção ou os dois). Nos leads valem segmento, UF, cidade, dias desde o cadastro e os contatos; regra só de pessoa deixa os leads de fora. Disparo do lead sai com `lead_id`, e o SAIR também descadastra o lead.
+- Segmentos: detalhe "Leads do Segmento".
+
 ## 0.0.209 — 2026-11-24
 
 - Vigia do WhatsApp: não conta os feriados nacionais nem o almoço (11h30 às 13h30) nas 2 h de silêncio, e tenta de novo antes de avisar falha pontual da Evolution.

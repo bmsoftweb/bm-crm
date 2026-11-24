@@ -29,21 +29,34 @@ type Operador = (typeof OPERADORES)[number];
  * comparada com o valor pelo operador; nada do navegador entra no SQL além do valor,
  * que vai como parâmetro.
  */
-export const REGRAS: Record<string, { rotulo: string; valor: 'numero' | 'texto' | 'sim_nao' | 'tipo_pessoa' | 'segmento'; sql: string }> = {
+export const REGRAS: Record<
+  string,
+  {
+    rotulo: string;
+    valor: 'numero' | 'texto' | 'sim_nao' | 'tipo_pessoa' | 'segmento' | 'publico';
+    sql: string;
+    /** Vale também para os leads da Prospecção (a tabela de leads com o mesmo alias "p"): true = mesmo SQL; texto = SQL do lead */
+    lead?: true | string;
+  }
+> = {
+  // Não vira SQL: diz de onde vem o público (pessoas, leads da Prospecção ou os dois); sem ele, só pessoas
+  publico: { rotulo: 'Público (pessoas ou leads)', valor: 'publico', sql: '' },
   tipo: { rotulo: 'Tipo da pessoa', valor: 'tipo_pessoa', sql: 'p.tipo' },
   cod_integracao: { rotulo: 'Cód. integração', valor: 'texto', sql: 'p.cod_integracao' },
-  segmento: { rotulo: 'Segmento da pessoa', valor: 'segmento', sql: 'p.segmento_id' },
+  segmento: { rotulo: 'Segmento da pessoa', valor: 'segmento', sql: 'p.segmento_id', lead: true },
   uf: {
     rotulo: 'UF do endereço principal',
     valor: 'texto',
     sql: `(SELECT e.uf FROM pessoas_enderecos e WHERE e.pessoa_id = p.id ORDER BY e.principal DESC, e.id LIMIT 1)`,
+    lead: 'p.uf',
   },
   cidade: {
     rotulo: 'Cidade do endereço principal',
     valor: 'texto',
     sql: `(SELECT e.cidade FROM pessoas_enderecos e WHERE e.pessoa_id = p.id ORDER BY e.principal DESC, e.id LIMIT 1)`,
+    lead: 'p.cidade',
   },
-  dias_cadastro: { rotulo: 'Dias desde o cadastro', valor: 'numero', sql: 'DATEDIFF(CURDATE(), p.criado_em)' },
+  dias_cadastro: { rotulo: 'Dias desde o cadastro', valor: 'numero', sql: 'DATEDIFF(CURDATE(), p.criado_em)', lead: true },
   // Quem nunca comprou fica de fora (sem data): para esses, usar "Quantidade de pedidos = 0"
   ultima_compra: {
     rotulo: 'Dias desde a última compra',
@@ -81,14 +94,15 @@ export const REGRAS: Record<string, { rotulo: string; valor: 'numero' | 'texto' 
     valor: 'numero',
     sql: `(SELECT DATEDIFF(MIN(ct.data_fim), CURDATE()) FROM contratos ct WHERE ct.pessoa_id = p.id AND ct.situacao = 'ativo' AND ct.data_fim IS NOT NULL)`,
   },
-  tem_email: { rotulo: 'Tem e-mail', valor: 'sim_nao', sql: `(p.email IS NOT NULL AND p.email <> '')` },
-  tem_telefone: { rotulo: 'Tem telefone', valor: 'sim_nao', sql: `(p.telefone IS NOT NULL AND p.telefone <> '')` },
-  tem_whatsapp: { rotulo: 'Tem WhatsApp cadastrado', valor: 'sim_nao', sql: `(p.whatsapp IS NOT NULL AND p.whatsapp <> '')` },
+  tem_email: { rotulo: 'Tem e-mail', valor: 'sim_nao', sql: `(p.email IS NOT NULL AND p.email <> '')`, lead: true },
+  tem_telefone: { rotulo: 'Tem telefone', valor: 'sim_nao', sql: `(p.telefone IS NOT NULL AND p.telefone <> '')`, lead: true },
+  tem_whatsapp: { rotulo: 'Tem WhatsApp cadastrado', valor: 'sim_nao', sql: `(p.whatsapp IS NOT NULL AND p.whatsapp <> '')`, lead: true },
   // DDD + 9 + 8 dígitos (com ou sem 0/55 na frente), no WhatsApp ou, sem ele, no telefone; sem DDD não dá para mandar WhatsApp
   tem_celular: {
     rotulo: 'Tem celular (com DDD)',
     valor: 'sim_nao',
     sql: `(REGEXP_REPLACE(COALESCE(NULLIF(p.whatsapp, ''), p.telefone, ''), '[^0-9]', '') REGEXP '^0*(55)?[1-9]{2}9[0-9]{8}$')`,
+    lead: true,
   },
 };
 
@@ -166,6 +180,9 @@ export function normalizarCriterios(bruto: unknown): Criterio[] {
     } else if (regra.valor === 'sim_nao') {
       valor = Number(valor) ? 1 : 0;
       if (operador !== '=' && operador !== '<>') throw new Error(`Critério ${i + 1} (${regra.rotulo}): use "=" ou "<>".`);
+    } else if (regra.valor === 'publico') {
+      valor = String(valor);
+      if (!PUBLICOS.includes(valor) || operador !== '=') throw new Error(`Critério ${i + 1} (${regra.rotulo}): escolha pessoas, leads ou os dois.`);
     } else {
       valor = String(valor).trim();
       if (!valor) throw new Error(`Critério ${i + 1} (${regra.rotulo}): informe o valor.`);
@@ -186,25 +203,48 @@ export function normalizarSelecao(bruto: unknown): Criterio[] | SelecaoIa {
   return normalizarCriterios(bruto);
 }
 
+/** Valores do critério "Público": só pessoas (o padrão), só os leads da Prospecção ou os dois */
+export const PUBLICOS = ['pessoas', 'leads', 'ambos'];
+
+/** De onde vem o público: as pessoas ou os leads ainda não convertidos, os dois com o alias "p" */
+interface Fonte {
+  lead: boolean;
+  where: string;
+  params: any[];
+}
+const tabelaDa = (f: Fonte) => (f.lead ? 'leads' : 'pessoas');
+
 /**
- * WHERE (sobre a pessoa "p") do público: pelos critérios, ou, na seleção com IA, pela lista de ids que o SQL da IA
- * devolve (rodado à parte, só leitura: o SQL da IA nunca entra nas outras consultas)
+ * WHERE (sobre "p") de cada fonte do público: pelos critérios, ou, na seleção com IA (só pessoas), pela lista de ids
+ * que o SQL da IA devolve (rodado à parte, só leitura: o SQL da IA nunca entra nas outras consultas)
  */
-export async function filtroPublico(bruto: unknown, empresaId: string | number): Promise<{ where: string; params: any[] }> {
+export async function fontesPublico(bruto: unknown, empresaId: string | number): Promise<Fonte[]> {
   const sel = normalizarSelecao(bruto);
-  if (Array.isArray(sel)) return sqlCriterios(sel, empresaId);
-  const ids = await idsDaSelecaoIa(sel.sql, empresaId);
-  return { where: ids.length ? 'p.empresa_id = ? AND p.id IN (?)' : '0 = 1', params: ids.length ? [empresaId, ids] : [] };
+  if (!Array.isArray(sel)) {
+    const ids = await idsDaSelecaoIa(sel.sql, empresaId);
+    return [{ lead: false, where: ids.length ? 'p.empresa_id = ? AND p.id IN (?)' : '0 = 1', params: ids.length ? [empresaId, ids] : [] }];
+  }
+  const publico = String(sel.find((c) => c.regra === 'publico')?.valor ?? 'pessoas');
+  const fontes: Fonte[] = [];
+  if (publico !== 'leads') fontes.push({ lead: false, ...sqlCriterios(sel, empresaId) });
+  if (publico !== 'pessoas') fontes.push({ lead: true, ...sqlCriterios(sel, empresaId, true) });
+  return fontes;
 }
 
-/** WHERE (sobre a pessoa "p") que seleciona as pessoas da empresa atendidas pelos critérios */
-export function sqlCriterios(criterios: Criterio[], empresaId: string | number): { where: string; params: any[] } {
-  const partes = ['p.empresa_id = ?'];
+/**
+ * WHERE (sobre "p") que seleciona as pessoas da empresa atendidas pelos critérios, ou, com `lead`, os leads ainda não
+ * convertidos. Regra que só existe na pessoa (pedidos, negócios, tipo...) deixa os leads todos de fora.
+ */
+export function sqlCriterios(criterios: Criterio[], empresaId: string | number, lead = false): { where: string; params: any[] } {
+  const partes = [lead ? 'p.empresa_id = ? AND p.convertido_em IS NULL' : 'p.empresa_id = ?'];
   const params: any[] = [empresaId];
   for (const c of criterios) {
     const regra = regraDe(c.regra)!;
+    if (regra.valor === 'publico') continue;
+    const sql = !lead ? regra.sql : regra.lead === true ? regra.sql : regra.lead;
+    if (!sql) return { where: '0 = 1', params: [] };
     // Texto vazio conta como '': "diferente de X" pega também quem não tem o campo preenchido
-    const expr = regra.valor === 'texto' ? `COALESCE(${regra.sql}, '')` : regra.sql;
+    const expr = regra.valor === 'texto' ? `COALESCE(${sql}, '')` : sql;
     if (c.operador === 'contem' || c.operador === 'comeca') {
       const literal = String(c.valor).replace(/[\\%_]/g, (x) => `\\${x}`);
       partes.push(`${expr} LIKE ?`);
@@ -232,6 +272,9 @@ export const VARIAVEIS: Record<string, string> = {
   ultima_compra: `(SELECT DATE_FORMAT(MAX(pd.data_emissao), '%d/%m/%Y') FROM pedidos pd WHERE pd.pessoa_id = p.id AND pd.status <> 'cancelado')`,
   empresa: '(SELECT nome FROM empresas WHERE id = p.empresa_id)',
 };
+
+/** No lead (alias "p" sobre a tabela de leads) mudam só estas; ele não tem compras */
+const VARIAVEIS_LEAD: Record<string, string> = { ...VARIAVEIS, cidade: 'p.cidade', ultima_compra: 'NULL' };
 
 const RE_VARIAVEL = /\{\{\s*([a-z_]+)\s*\}\}/gi;
 
@@ -273,24 +316,36 @@ const SEM_DESCADASTRADOS = 'AND p.nao_receber_campanhas = 0';
 
 /** Quantas pessoas atendem aos critérios (o "público estimado" da campanha) */
 export async function contarPublico(criterios: unknown, empresaId: string | number, db: Executor = pool): Promise<number> {
-  const { where, params } = await filtroPublico(criterios, empresaId);
-  const [r] = await db.query<any[]>(`SELECT COUNT(*) AS n FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS}`, params);
-  return Number(r[0].n);
+  let n = 0;
+  for (const f of await fontesPublico(criterios, empresaId)) {
+    const [r] = await db.query<any[]>(`SELECT COUNT(*) AS n FROM ${tabelaDa(f)} p WHERE ${f.where} ${SEM_DESCADASTRADOS}`, f.params);
+    n += Number(r[0].n);
+  }
+  return n;
 }
 
-/** Botão "Testar" dos critérios: o total do público e as 50 primeiras pessoas (por nome), sem gravar nada */
+const porNome = (a: any, b: any) => String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR');
+
+/** Botão "Testar" dos critérios: o total do público e as 50 primeiras pessoas/leads (por nome), sem gravar nada */
 export async function testarCriterios(criterios: unknown, empresaId: string | number) {
-  const { where, params } = await filtroPublico(criterios, empresaId);
-  const [r] = await pool.query<any[]>(
-    `SELECT p.id, p.nome, p.tipo, p.cod_integracao, COALESCE(NULLIF(p.whatsapp, ''), p.telefone) AS telefone, p.email,
-            (SELECT CONCAT_WS(' / ', e.cidade, e.uf) FROM pessoas_enderecos e WHERE e.pessoa_id = p.id ORDER BY e.principal DESC, e.id LIMIT 1) AS cidade
-       FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS} ORDER BY p.nome LIMIT 50`,
-    params,
-  );
-  const [[{ n }]] = await pool.query<any>(`SELECT COUNT(*) AS n FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS}`, params);
+  const linhas: any[] = [];
+  for (const f of await fontesPublico(criterios, empresaId)) {
+    const [r] = await pool.query<any[]>(
+      `SELECT p.id, p.nome, ${f.lead ? "'lead_prospeccao' AS tipo, NULL AS cod_integracao" : 'p.tipo, p.cod_integracao'},
+              COALESCE(NULLIF(p.whatsapp, ''), p.telefone) AS telefone, p.email,
+              ${f.lead ? "NULLIF(CONCAT_WS(' / ', NULLIF(p.cidade, ''), NULLIF(p.uf, '')), '')" : "(SELECT CONCAT_WS(' / ', e.cidade, e.uf) FROM pessoas_enderecos e WHERE e.pessoa_id = p.id ORDER BY e.principal DESC, e.id LIMIT 1)"} AS cidade
+         FROM ${tabelaDa(f)} p WHERE ${f.where} ${SEM_DESCADASTRADOS} ORDER BY p.nome LIMIT 50`,
+      f.params,
+    );
+    linhas.push(...r);
+  }
   // Seleção com IA: o comando que rodou (botão "Raw" da tela)
   const sel = normalizarSelecao(criterios);
-  return { total: Number(n), pessoas: r, ...(Array.isArray(sel) ? {} : { sqlExecutado: sqlExecutadoIa(sel.sql, empresaId) }) };
+  return {
+    total: await contarPublico(criterios, empresaId),
+    pessoas: linhas.sort(porNome).slice(0, 50),
+    ...(Array.isArray(sel) ? {} : { sqlExecutado: sqlExecutadoIa(sel.sql, empresaId) }),
+  };
 }
 
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -325,15 +380,20 @@ async function campanhaDa(id: string | number, empresaId: string | number, db: E
   return r[0];
 }
 
-/** Pessoas do público com as variáveis da mensagem (nome, email, whatsapp...) */
+/** Pessoas e leads do público (pessoa_id ou lead_id) com as variáveis da mensagem (nome, email, whatsapp...) */
 async function publicoDa(c: any, empresaId: string | number, db: Executor, limite?: number) {
-  const { where, params } = await filtroPublico(c.criterios, empresaId);
-  const colunas = Object.entries(VARIAVEIS).map(([k, sql]) => `${sql} AS ${k}`).join(', ');
-  const [r] = await db.query<any[]>(
-    `SELECT p.id, ${colunas} FROM pessoas p WHERE ${where} ${SEM_DESCADASTRADOS} ORDER BY p.nome${limite ? ` LIMIT ${Number(limite)}` : ''}`,
-    params,
-  );
-  return r;
+  const linhas: any[] = [];
+  for (const f of await fontesPublico(c.criterios, empresaId)) {
+    const colunas = Object.entries(f.lead ? VARIAVEIS_LEAD : VARIAVEIS).map(([k, sql]) => `${sql} AS ${k}`).join(', ');
+    const [r] = await db.query<any[]>(
+      `SELECT ${f.lead ? 'NULL AS pessoa_id, p.id AS lead_id' : 'p.id AS pessoa_id, NULL AS lead_id'}, ${colunas}
+         FROM ${tabelaDa(f)} p WHERE ${f.where} ${SEM_DESCADASTRADOS} ORDER BY p.nome${limite ? ` LIMIT ${Number(limite)}` : ''}`,
+      f.params,
+    );
+    linhas.push(...r);
+  }
+  linhas.sort(porNome);
+  return limite ? linhas.slice(0, limite) : linhas;
 }
 
 /**
@@ -357,8 +417,10 @@ export async function gerarDisparos(campanhaId: string | number, empresaId: stri
 
     await conn.beginTransaction();
     await conn.query("DELETE FROM campanha_disparos WHERE campanha_id = ? AND situacao = 'pendente'", [c.id]);
-    const [feitos] = await conn.query<any[]>('SELECT pessoa_id, canal FROM campanha_disparos WHERE campanha_id = ?', [c.id]);
-    const jaFeito = new Set(feitos.map((f) => `${f.pessoa_id}|${f.canal}`));
+    const [feitos] = await conn.query<any[]>('SELECT pessoa_id, lead_id, canal FROM campanha_disparos WHERE campanha_id = ?', [c.id]);
+    // Lead e pessoa têm ids de tabelas diferentes: o lead leva "L" na chave
+    const chave = (f: any) => `${f.pessoa_id ?? `L${f.lead_id}`}|${f.canal}`;
+    const jaFeito = new Set(feitos.map(chave));
     const linhas: any[][] = [];
     let semContato = 0;
     let jaEnviados = 0;
@@ -368,15 +430,15 @@ export async function gerarDisparos(campanhaId: string | number, empresaId: stri
         semContato++;
         continue;
       }
-      if (jaFeito.has(`${p.id}|${d.canal}`)) {
+      if (jaFeito.has(chave({ ...p, canal: d.canal }))) {
         jaEnviados++;
         continue;
       }
       const assunto = personalizar(c.assunto, p).trim().slice(0, 255) || null;
-      linhas.push([c.id, p.id, String(p.nome ?? '').slice(0, 255), d.canal, d.destino, assunto, comAvisoSair(personalizar(c.mensagem, p), d.canal), quando]);
+      linhas.push([c.id, p.pessoa_id, p.lead_id, String(p.nome ?? '').slice(0, 255), d.canal, d.destino, assunto, comAvisoSair(personalizar(c.mensagem, p), d.canal), quando]);
     }
     for (let i = 0; i < linhas.length; i += 500) {
-      await conn.query('INSERT INTO campanha_disparos (campanha_id, pessoa_id, nome, canal, destino, assunto, mensagem, agendado_para) VALUES ?', [
+      await conn.query('INSERT INTO campanha_disparos (campanha_id, pessoa_id, lead_id, nome, canal, destino, assunto, mensagem, agendado_para) VALUES ?', [
         linhas.slice(i, i + 500),
       ]);
     }
@@ -418,6 +480,8 @@ export interface CampanhaDaConversa {
   /** Instruções da campanha para a IA: o que explicar, preços, perguntas frequentes */
   instrucoes: string;
   pessoa_id: number | null;
+  /** Campanha com público de leads da Prospecção */
+  lead_id?: number | null;
 }
 
 /** Dias depois do envio em que a resposta ainda é "sobre a campanha" */
@@ -428,7 +492,7 @@ export async function campanhaDaConversa(empresaId: string | number, telefone: s
   const chave = chaveTelefone(telefone, true);
   if (!chave) return null;
   const [r] = await pool.query<any[]>(
-    `SELECT c.id, c.nome, c.instrucoes_ia, d.mensagem, d.pessoa_id, d.destino
+    `SELECT c.id, c.nome, c.instrucoes_ia, d.mensagem, d.pessoa_id, d.lead_id, d.destino
        FROM campanha_disparos d JOIN campanhas c ON c.id = d.campanha_id
       WHERE c.empresa_id = ? AND d.canal = 'whatsapp' AND d.situacao IN ('enviado', 'entregue', 'lido')
         AND d.enviado_em >= NOW() - INTERVAL ? DAY AND RIGHT(d.destino, 8) = RIGHT(?, 8)
@@ -436,7 +500,7 @@ export async function campanhaDaConversa(empresaId: string | number, telefone: s
     [empresaId, DIAS_CONTEXTO, telefone],
   );
   const d = r.find((x) => chaveTelefone(x.destino, true) === chave);
-  return d ? { id: d.id, nome: d.nome, mensagem: d.mensagem, instrucoes: String(d.instrucoes_ia ?? '').trim(), pessoa_id: d.pessoa_id } : null;
+  return d ? { id: d.id, nome: d.nome, mensagem: d.mensagem, instrucoes: String(d.instrucoes_ia ?? '').trim(), pessoa_id: d.pessoa_id, lead_id: d.lead_id } : null;
 }
 
 /**
@@ -583,7 +647,7 @@ export async function enviarDisparoAgora(id: string | number, empresaId: string 
             empresaId,
             telefoneWhatsApp(d.destino),
             (assunto ? `*${assunto}*\n\n` : '') + d.mensagem,
-            { pessoa_id: d.pessoa_id, disparo_id: d.id },
+            { pessoa_id: d.pessoa_id, lead_id: d.lead_id, disparo_id: d.id },
             d.imagem,
           );
         }

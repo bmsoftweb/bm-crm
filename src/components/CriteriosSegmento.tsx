@@ -40,6 +40,13 @@ const TIPOS_PESSOA = [
   { value: 'cliente', label: 'Cliente' },
 ];
 
+/** Critério "Público": de onde vêm os destinatários (sem ele, só pessoas) */
+const PUBLICOS = [
+  { value: 'pessoas', label: 'Pessoas' },
+  { value: 'leads', label: 'Leads da Prospecção' },
+  { value: 'ambos', label: 'Pessoas e leads' },
+];
+
 function lerValor(value: unknown): unknown {
   if (typeof value !== 'string') return value;
   try {
@@ -64,7 +71,7 @@ function lerLista(value: unknown): Criterio[] {
 }
 
 const valorInicial = (r?: RegraCriterio): string | number =>
-  r?.valor === 'sim_nao' ? 1 : r?.valor === 'numero' ? 0 : r?.valor === 'tipo_pessoa' ? 'cliente' : '';
+  r?.valor === 'sim_nao' ? 1 : r?.valor === 'numero' ? 0 : r?.valor === 'tipo_pessoa' ? 'cliente' : r?.valor === 'publico' ? 'leads' : '';
 
 /**
  * Público da campanha, em duas abas: "Por critérios" (regra, operador e valor por linha; todas precisam valer) ou
@@ -172,10 +179,10 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
         </SelectAuto>
       );
     if (tipo === 'sim_nao') return <Toggle checked={Boolean(Number(c.valor))} onChange={(v) => alterar(i, { valor: v ? 1 : 0 })} />;
-    if (tipo === 'tipo_pessoa')
+    if (tipo === 'tipo_pessoa' || tipo === 'publico')
       return (
         <SelectAuto value={String(c.valor)} onChange={(e) => alterar(i, { valor: e.target.value })} required className={`${cls} cursor-pointer`}>
-          {TIPOS_PESSOA.map((o) => (
+          {(tipo === 'publico' ? PUBLICOS : TIPOS_PESSOA).map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
@@ -279,7 +286,8 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
       )}
       {modo === 'criterios' && lista.map((c, i) => {
         const r = regraDe(c.regra);
-        const operadores = r?.valor === 'numero' ? OPERADORES_NUMERO : r?.valor === 'texto' ? OPERADORES_TEXTO : OPERADORES_IGUALDADE;
+        const operadores =
+          r?.valor === 'numero' ? OPERADORES_NUMERO : r?.valor === 'texto' ? OPERADORES_TEXTO : r?.valor === 'publico' ? OPERADORES_IGUALDADE.slice(0, 1) : OPERADORES_IGUALDADE;
         return (
           <div key={i} className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-2 items-center">
             <SelectAuto
@@ -406,10 +414,10 @@ export const CriteriosSegmento: React.FC<Props> = ({ id, value, onChange }) => {
                     </thead>
                     <tbody>
                       {teste.pessoas.map((p) => (
-                        <tr key={p.id} className="border-t border-stone-100 dark:border-stone-800 text-stone-700 dark:text-stone-200">
+                        <tr key={`${p.tipo}-${p.id}`} className="border-t border-stone-100 dark:border-stone-800 text-stone-700 dark:text-stone-200">
                           <td className="px-3 py-1.5 font-semibold">{p.nome}</td>
                           <td className="px-3 py-1.5 font-mono">{p.cod_integracao || '—'}</td>
-                          <td className="px-3 py-1.5">{p.tipo === 'cliente' ? 'Cliente' : p.tipo === 'lead' ? 'Lead' : p.tipo}</td>
+                          <td className="px-3 py-1.5">{p.tipo === 'cliente' ? 'Cliente' : p.tipo === 'lead' ? 'Lead' : p.tipo === 'lead_prospeccao' ? 'Lead (Prospecção)' : p.tipo}</td>
                           <td className="px-3 py-1.5">{p.cidade || '—'}</td>
                           <td className="px-3 py-1.5 whitespace-nowrap">{p.telefone || '—'}</td>
                           <td className="px-3 py-1.5">{p.email || '—'}</td>

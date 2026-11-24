@@ -445,7 +445,7 @@ export function invalidarCamposPersonalizados() {
 export interface RegraCriterio {
   regra: string;
   rotulo: string;
-  valor: 'numero' | 'texto' | 'sim_nao' | 'tipo_pessoa' | 'segmento' | 'lista';
+  valor: 'numero' | 'texto' | 'sim_nao' | 'tipo_pessoa' | 'segmento' | 'lista' | 'publico';
   /** Campo personalizado decimal: casas do valor */
   casas?: number;
   /** Campo personalizado de lista: as opções */

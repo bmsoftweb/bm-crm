@@ -1789,7 +1789,11 @@ export const RESOURCES: ResourceDef[] = [
     canCreate: true,
     canUpdate: true,
     canDelete: true,
-    details: [{ resource: 'pessoas', foreignKey: 'segmento_id', label: 'Pessoas do Segmento' }],
+    details: [
+      { resource: 'pessoas', foreignKey: 'segmento_id', label: 'Pessoas do Segmento' },
+      // Leads da Prospecção também levam o segmento (os convertidos já aparecem como pessoas)
+      { resource: 'leads', foreignKey: 'segmento_id', label: 'Leads do Segmento' },
+    ],
     fields: [
       ID,
       { name: 'nome', label: 'Nome', type: 'text', required: true, listed: true, searchable: true, maxLength: 100 },

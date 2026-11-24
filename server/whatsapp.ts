@@ -1114,7 +1114,7 @@ export async function enviarPendentes(limite = 50, prazoMs = Infinity): Promise<
     try {
       // Disparos das campanhas (server/campanhas.ts): destino e texto já vêm prontos, personalizados ao gerar
       const [fila] = await conn.query<any[]>(
-        `SELECT d.id, d.pessoa_id, c.empresa_id, d.destino, d.assunto, d.mensagem, c.imagem
+        `SELECT d.id, d.pessoa_id, d.lead_id, c.empresa_id, d.destino, d.assunto, d.mensagem, c.imagem
            FROM campanha_disparos d
            JOIN campanhas c ON c.id = d.campanha_id
           WHERE d.situacao = 'pendente' AND d.canal = 'whatsapp' AND d.agendado_para <= NOW()
@@ -1137,7 +1137,7 @@ export async function enviarPendentes(limite = 50, prazoMs = Infinity): Promise<
           const assunto = String(d.assunto ?? '').trim();
           const telefone = telefoneWhatsApp(d.destino);
           const texto = (assunto ? `*${assunto}*\n\n` : '') + d.mensagem;
-          await mandarCampanha(c, d.empresa_id, telefone, texto, d.imagem, { pessoa_id: d.pessoa_id, disparo_id: d.id });
+          await mandarCampanha(c, d.empresa_id, telefone, texto, d.imagem, { pessoa_id: d.pessoa_id, lead_id: d.lead_id, disparo_id: d.id });
           await conn.query(
             "UPDATE campanha_disparos SET situacao = 'enviado', enviado_em = NOW(), erro = NULL WHERE id = ? AND situacao = 'pendente'",
             [d.id],
