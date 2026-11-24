@@ -2,6 +2,10 @@
 
 Mais recente primeiro. PATCH a cada envio ao GitHub; MAJOR/MINOR só quando pedido.
 
+## 0.0.212 — 2026-11-24
+
+- WhatsApp: mensagem do cliente depois que a equipe encerrou o atendimento não volta mais para o último técnico; segue o fluxo normal (bot/fila), como já era no erp-crm.
+
 ## 0.0.211 — 2026-11-24
 
 - Campanhas: critérios ligados por E ou OU (o E vale antes do OU). No lead, regra só de pessoa conta como "não atende" só naquela condição. "Adicionar critério" não começa mais pelo "Público".

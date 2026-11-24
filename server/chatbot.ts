@@ -1092,6 +1092,7 @@ async function paraFila(nova: MensagemNova, cfg: ConfigChatbot | null, motivo: s
  * O cliente respondeu a uma mensagem de técnico: a citada ou, sem citação, a última enviada a ele (sem contar o
  * aviso de inatividade e as linhas de evento/encerramento). Técnico = sem origem (não é bot, automática nem
  * campanha) e das últimas 48 h. Resposta ao bot, à campanha, a uma automática ou a técnico mais antigo segue o fluxo normal.
+ * A equipe encerrou o atendimento depois da mensagem do técnico: assunto encerrado, segue o fluxo normal (o bot).
  * Devolve o usuário que escreveu (null: mandada pelo celular, sem usuário) ou false se não é resposta a técnico.
  */
 async function respondeTecnico(nova: MensagemNova): Promise<number | null | false> {
@@ -1101,8 +1102,10 @@ async function respondeTecnico(nova: MensagemNova): Promise<number | null | fals
                             (SELECT MAX(z.id) FROM whatsapp_mensagens z
                               WHERE z.empresa_id = ? AND z.telefone = ? AND z.id < ? AND z.direcao = 'enviada'
                                 AND z.tipo NOT IN ('evento', 'encerramento') AND (z.origem IS NULL OR z.origem NOT LIKE 'inatividade:%')))
-        AND m.direcao = 'enviada' AND m.origem IS NULL AND m.disparo_id IS NULL AND m.data_hora > NOW() - INTERVAL 48 HOUR`,
-    [nova.id, nova.empresaId, nova.telefone, nova.id],
+        AND m.direcao = 'enviada' AND m.origem IS NULL AND m.disparo_id IS NULL AND m.data_hora > NOW() - INTERVAL 48 HOUR
+        AND NOT EXISTS (SELECT 1 FROM whatsapp_mensagens e
+                         WHERE e.empresa_id = ? AND e.telefone = ? AND e.tipo = 'encerramento' AND e.usuario_id IS NOT NULL AND e.id > m.id AND e.id < ?)`,
+    [nova.id, nova.empresaId, nova.telefone, nova.id, nova.empresaId, nova.telefone, nova.id],
   );
   return r.length ? (r[0].usuario_id ?? null) : false;
 }
