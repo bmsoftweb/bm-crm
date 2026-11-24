@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { chaveTelefone, conteudoMensagem, escolherDono, telefoneWhatsApp, imagemDaCampanha, suspeitaDeRecebimento } from './whatsapp.js';
+import { chaveTelefone, conteudoMensagem, escolherDono, telefoneWhatsApp, imagemDaCampanha, suspeitaDeRecebimento, inicioSilencio, feriadoNacional } from './whatsapp.js';
 
 assert.strictEqual(telefoneWhatsApp('(41) 99901-2223'), '5541999012223');
 assert.strictEqual(telefoneWhatsApp('(41)35238200'), '554135238200');
@@ -73,3 +73,16 @@ assert.strictEqual(suspeitaDeRecebimento({ ...ok, confirmadas: 0, destinos: 1 },
 assert.match(suspeitaDeRecebimento({ ...ok, recebidas_2h: 0 }, true) ?? '', /2 horas de expediente/);
 assert.strictEqual(suspeitaDeRecebimento({ ...ok, recebidas_2h: 0 }, false), null); // fora do expediente
 assert.strictEqual(suspeitaDeRecebimento({ ...ok, recebidas_2h: 0, recebidas_7d: 40 }, true), null); // empresa de pouco movimento
+
+// Vigia: as 2 h de silêncio não contam o almoço (11h30 às 13h30)
+const hm = (h: number, m = 0) => h * 60 + m;
+assert.strictEqual(inicioSilencio(hm(10)), hm(8));
+assert.strictEqual(inicioSilencio(hm(11, 30)), hm(9, 30));
+assert.strictEqual(inicioSilencio(hm(13, 30)), hm(9, 30)); // o caso do alarme falso de 19/11
+assert.strictEqual(inicioSilencio(hm(15)), hm(11)); // 11h-11h30 + 13h30-15h
+assert.strictEqual(inicioSilencio(hm(15, 30)), hm(13, 30));
+assert.strictEqual(inicioSilencio(hm(17)), hm(15));
+
+// Vigia: feriados nacionais
+for (const f of ['2026-11-20', '2026-01-01', '2026-04-03', '2026-02-16', '2026-02-17', '2026-06-04', '2027-03-26', '2027-05-27']) assert.ok(feriadoNacional(f), f);
+for (const u of ['2026-11-19', '2026-11-23', '2026-04-06', '2026-02-18', '2026-06-05']) assert.ok(!feriadoNacional(u), u);

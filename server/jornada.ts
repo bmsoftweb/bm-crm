@@ -671,6 +671,8 @@ class Execucao {
     await this.enviar(resposta);
     if (this.ctx.jornada.transferencia === null) return null;
     this.estado.vars.motivo = this.ctx.jornada.transferencia;
+    // O que o cliente quer fica escrito na conversa para quem pegar o atendimento
+    await marcarEvento(this.ctx.empresaId, this.ctx.telefone, `IA passou para a equipe: ${this.ctx.jornada.transferencia}`, null);
     const humano = this.destino(no, 'humano');
     if (humano) return humano;
     await mudarAtendimento(this.ctx.empresaId, this.ctx.telefone, 'humano');

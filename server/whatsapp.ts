@@ -1196,8 +1196,12 @@ export async function vigiarWhatsApp(): Promise<string[]> {
   const [rows] = await pool.query<any[]>(
     "SELECT empresa_id, chave, valor FROM config WHERE grupo = 'whatsapp' AND chave IN ('provedor', 'campanhas') AND empresa_id IS NOT NULL",
   );
-  // Expediente (horário do banco = Brasília): seg a sex, das 10h às 18h (antes das 10h as 2 h para trás pegam a noite)
-  const [[h]] = await pool.query<any[]>('SELECT WEEKDAY(NOW()) < 5 AND HOUR(NOW()) BETWEEN 10 AND 17 AS expediente');
+  // Expediente (horário do banco = Brasília): seg a sex fora dos feriados nacionais, das 10h às 18h (antes das 10h as 2 h para trás pegam a noite)
+  const [[h]] = await pool.query<any[]>(
+    "SELECT DATE_FORMAT(NOW(), '%Y-%m-%d') AS hoje, WEEKDAY(NOW()) < 5 AND HOUR(NOW()) BETWEEN 10 AND 17 AS expediente, HOUR(NOW()) * 60 + MINUTE(NOW()) AS minuto",
+  );
+  const expediente = Boolean(h.expediente) && !feriadoNacional(h.hoje);
+  const silencioDesde = inicioSilencio(Number(h.minuto));
   const avisos = await Promise.all(
     rows.map(async (r) => {
       let cfg: ConfigWhats | null = null;
@@ -1209,11 +1213,15 @@ export async function vigiarWhatsApp(): Promise<string[]> {
       // Sem apikey o número não está em uso: não vigia, para não encher o sino
       if (cfg?.provedor !== 'evolution' || !cfg.token_cifrado) return null;
       const conta = contaWhats(r.chave);
-      const aviso = await vigiarInstancia(r.empresa_id, conta, cfg, Boolean(h.expediente)).catch((err) =>
-        /HTTP 401/.test(err.message)
-          ? null // apikey recusada: a instância não existe nesse servidor (número fora de uso), não avisa
-          : `não foi possível consultar a Evolution (${err.message.slice(0, 200)}).`,
-      );
+      const vigiar = () => vigiarInstancia(r.empresa_id, conta, cfg as ConfigWhats, expediente, silencioDesde);
+      // Falha pontual da Evolution (ex.: HTTP 500 do banco dela, conexão que caiu) não vira aviso: tenta de novo antes
+      const aviso = await vigiar()
+        .catch(() => esperar(5_000).then(vigiar))
+        .catch((err) =>
+          /HTTP 401/.test(err.message)
+            ? null // apikey recusada: a instância não existe nesse servidor (número fora de uso), não avisa
+            : `não foi possível consultar a Evolution (${err.message.slice(0, 200)}).`,
+        );
       if (!aviso) return null;
       await alertar(r.empresa_id, cfg.instancia, aviso);
       return `${r.empresa_id}/${cfg.instancia}: ${aviso}`;
@@ -1226,7 +1234,7 @@ const RECRIAR =
   'Mande uma mensagem de teste para o número; se não aparecer no CRM, apague e crie de novo a instância no painel da Evolution (mesmo nome) e use Conectar WhatsApp.';
 
 /** O que há de errado com a instância (null = tudo certo); conexão caída e webhook sumido ela já tenta corrigir */
-async function vigiarInstancia(empresaId: number, conta: ContaWhats, cfg: ConfigWhats, expediente: boolean): Promise<string | null> {
+async function vigiarInstancia(empresaId: number, conta: ContaWhats, cfg: ConfigWhats, expediente: boolean, silencioDesde: number): Promise<string | null> {
   const c = await credenciais(empresaId, conta);
   const inst = await instanciaEvolution(c);
   if ((inst.connectionStatus ?? inst.instance?.status) !== 'open') {
@@ -1256,12 +1264,36 @@ async function vigiarInstancia(empresaId: number, conta: ContaWhats, cfg: Config
     `SELECT COUNT(IF(direcao = 'enviada' AND wa_id IS NOT NULL AND criado_em BETWEEN NOW() - INTERVAL 3 HOUR AND NOW() - INTERVAL 15 MINUTE, 1, NULL)) AS enviadas,
             COUNT(DISTINCT IF(direcao = 'enviada' AND wa_id IS NOT NULL AND criado_em BETWEEN NOW() - INTERVAL 3 HOUR AND NOW() - INTERVAL 15 MINUTE, telefone, NULL)) AS destinos,
             COUNT(IF(direcao = 'enviada' AND wa_id IS NOT NULL AND situacao IN ('entregue', 'lida') AND criado_em BETWEEN NOW() - INTERVAL 3 HOUR AND NOW() - INTERVAL 15 MINUTE, 1, NULL)) AS confirmadas,
-            COUNT(IF(direcao = 'recebida' AND criado_em >= NOW() - INTERVAL 2 HOUR, 1, NULL)) AS recebidas_2h,
+            COUNT(IF(direcao = 'recebida' AND criado_em >= CURDATE() + INTERVAL ? MINUTE, 1, NULL)) AS recebidas_2h,
             COUNT(IF(direcao = 'recebida', 1, NULL)) AS recebidas_7d
        FROM whatsapp_mensagens WHERE empresa_id = ? AND criado_em >= NOW() - INTERVAL 7 DAY`,
-    [empresaId],
+    [silencioDesde, empresaId],
   );
   return suspeitaDeRecebimento(t, expediente);
+}
+
+// ponytail: almoço fixo das 11h30 às 13h30 para todas as empresas; vira configuração se alguma almoçar em outro horário
+const ALMOCO = [11 * 60 + 30, 13 * 60 + 30];
+
+/** Minuto do dia em que começam as últimas 2 h de expediente, sem contar o almoço (pode ser negativo: dia anterior) */
+export function inicioSilencio(minuto: number): number {
+  const [ini, fim] = ALMOCO;
+  if (minuto <= ini || minuto >= fim + 120) return minuto - 120;
+  if (minuto <= fim) return ini - 120; // no almoço: as 2 h antes dele
+  return minuto - 120 - (fim - ini); // logo depois: o que falta vem de antes do almoço
+}
+
+/** Feriado nacional (fixos, Carnaval, Sexta-feira Santa e Corpus Christi, pela Páscoa); data 'aaaa-mm-dd' */
+export function feriadoNacional(data: string): boolean {
+  const [a, m, d] = data.split('-').map(Number);
+  if (['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'].includes(data.slice(5))) return true;
+  // Páscoa (algoritmo de Meeus/Jones/Butcher)
+  const g = a % 19, c = Math.floor(a / 100), h = (c - Math.floor(c / 4) - Math.floor((8 * c + 13) / 25) + 19 * g + 15) % 30;
+  const i = h - Math.floor(h / 28) * (1 - Math.floor(29 / (h + 1)) * Math.floor((21 - g) / 11));
+  const j = (a + Math.floor(a / 4) + i + 2 - c + Math.floor(c / 4)) % 7;
+  const mes = 3 + Math.floor((i - j + 40) / 44), dia = i - j + 28 - 31 * Math.floor(mes / 4);
+  const dias = (Date.UTC(a, m - 1, d) - Date.UTC(a, mes - 1, dia)) / 86_400_000;
+  return [-48, -47, -2, 60].includes(dias);
 }
 
 /**
@@ -1276,7 +1308,7 @@ export function suspeitaDeRecebimento(
   if (Number(t.enviadas) >= 3 && Number(t.destinos) >= 2 && Number(t.confirmadas) === 0) {
     return `as últimas mensagens enviadas não receberam confirmação de entrega: o número pode ter parado de receber mensagens. ${RECRIAR}`;
   }
-  // ponytail: lim. fixo de 100 recebidas/semana; um almoço longo numa empresa movimentada pode dar alarme falso
+  // ponytail: lim. fixo de 100 recebidas/semana; empresa movimentada com um dia parado (ponte de feriado) pode dar alarme falso
   if (expediente && Number(t.recebidas_2h) === 0 && Number(t.recebidas_7d) >= 100) {
     return `nenhuma mensagem recebida nas últimas 2 horas de expediente: o número pode ter parado de receber mensagens. ${RECRIAR}`;
   }
